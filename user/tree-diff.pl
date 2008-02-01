@@ -23,7 +23,7 @@ EndOfUsage
 
 use vars qw( $DEBUG $IDENT $ONE_DEVICE );
 
-GetOptions('debug|d!'     => \$DEBUG,
+GetOptions('debug|d+'     => \$DEBUG,
            'identical|s!' => \$IDENT,
            'xdev|x!'      => \$ONE_DEVICE,
           ) or Usage;
@@ -34,6 +34,7 @@ GetOptions('debug|d!'     => \$DEBUG,
 
 sub uniq_by_count ( @ ) {
   my (@list) = @_;
+  return unless @list;
   my %count;
   ++$count{$_} for @list;
   sort { $count{$b} <=> $count{$a} } keys %count;
@@ -42,12 +43,20 @@ sub uniq_by_count ( @ ) {
 sub most_common ( @ ) {
   my (@list) = @_;
   return unless @list;
-  my $mc = (uniq_by_count @list)[0];
-  return unless grep($_ eq $mc, @list) > 1;
-  $mc;
+  my %count;
+  ++$count{$_} for @list;
+  my @mcl = sort { $count{$b} <=> $count{$a} } keys %count;
+  return $mcl[0] if (@mcl == 1) || ($count{$mcl[0]} != $count{$mcl[1]});
+  return;
 }
 
-sub filetype ( $ ) {
+sub is_only_one ( @ ) {
+  my (@list) = @_;
+  my @uniq = uniq_by_count(@list);
+  @uniq == 1;
+}
+
+sub file_type ( $ ) {
   my ($type) = @_;
   $type = $type & S_IFMT;
   $type == S_IFDIR  and return 'a directory';
@@ -60,156 +69,302 @@ sub filetype ( $ ) {
   return sprintf "of unknown type (octal 0%o)", $type;
 }
 
+sub file_rdev ( $ ) {
+  my ($rdev) = @_;
+  my ($bits);
+  $^O eq 'solaris' and $bits = 18;
+  $^O eq 'linux'   and $bits = 8;
+  $bits and return sprintf("device %d,%d",
+                           ($rdev >> $bits), ($rdev & ((1<<$bits) - 1)) );
+  sprintf("device 0x%x", $rdev);
+}
+
+### common messages
+
+sub dbg_comparing ( $$@ ) {
+  my ($level, $type, @info) = @_;
+  return unless $DEBUG and $DEBUG >= $level;
+  print STDERR (":> comparing ${type}:\n",
+                map ":>   $_->{path}\n", @info);
+}
+
 ### differencing code
 
+sub tdiff_type_entries ( $@ );
 sub tdiff_files ( $@ );
 sub tdiff_directories ( $@ );
 sub tdiff_symlinks ( $@ );
 
 sub tdiff_entries ( $@ ) {
-  my ($meta, @entries) = @_;
-  my @xdev = @{ $meta->{xdev} } if exists $meta->{xdev};
+  my ($flags, @info) = @_;
+  # make a local deep copy so we can modify:
+  @info = map +{ %$_ }, @info;
 
-  my @stat = map File::stat::lstat($_) || undef, @entries;
+  ## stat the data
+  $_->{stat} = File::stat::lstat($_->{path}) foreach @info;
+  my @stat  = map $_->{stat}, @info;
+
+  my @ipath = map $_->{indent} . $_->{path}, @info;
 
   my @valid;
-  for my $i (0..$#entries) {
-    $stat[$i] or warn("$entries[$i]: does not exist.\n"), next;
+  for my $i (0..$#info) {
+    $stat[$i] or warn("$ipath[$i]: does not exist.\n"), next;
     push @valid, $i;
   }
   return if @valid < 2;
 
-  @entries = @entries[@valid];
-  @stat    = @stat[@valid];
-  @xdev    = @xdev[@valid] if @xdev;
+  @info  = @info[@valid];
+  @stat  = @stat[@valid];
+  @ipath = @ipath[@valid];
 
-  if (@xdev) {
+  ## check for device boundaries
+  if (grep exists $_->{xdev}, @info) {
     @valid = ();
-    for my $i (0..$#entries) {
-      $stat[$i]->dev == $xdev[$i]
-        or ($DEBUG and warn("$entries[$i]: the device has changed!\n")),
+    for my $i (0..$#info) {
+      $stat[$i]->dev == $info[$i]{xdev}
+        or ($DEBUG and warn("$ipath[$i]: the device has changed!\n")),
           next;
       push @valid, $i;
     }
     return if @valid < 2;
 
-    @entries = @entries[@valid];
-    @stat    = @stat[@valid];
-    @xdev    = @xdev[@valid];
+    @info  = @info[@valid];
+    @stat  = @stat[@valid];
+    @ipath = @ipath[@valid];
 
   } elsif ($ONE_DEVICE) {
-    @xdev = map $_->dev, @stat;
+    $info[$_]{xdev} = $stat[$_]->dev for 0..$#info;
     if ($DEBUG) {
-      warn sprintf "%s: device is 0x%x.\n", $entries[$_], $xdev[$_]
-        for 0..$#entries;
+      warn sprintf "%s: device is 0x%x.\n", $ipath[$_], $info[$_]{xdev}
+        for 0..$#info;
     }
   }
 
-  my @modes = map $_->mode & ~S_IFMT, @stat;
-  my $mode  = most_common @modes;
-
+  ## segregate by file type
   my @types = map $_->mode & S_IFMT, @stat;
-  my $type  = most_common @types;
-
-  for my $i (0..$#entries) {
-    defined $mode
-      or warn(sprintf "%s: is mode 0%o.\n", $entries[$i], $modes[$i]), next;
-    $modes[$i] == $mode
-      or warn(sprintf "%s: is mode 0%o, not 0%o.\n",
-              $entries[$i], $modes[$i], $mode), next;
+  my @uniq_types = uniq_by_count @types;
+  if (@uniq_types > 1) {
+    warn("$ipath[$_]: is @{[file_type $types[$_]]}.\n") for 0..$#ipath;
   }
 
-  @valid = ();
-  for my $i (0..$#entries) {
-    defined $type
-      or warn("$entries[$i]: is @{[filetype $types[$i]]}.\n"), next;
-    $types[$i] == $type
-      or warn("$entries[$i]: is @{[filetype $types[$i]]}, not" .
-              " @{[filetype $type]}.\n"), next;
-    push @valid, $i;
+  for my $utype (@uniq_types) {
+    @valid = grep $types[$_] == $utype, 0..$#info;
+    tdiff_type_entries $flags, @info[@valid] if @valid > 1;
   }
-  return if @valid < 2;
+}
 
-  @entries = @entries[@valid];
-  @stat    = @stat[@valid];
-  @types   = @types[@valid];
+sub tdiff_type_entries ( $@ ) {
+  my ($flags, @info) = @_;
+  # Called with a list of entries that have the same file type.
+  return if @info < 2;
 
-  my %meta = %$meta;
-  $meta{xdev} = \@xdev if @xdev;
+  # tdiff_entries already made a deep copy and stat'ed the data.
+  my @stat  = map $_->{stat}, @info;
+  my @ipath = map $_->{indent} . $_->{path}, @info;
 
-  $type == S_IFDIR  and return tdiff_directories \%meta, @entries;
-  $type == S_IFREG  and return tdiff_files       \%meta, @entries;
-  $type == S_IFLNK  and return tdiff_symlinks    \%meta, @entries;
+  my @valid;
+
+  ## check file device numbers
+  {
+    my @rdevs = map $_->rdev, @stat;
+    if (! is_only_one @rdevs) {
+      warn "$ipath[$_]: is @{[file_rdev $rdevs[$_]]}.\n"
+        for 0..$#ipath;
+    }
+  }
+
+  ## check file permissions
+  {
+    my @modes = map $_->mode & ~S_IFMT, @stat;
+    if (! is_only_one @modes) {
+      warn sprintf "%s: is mode 0%o.\n", $ipath[$_], $modes[$_]
+        for 0..$#ipath;
+    }
+  }
+
+  ## check file ownership
+  {
+    my @uidgids = map $_->uid . '/' . $_->gid, @stat;
+    if (! is_only_one @uidgids) {
+      warn sprintf "%s: is owned by %s.\n", $ipath[$_], $uidgids[$_]
+        for 0..$#ipath;
+    }
+  }
+
+  # all entries have to be the same type (all directories, all symlinks, etc)
+  my $type = $stat[0]->mode & S_IFMT;
+
+  ## check number of hard links
+  if ($type != S_IFDIR) {
+    my @nlinks = map $_->nlink, @stat;
+    if (! is_only_one @nlinks) {
+      warn sprintf "%s: %d hard links.\n", $ipath[$_], $nlinks[$_]
+        for 0..$#ipath;
+    }
+  }
+
+  ## dispatch according to type
+  $type == S_IFDIR  and return tdiff_directories $flags, @info;
+  $type == S_IFREG  and return tdiff_files       $flags, @info;
+  $type == S_IFLNK  and return tdiff_symlinks    $flags, @info;
 }
 
 sub tdiff_directories ( $@ ) {
-  my ($meta, @dirs) = @_;
-  s,/*$,/, foreach @dirs;
+  my ($flags, @info) = @_;
+  dbg_comparing 2, 'directories', @info;
+
   my %entries;
  DIR:
-  for my $dir (@dirs) {
-    opendir my $DIR, $dir or warn("opendir: $!"), next DIR;
+  for my $info (@info) {
+    opendir my $DIR, $info->{path}
+      or warn("opendir($info->{path}): $!"), next DIR;
     /^\.\.?$/ or ++$entries{$_} foreach readdir $DIR;
     closedir $DIR;
   }
 
   for my $ent (sort keys %entries) {
-    tdiff_entries $meta, map "$_$ent", @dirs;
+    # make a local deep copy for the loop:
+    my @cinfo = map +{ %$_ }, @info;
+    $_->{path} =~ s!/*$!/$ent! foreach @cinfo;
+    tdiff_entries $flags, @cinfo;
   }
 }
 
 sub tdiff_symlinks ( $@ ) {
-  my ($meta, @paths) = @_;
-  my @links = map readlink($_), @paths;
-  my $link  = most_common @links;
+  my ($flags, @info) = @_;
+  dbg_comparing 3, 'symlinks', @info;
 
-  for my $i (0..$#paths) {
-    defined $link
-      or warn(sprintf "%s: symlink to '%s'.\n", $paths[$i], $links[$i]), next;
-    $links[$i] eq $link
-      or warn(sprintf "%s: symlink to '%s', not '%s'.\n",
-              $paths[$i], $links[$i], $link), next;
+  my @links = map readlink($_->{path}), @info;
+
+  if (! is_only_one @links) {
+    warn sprintf "%s%s: symlink to '%s'.\n",
+      $info[$_]{indent}, $info[$_]{path}, $links[$_]
+        for 0..$#info;
+  } elsif ($IDENT) {
+    warn sprintf "%s%s: symlinks are identical.\n",
+      $info[$_]{indent}, $info[$_]{path}
+        for 0..$#info;
   }
 }
 
-use constant FILE_READ_LEN => 1024*1024;
+use constant FILE_READ_LEN => 1024*1024;  # 1MB
 
 sub tdiff_files ( $@ ) {
-  my ($meta, @paths) = @_;
-  my @handles = map IO::File->new($_, '<'), @paths;
-  my @buffers = map '', @paths;
-  my @equal   = map 1, @paths;
+  my ($flags, @info) = @_;
+  dbg_comparing 3, 'plain files', @info;
 
-  while (grep $_, @handles) {
-    # read from all handles
-    for my $i (0..$#paths) {
-      $handles[$i] or next;
-      my $ret = $handles[$i]->read($buffers[$i], FILE_READ_LEN);
-      $ret and next;
-      $handles[$i] = undef;
-      defined $ret
-        or warn("$paths[$i]: read error: $!\n"), $equal[$i] = 0, next;
-    }
+  $info[$_]->{index} = 1+$_ for 0..$#info;
+  $_->{handle} = IO::File->new($_->{path}, '<') foreach @info;
+  my $all_equal = 1;
 
-    # compare results
-    for my $i (1..$#paths) {
-      $handles[$i] or next;
-      $buffers[$i] eq $buffers[0]
-        or warn(sprintf "%s and %s: files differ.\n",
-                $paths[$i], $paths[0]),
-                  $handles[$i] = undef, $equal[$i] = 0, next;
-    }
+  my @sizes = uniq_by_count map $_->{stat}->size, @info;
+  if (@sizes > 1) {
+    warn sprintf "%s%s: size is %d bytes.\n",
+      $info[$_]{indent}, $info[$_]{path}, $info[$_]{stat}->size
+        for 0..$#info;
+    return;
   }
 
-  if ($IDENT) {
-    for my $i (1..$#paths) {
-      $equal[$i]
-        and warn(sprintf "%s and %s: files are identical.\n",
-                 $paths[$i], $paths[0]);
+  my (@info_groups, @done_groups);
+  for my $usize (@sizes) {
+    push @info_groups, [ grep $_->{stat}->size == $usize, @info ];
+  }
+
+  my @buffers = ();
+ INFO_GROUP:
+  while (@info_groups) {
+    my $group   = shift @info_groups;
+    my @group   = @$group;
+    my @buffers = map 'ok::', @group;
+    @group < 2 and push(@done_groups, $group), next INFO_GROUP;
+
+  BLOCKS:
+    while (1) {
+      # Read the next block from all handles in this group.
+      # On a successful read, $buffers[$i] will contain 'ok::'
+      # followed by the block of data from the file.
+    FILE:
+      for my $i (0..$#group) {
+        my $ret = $group[$i]{handle}->read($buffers[$i], FILE_READ_LEN, 4);
+        $ret and length($buffers[$i]) != $ret+4
+          and die "internal error: mismatch @{[length($buffers[$i]), $ret]}";
+        $ret and next FILE;
+
+        # encountered EOF or error
+        $group[$i]{handle} = undef;
+        defined $ret
+          or warn("$info[$i]{indent}$info[$i]{path}: read error: $!\n"),
+            $buffers[$i] = 'ERR', next FILE;
+        $buffers[$i] = 'eof';
+      }
+
+      # compare results (including status)
+      my @uniq_buf = uniq_by_count @buffers;
+      @uniq_buf == 1 and $uniq_buf[0] eq 'eof' and last BLOCKS;
+      @uniq_buf == 1 and $uniq_buf[0] ne 'ERR' and next BLOCKS;
+
+      # Have either errors or a mismatch.
+
+      my @new_groups;
+      for my $ubuf (@uniq_buf) {
+        my @matches = grep $buffers[$_] eq $ubuf, 0..$#info;
+        # if error, split them up: don't assume they match one another.
+        $ubuf eq 'ERR'
+          and push(@done_groups, map [$_], @group[@matches]), next INFO_GROUP;
+        # if EOF, these are done.
+        $ubuf eq 'eof'
+          and push(@done_groups, [ @group[@matches] ]), next INFO_GROUP;
+        push @new_groups, [ @group[@matches] ];
+      }
+      unshift @info_groups, @new_groups;
+      next INFO_GROUP;
     }
+
+    # At this point, this whole group did match.
+    push @done_groups, $group;
+  }
+
+  # Generate the output.
+  if (@done_groups == 1) {
+    if ($IDENT) {
+      warn sprintf "%s%s: files are identical.\n",
+        $info[$_]{indent}, $info[$_]{path}
+          for 0..$#info;
+    }
+  } else {
+    # Go group by group and figure out what matches what.
+    for my $dg (@done_groups) {
+      my @group = @$dg;
+      @group > 1 or next;
+      my @indices = sort {$a <=> $b} map $_->{index}, @group;
+      for my $elt (@group) {
+        my $idx = $elt->{index};
+        $elt->{match_text} = sprintf "#$idx == " .
+          join ',', grep $_ != $idx, @indices;
+      }
+    }
+    # Now go in order and print out the results
+    warn sprintf "%s%s: files differ (%s).\n",
+      $info[$_]{indent}, $info[$_]{path},
+        ($info[$_]{match_text} || ("#" . $info[$_]{index}))
+          for 0..$#info;
   }
 }
 
 ### do it!
 
-tdiff_entries {}, @ARGV;
+select STDERR;
+$| = 1;
+select STDOUT;
+$| = 1;
+
+my @info = map +{ path => $_ }, @ARGV;
+
+# force directory names to end with a /
+-d $_->{path} and $_->{path} =~ s,/*$,/, foreach @info;
+
+# indent path names with spaces so they line up
+my $width = (sort {$b <=> $a} map length $_->{path}, @info)[0];
+$_->{indent} = (' ' x ($width - length $_->{path})) foreach @info;
+
+tdiff_entries { print_delta => 1 }, @info;;
