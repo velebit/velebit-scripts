@@ -15,22 +15,29 @@ Usage: $0 [flags] dir1 dir2
 Flags:
   --identical  (-s)  Report identical files.
   --xdev       (-x)  Do not cross device boundaries.
+  --check-dev        Check for special device files, and if
+                     encountered, compare the device numbers.
+                     (This is the default on UNIXish systems.)
+  --no-check-dev     Do not check for special device files.
+                     (This is the default on Windowsish systems.)
 
   --debug      (-d)  Enable debugging output.
 EndOfUsage
   exit 0;
 }
 
-use vars qw( $DEBUG $IDENT $ONE_DEVICE );
+use vars qw( $DEBUG $IDENT $ONE_DEVICE $CHECK_FOR_DEVICES );
+$CHECK_FOR_DEVICES = 1 unless $^O eq 'MSWin32' or $^O eq 'cygwin';
 
 GetOptions('debug|d+'     => \$DEBUG,
            'identical|s!' => \$IDENT,
            'xdev|x!'      => \$ONE_DEVICE,
+           'check-dev!'   => \$CHECK_FOR_DEVICES,
           ) or Usage;
 
 @ARGV >= 2 or Usage;
 
-### code helpers
+### code helpers: generic list folding operations
 
 sub uniq_by_count ( @ ) {
   my (@list) = @_;
@@ -56,6 +63,8 @@ sub is_only_one ( @ ) {
   @uniq == 1;
 }
 
+### code helpers: UNIX file modes and devices
+
 sub file_type ( $ ) {
   my ($type) = @_;
   $type = $type & S_IFMT;
@@ -66,7 +75,7 @@ sub file_type ( $ ) {
   $type == S_IFLNK  and return 'a symlink';
   $type == S_IFSOCK and return 'a socket';
   $type == S_IFIFO  and return 'a fifo';
-  return sprintf "of unknown type (octal 0%o)", $type;
+  sprintf "an entry of unknown type (octal 0%o)", $type;
 }
 
 sub file_rdev ( $ ) {
@@ -76,20 +85,21 @@ sub file_rdev ( $ ) {
   $^O eq 'linux'   and $bits = 8;
   $bits and return sprintf("device %d,%d",
                            ($rdev >> $bits), ($rdev & ((1<<$bits) - 1)) );
-  sprintf("device 0x%x", $rdev);
+  sprintf "device 0x%x", $rdev;
 }
 
 ### common messages
 
 sub dbg_comparing ( $$@ ) {
   my ($level, $type, @info) = @_;
-  return unless $DEBUG and $DEBUG >= $level;
   print STDERR (":> comparing ${type}:\n",
-                map ":>   $_->{path}\n", @info);
+                map ":>   $_->{path}\n", @info)
+      if $DEBUG and $DEBUG >= $level;
 }
 
 ### differencing code
 
+sub tdiff_entries ( $@ );
 sub tdiff_type_entries ( $@ );
 sub tdiff_files ( $@ );
 sub tdiff_directories ( $@ );
@@ -165,7 +175,7 @@ sub tdiff_type_entries ( $@ ) {
   my @valid;
 
   ## check file device numbers
-  {
+  if ($CHECK_FOR_DEVICES) {
     my @rdevs = map $_->rdev, @stat;
     if (! is_only_one @rdevs) {
       warn "$ipath[$_]: is @{[file_rdev $rdevs[$_]]}.\n"
