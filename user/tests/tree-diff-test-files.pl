@@ -62,9 +62,13 @@ for my $c (@codes) {
     for my $i (0..$#cx) {
       my $here = $cx[$i];
       my @other = grep $_ != $i+1, @{ $match{$here} };
-      my $eq = '';
-      $eq = ' == ' . join ',', @other if @other;
-      print $OUT "d$idx[$i]/$c.txt: files differ (#" . ($i+1) . $eq . ").\n";
+      my $suffix = '';
+      if (@cx > 2) {
+        my $eq = '';
+        $eq = ' == ' . join ',', @other if @other;
+        $suffix = " (#" . ($i+1) . $eq . ")";
+      }
+      print $OUT "d$idx[$i]/$c.txt: files differ$suffix.\n";
     }
   }
 }

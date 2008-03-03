@@ -1,5 +1,6 @@
 #!/usr/bin/perl
 # -*- cperl -*-
+# $Id$
 use warnings;
 use strict;
 use Getopt::Long;
@@ -14,31 +15,46 @@ sub Usage () {
   print STDERR <<'EndOfUsage';
 Usage: $0 [flags] dir1 dir2
 Flags:
-  --listing    (-l)  Print only file names (relative to the root).
-  --identical  (-s)  Report identical files.
-  --xdev       (-x)  Do not cross device boundaries.
-  --check-dev        Check for special device files, and if
-                     encountered, compare the device numbers.
-                     (This is the default on UNIXish systems.)
-  --no-check-dev     Do not check for special device files.
-                     (This is the default on Windowsish systems.)
+  --listing     (-l)  Print only file names (relative to the root).
+  --identical   (-s)  Report identical files.
 
-  --debug      (-d)  Enable debugging output.
+  --exclude PAT (-x)  Do not include files matching PAT.
+  --xdev              Do not cross device boundaries.
+
+  --check-dev         Check for special device files, and if
+                      encountered, compare the device numbers.
+                      (This is the default on UNIXish systems.)
+  --no-check-dev      Do not check for special device files.
+                      (This is the default on Windowsish systems.)
+  --no-check-size     Do not check the file size first.
+
+  --debug       (-d)  Enable debugging output.
 EndOfUsage
   exit 0;
 }
 
-use vars qw( $DEBUG $LIST $IDENT $ONE_DEVICE $CHECK_FOR_DEVICES );
+use vars qw( $DEBUG $LIST $IDENT @EXCLUDE $ONE_DEVICE
+	     $CHECK_FOR_DEVICES $CHECK_SIZE_BEFORE_CONTENTS );
 $CHECK_FOR_DEVICES = 1 unless $^O eq 'MSWin32' or $^O eq 'cygwin';
+$CHECK_SIZE_BEFORE_CONTENTS = 1;
 
-GetOptions('debug|d+'     => \$DEBUG,
-           'identical|s!' => \$IDENT,
-           'xdev|x!'      => \$ONE_DEVICE,
-           'check-dev!'   => \$CHECK_FOR_DEVICES,
-           'listing|l!'   => \$LIST,
+Getopt::Long::Configure qw( bundling );
+GetOptions('help|h|?'           => \&Usage,
+	   'debug|d+'           => \$DEBUG,
+           'listing|l!'         => \$LIST,
+           'identical|s!'       => \$IDENT,
+           'exclude|x=s'        => \@EXCLUDE,
+           'xdev!'              => \$ONE_DEVICE,
+           'check-dev|dev!'     => \$CHECK_FOR_DEVICES,
+           'check-size|size!'   => \$CHECK_SIZE_BEFORE_CONTENTS,
           ) or Usage;
 
 @ARGV >= 2 or Usage;
+
+# Convert the exclude list into regexps.
+my %glob2re = ( '?' => '.', '*' => '.*' );
+s/(?:(\\.)|(.))/ $1 || $glob2re{$2} || quotemeta($2) /ges, $_ = qr/^$_$/
+  for @EXCLUDE;
 
 ### code helpers: generic list folding operations
 
@@ -107,7 +123,7 @@ sub msg_differ ( $$$@ ) {
   if ($LIST) {
     $rpath ne $msg_differ_list_last
       and $msg_differ_list_last = $rpath,
-	print($rpath . "\n");
+        print($rpath . "\n");
   } else {
     print sprintf "%s%s: ${fmt}.\n", $info->{iroot}, $rpath, @args;
   }
@@ -243,11 +259,12 @@ sub tdiff_directories ( $$@ ) {
     closedir $DIR;
   }
 
+  $rpath =~ s!(?<=.)/*$!/!;
   for my $ent (sort keys %entries) {
-    my $ent_rpath = $rpath;
-    $ent_rpath =~ s!(?<=.)/*$!/!;
-    $ent_rpath .= $ent;
-    tdiff_entries $flags, $ent_rpath, @info;
+    my $rpath_ent = $rpath . $ent;
+    grep($ent =~ $_, @EXCLUDE)       and next;
+    grep($rpath_ent =~ $_, @EXCLUDE) and next;
+    tdiff_entries $flags, $rpath_ent, @info;
   }
 }
 
@@ -273,19 +290,24 @@ sub tdiff_files ( $$@ ) {
   dbg_comparing 3, 'plain files', $rpath, @info;
 
   $info[$_]->{index} = 1+$_ for 0..$#info;
-  $_->{handle} = IO::File->new($_->{root} . $rpath, '<') foreach @info;
+  $_->{handle} = IO::File->new($_->{root} . $rpath, '<'),
+    $_->{handle}->binmode(1) foreach @info;
   my $all_equal = 1;
 
-  my @sizes = uniq_by_count map $_->{stat}->size, @info;
-  if (@sizes > 1) {
-    msg_differ($info[$_], $rpath, "size is %d bytes", $info[$_]{stat}->size)
-      for 0..$#info;
-    return;
-  }
-
   my (@info_groups, @done_groups);
-  for my $usize (@sizes) {
-    push @info_groups, [ grep $_->{stat}->size == $usize, @info ];
+  if ($CHECK_SIZE_BEFORE_CONTENTS) {
+    my @sizes = uniq_by_count map $_->{stat}->size, @info;
+    if (@sizes > 1) {
+      msg_differ($info[$_], $rpath, "size is %d bytes", $info[$_]{stat}->size)
+        for 0..$#info;
+      return;
+    }
+
+    for my $usize (@sizes) {
+      push @info_groups, [ grep $_->{stat}->size == $usize, @info ];
+    }
+  } else {
+    @info_groups = [ @info ];
   }
 
   my @buffers = ();
@@ -346,7 +368,7 @@ sub tdiff_files ( $$@ ) {
   if (@done_groups == 1) {
     if ($IDENT) {
       msg_differ($info[$_], $rpath, 'files are identical')
-	for 0..$#info;
+        for 0..$#info;
     }
   } else {
     # Go group by group and figure out what matches what.
@@ -361,9 +383,13 @@ sub tdiff_files ( $$@ ) {
       }
     }
     # Now go in order and print out the results
-    msg_differ($info[$_], $rpath, "files differ (%s)",
-	       ($info[$_]{match_text} || ("#" . $info[$_]{index})))
-      for 0..$#info;
+    if (@info > 2) {
+      msg_differ($info[$_], $rpath, "files differ (%s)",
+                 ($info[$_]{match_text} || ("#" . $info[$_]{index})))
+        for 0..$#info;
+    } else {
+      msg_differ($info[$_], $rpath, "files differ") for 0..$#info;
+    }
   }
 }
 
