@@ -1,0 +1,13 @@
+#!/usr/bin/perl
+# dump ID3 tags from a file
+use warnings;
+use strict;
+use MP3::Info;
+
+use encoding 'UTF8';
+
+foreach my $file (@ARGV) {
+  my $tag = get_mp3tag($file) || {};
+  use Data::Dumper; print Dumper $tag;
+  print $tag->{TITLE}, "\n";
+}
