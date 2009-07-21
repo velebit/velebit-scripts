@@ -2,12 +2,46 @@
 # dump ID3 tags from a file
 use warnings;
 use strict;
+use encoding 'UTF8';
+
+BEGIN {
+  use Config;
+  my $usr_site_dir = $Config{sitelib};
+  $usr_site_dir =~ s,^/usr/lib/,/home/bert/perl-lib/lib/,;
+  #use lib $usr_site_dir;  # doesn't work?
+  unshift @INC, $usr_site_dir;
+}
 use MP3::Info;
 
-use encoding 'UTF8';
+sub wfmt_dot ( $$ ) {
+  my ($width, $text) = @_;
+  my $len = length $text;
+  $len <= $width and return $text . (' ' x ($width - $len));
+  substr($text, 0, $width-3) . '...';
+}
+
+sub wfmt_trunc ( $$ ) {
+  my ($width, $text) = @_;
+  my $len = length $text;
+  $len <= $width and return $text . (' ' x ($width - $len));
+  substr($text, 0, $width);
+}
+
+sub field ( $$$ ) {
+  my ($width, $tag, $field) = @_;
+  wfmt_dot $width, (exists $tag->{$field} ? $tag->{$field} : '');
+}
 
 foreach my $file (@ARGV) {
   my $tag = get_mp3tag($file) || {};
-  use Data::Dumper; print Dumper $tag;
-  print $tag->{TITLE}, "\n";
+  #use Data::Dumper; print Dumper $tag;
+  my ($track, $num_tracks) = split m!/!, ($tag->{TRACKNUM} || '');
+  $track = $track ? sprintf("%2d", $track) : '  ';
+  my $ver = $tag->{TAGVERSION} || '';
+  $ver =~ s/^ID3v?//g;  $ver =~ s!/.*!+!;  $ver =~ s/[\s\.]//g;
+  print(field(20, $tag, 'ARTIST'), '|',
+	field(27, $tag, 'TITLE'),  '|',
+	$track,                    '|',
+	field(22, $tag, 'ALBUM'),  '<',
+	'v' . wfmt_trunc(4, $ver), "\n");
 }
