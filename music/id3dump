@@ -13,6 +13,13 @@ BEGIN {
 }
 use MP3::Info;
 
+our $RAW_COLUMNS = 0;
+our $DUMP_DATA   = 0;
+# Really Dumbass Getopt =) :
+@ARGV and $ARGV[0] eq '-r' and shift(@ARGV), $RAW_COLUMNS = 1;
+@ARGV and $ARGV[0] eq '-d' and shift(@ARGV), $DUMP_DATA = 1;
+$RAW_COLUMNS and $DUMP_DATA and die;
+
 sub wfmt_dot ( $$ ) {
   my ($width, $text) = @_;
   my $len = length $text;
@@ -29,7 +36,9 @@ sub wfmt_trunc ( $$ ) {
 
 sub field ( $$$ ) {
   my ($width, $tag, $field) = @_;
-  wfmt_dot $width, (exists $tag->{$field} ? $tag->{$field} : '');
+  my $val = (exists $tag->{$field} ? $tag->{$field} : '');
+  return $val if $RAW_COLUMNS;
+  wfmt_dot $width, $val;
 }
 
 foreach my $file (@ARGV) {
@@ -39,8 +48,13 @@ foreach my $file (@ARGV) {
   $track = $track ? sprintf("%2d", $track) : '  ';
   my $ver = $tag->{TAGVERSION} || '';
   $ver =~ s/^ID3v?//g;  $ver =~ s!/.*!+!;  $ver =~ s/[\s\.]//g;
+  if ($DUMP_DATA) {
+    require Data::Dumper;
+    print Data::Dumper::Dumper($tag);
+    next;
+  }
   print(field(20, $tag, 'ARTIST'), '|',
-	field(27, $tag, 'TITLE'),  '|',
+	field(26, $tag, 'TITLE'),  '|',
 	$track,                    '|',
 	field(22, $tag, 'ALBUM'),  '<',
 	'v' . wfmt_trunc(4, $ver), "\n");
