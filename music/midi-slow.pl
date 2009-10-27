@@ -63,9 +63,9 @@ sub make_output_name ( $$ ) {
   my ($file, $speed) = @_;
   $file =~ s/\.midi?$//i;
   $file =~ /_spd\d+$/
-    and die("I refuse to auto-generate a file name for an already modified file"
-	    . "\n    '$_[0]'\n ");
-  $file . sprintf("_spd%03d.mid", $speed);
+    and die("I refuse to auto-generate a file name for an already modified"
+	    . " file\n    '$_[0]'\n ");
+  $file . sprintf("_spd%03.0f.mid", $speed);
 }
 
 for my $input (@ARGV) {
