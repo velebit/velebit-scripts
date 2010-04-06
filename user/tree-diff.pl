@@ -27,16 +27,21 @@ Flags:
   --no-check-dev      Do not check for special device files.
                       (This is the default on Windowsish systems.)
   --no-check-size     Do not check the file size first.
+  --no-check-mode     Do not check the file/directory mode.
+  --no-check-owner    Do not check the file/directory ownership (UID or GID).
+  --no-check-nlinks   Do not check the file/directory hard link count.
 
   --debug       (-d)  Enable debugging output.
 EndOfUsage
   exit 0;
 }
 
-use vars qw( $DEBUG $LIST $IDENT @EXCLUDE $ONE_DEVICE
-	     $CHECK_FOR_DEVICES $CHECK_SIZE_BEFORE_CONTENTS );
-$CHECK_FOR_DEVICES = 1 unless $^O eq 'MSWin32' or $^O eq 'cygwin';
-$CHECK_SIZE_BEFORE_CONTENTS = 1;
+use vars qw( $DEBUG $LIST $IDENT @EXCLUDE $ONE_DEVICE );
+our $CHECK_FOR_DEVICES = 1 unless $^O eq 'MSWin32' or $^O eq 'cygwin';
+our $CHECK_SIZE_BEFORE_CONTENTS = 1;
+our $CHECK_MODE = 1;
+our $CHECK_OWNERSHIP = 1;
+our $CHECK_NLINKS = 1;
 
 Getopt::Long::Configure qw( bundling );
 GetOptions('help|h|?'           => \&Usage,
@@ -47,6 +52,9 @@ GetOptions('help|h|?'           => \&Usage,
            'xdev!'              => \$ONE_DEVICE,
            'check-dev|dev!'     => \$CHECK_FOR_DEVICES,
            'check-size|size!'   => \$CHECK_SIZE_BEFORE_CONTENTS,
+           'check-mode|mode!'   => \$CHECK_MODE,
+           'check-owner|owner!' => \$CHECK_OWNERSHIP,
+           'check-nlinks|nlinks!' => \$CHECK_NLINKS,
           ) or Usage;
 
 @ARGV >= 2 or Usage;
@@ -211,7 +219,7 @@ sub tdiff_type_entries ( $$@ ) {
   }
 
   ## check file permissions
-  {
+  if ($CHECK_MODE) {
     my @modes = map $_->mode & ~S_IFMT, @stat;
     if (! is_only_one @modes) {
       msg_differ($info[$_], $rpath, "is mode 0%o", $modes[$_])
@@ -220,7 +228,7 @@ sub tdiff_type_entries ( $$@ ) {
   }
 
   ## check file ownership
-  {
+  if ($CHECK_OWNERSHIP) {
     my @uidgids = map $_->uid . '/' . $_->gid, @stat;
     if (! is_only_one @uidgids) {
       msg_differ($info[$_], $rpath, "is owned by %s", $uidgids[$_])
@@ -232,7 +240,7 @@ sub tdiff_type_entries ( $$@ ) {
   my $type = $stat[0]->mode & S_IFMT;
 
   ## check number of hard links
-  if ($type != S_IFDIR) {
+  if ($CHECK_NLINKS and $type != S_IFDIR) {
     my @nlinks = map $_->nlink, @stat;
     if (! is_only_one @nlinks) {
       msg_differ($info[$_], $rpath, "%d hard links", $nlinks[$_])
