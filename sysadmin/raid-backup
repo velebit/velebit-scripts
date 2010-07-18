@@ -6,11 +6,14 @@ fail () {
     exit 1
 }
 
+full_backup="home scratch"
+tar_backup="root boot"
+
 backup=/backup
 [ -n "`mount | awk '($3 == "'"$backup"'")'`" ] \
     || fail "$backup isn't mounted!"
 
-for i in home scratch; do
+for i in $full_backup; do
     src="/$i"
     if [ "$src" = "/root" ]; then src="/"; fi
     dst="$backup/$i"
@@ -31,7 +34,7 @@ for i in home scratch; do
     rm -rf "$dst.old"
 done
 
-for i in root boot; do
+for i in $tar_backup; do
     src="/$i"
     if [ "$src" = "/root" ]; then src="/"; fi
     dst="$backup/$i.tar.gz"
@@ -43,7 +46,6 @@ for i in root boot; do
     if [ -e "$dst" ]; then
 	mv "$dst" "$dst.old" || fail "couldn't move old $dst"
     fi
-    mkdir -p "$dst" || fail "couldn't create new directory $dst"
 
     echo "Backing up $src to $dst..."
     time tar -C "$src" --one-file-system -czf "$dst" . \
