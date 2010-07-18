@@ -1,0 +1,53 @@
+#!/bin/sh
+
+fail () {
+    if [ "$#" -eq 0 ]; then set -- "Something has gone very wrong!"; fi
+    echo "$*" >&2
+    exit 1
+}
+
+backup=/backup
+[ -n "`mount | awk '($3 == "'"$backup"'")'`" ] \
+    || fail "$backup isn't mounted!"
+
+for i in home scratch; do
+    src="/$i"
+    if [ "$src" = "/root" ]; then src="/"; fi
+    dst="$backup/$i"
+
+    if [ -e "$dst.old" -a -e "$dst" ]; then
+	rm -rf "$dst.old" || fail "couldn't remove $dst.old"
+	[ -e "$dst.old" ] && fail "didn't actually remove $dst.old"
+    fi
+    if [ -e "$dst" ]; then
+	mv "$dst" "$dst.old" || fail "couldn't move old $dst"
+    fi
+    mkdir -p "$dst" || fail "couldn't create new directory $dst"
+
+    echo "Backing up $src to $dst..."
+    (time tar -C "$src" --one-file-system -cf - . \
+	| tar -C "$dst" -xpf -) || fail "The copying went kaboom."
+    echo "...done."
+    rm -rf "$dst.old"
+done
+
+for i in root boot; do
+    src="/$i"
+    if [ "$src" = "/root" ]; then src="/"; fi
+    dst="$backup/$i.tar.gz"
+
+    if [ -e "$dst.old" -a -e "$dst" ]; then
+	rm -rf "$dst.old" || fail "couldn't remove $dst.old"
+	[ -e "$dst.old" ] && fail "didn't actually remove $dst.old"
+    fi
+    if [ -e "$dst" ]; then
+	mv "$dst" "$dst.old" || fail "couldn't move old $dst"
+    fi
+    mkdir -p "$dst" || fail "couldn't create new directory $dst"
+
+    echo "Backing up $src to $dst..."
+    time tar -C "$src" --one-file-system -czf "$dst" . \
+	|| fail "The tarballing went kaboom."
+    echo "...done."
+    rm -rf "$dst.old"
+done
