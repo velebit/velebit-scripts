@@ -44,20 +44,33 @@ TestGood () {
 
 run_backup () {
     local src="$1"
-    local dst="$2"
+    local dst_base="$2"
+    local dst_ext="$3"
+    local dst="$dst_base$dst_ext"
 
-    if [ -e "$dst.old" -a -e "$dst" ]; then
-	Run rm -rf "$dst.old" || fail "couldn't remove $dst.old"
-	TestBad -e "$dst.old" && fail "didn't actually remove $dst.old"
-    fi
-    if [ -e "$dst" ]; then
-	Run mv "$dst" "$dst.old" || fail "couldn't move old $dst"
-    fi
+    set --
+    for ext in '' '.tar.gz' '.tar.bz2'; do
+	local xdst="$dst_base$ext"
+	if [ -e "$xdst.old" -a -e "$xdst" ]; then
+	    status "Cleaning up previous $xdst..."
+	    Run rm -rf "$xdst.old" || fail "couldn't remove $xdst.old"
+	    TestBad -e "$xdst.old" && fail "didn't actually remove $xdst.old"
+	    status "...done."
+	fi
+	if [ -e "$xdst" ]; then
+	    set -- "$@" "$xdst"
+	    Run mv "$xdst" "$xdst.old" || fail "couldn't move old $xdst"
+	fi
+    done
 
     status "Backing up $src to $dst..."
     case "$dst" in
 	*.tar.gz)
 	    TimeRun tar -C "$src" --one-file-system -czf "$dst" . \
+		|| fail "The tarballing went kaboom."
+	    ;;
+	*.tar.bz2)
+	    TimeRun tar -C "$src" --one-file-system -cjf "$dst" . \
 		|| fail "The tarballing went kaboom."
 	    ;;
 	*)
@@ -67,18 +80,28 @@ run_backup () {
 	    ;;
     esac
     status "...done."
-    Run rm -rf "$dst.old"
+
+    for xdst in "$@"; do
+	status "Cleaning up previous $xdst..."
+	Run rm -rf "$xdst.old"
+	status "...done."
+    done
+}
+
+partition_path () {
+    if [ "$1" = "root" ]; then echo "/"; else echo "/$1"; fi
+}
+backup_path () {
+    echo "$backup/$1"
 }
 
 run_all_backups () {
     for i in $full_backup; do
-	if [ "$i" = "root" ]; then run_backup "/"   "$backup/$i";
-	else                       run_backup "/$i" "$backup/$i"; fi
+	run_backup "`partition_path $i`" "`backup_path $i`" ""
     done
 
     for i in $tar_backup; do
-	if [ "$i" = "root" ]; then run_backup "/"   "$backup/$i.tar.gz";
-	else                       run_backup "/$i" "$backup/$i.tar.gz"; fi
+	run_backup "`partition_path $i`" "`backup_path $i`" ".tar.gz"
     done
 }
 
