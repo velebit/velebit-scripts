@@ -11,8 +11,8 @@ status () {
 }
 
 backup=/backup
-full_backup="home scratch"
-tar_backup="root boot"
+full_backup="home"
+tar_backup="scratch root boot"
 
 dryrun=
 
