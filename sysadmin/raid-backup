@@ -42,6 +42,34 @@ TestGood () {
     if [ -n "$dryrun" ]; then true;   else test "$@";  fi
 }
 
+CheckSpace () {
+    echo "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
+    df -h "$backup"
+    echo "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
+}
+disk_used_kb () {
+    df -k "$backup" | awk '($1~/^\/dev\//){print $3}'
+}
+disk_free_kb () {
+    # NB: we don't use df's "free" number ($4), since that number is
+    #   calibrated to hit zero when you get to 95% disk usage (100%
+    #   minus the "reserved" 5%!)
+    df -k "$backup" | awk '($1~/^\/dev\//){printf "%d",$2-$3}'
+}
+
+#units_to_bytes () {
+#    awk '{for(i=1;i<=NF;++i){a=$i;if(a~/T$/){a=a*1024 "G"};if(a~/G$/){a=a*1024 "M"};if(a~/M$/){a=a*1024 "K"};if(a~/K$/){a=a*1024};printf "%s%.0f",((i>1)?" ":""),a};printf "\n"}'
+#}
+#bytes_to_units () {
+#    awk '{for(i=1;i<=NF;++i){a=$i;s=1;u="";if(a<0){a=-a;s=-1};if(a>1024){a/=1024;u="K";if(a>1024){a/=1024;u="M";if(a>1024){a/=1024;u="G";if(a>1024){a/=1024;u="T"}}}};printf "%s%.1f%s",((i>1)?" ":""),s*a,u};printf "\n"}'
+#}
+kb_to_units () {
+    awk '{for(i=1;i<=NF;++i){a=$i;s=1;u="K";if(a<0){a=-a;s=-1};if(a>1024){a/=1024;u="M";if(a>1024){a/=1024;u="G";if(a>1024){a/=1024;u="T"}}};printf "%s%.1f%s",((i>1)?" ":""),s*a,u};printf "\n"}'
+}
+
+max_backup_size=0
+min_disk_free="`disk_free_kb`"
+
 run_backup () {
     local src="$1"
     local dst_base="$2"
@@ -56,12 +84,15 @@ run_backup () {
 	    Run rm -rf "$xdst.old" || fail "couldn't remove $xdst.old"
 	    TestBad -e "$xdst.old" && fail "didn't actually remove $xdst.old"
 	    status "...done."
+	    CheckSpace
 	fi
 	if [ -e "$xdst" ]; then
 	    set -- "$@" "$xdst"
 	    Run mv "$xdst" "$xdst.old" || fail "couldn't move old $xdst"
 	fi
     done
+
+    local free_before="`disk_free_kb`"
 
     status "Backing up $src to $dst..."
     case "$dst" in
@@ -80,11 +111,22 @@ run_backup () {
 	    ;;
     esac
     status "...done."
+    CheckSpace
 
+    local free_after="`disk_free_kb`"
+    local space_used="`expr "$free_before" - "$free_after"`"
+    if [ "$min_disk_free" -gt "$free_after" ]; then
+	min_disk_free="$free_after"
+    fi
+    if [ "$max_backup_size" -lt "$space_used" ]; then
+	max_backup_size="$space_used"
+    fi
+ 
     for xdst in "$@"; do
 	status "Cleaning up previous $xdst..."
 	Run rm -rf "$xdst.old"
 	status "...done."
+	CheckSpace
     done
 }
 
@@ -96,6 +138,8 @@ backup_path () {
 }
 
 run_all_backups () {
+    CheckSpace
+
     for i in $full_backup; do
 	run_backup "`partition_path $i`" "`backup_path $i`" ""
     done
@@ -103,6 +147,13 @@ run_all_backups () {
     for i in $tar_backup; do
 	run_backup "`partition_path $i`" "`backup_path $i`" ".tar.gz"
     done
+
+    status "Min. observed disk margin:  `echo "$min_disk_free" | kb_to_units`"
+    if [ -z "$dryrun" ]; then
+	local free="`disk_free_kb`"
+	local margin="`expr "$free" - "$max_backup_size"`"
+	status "Min. projected disk margin: `echo "$margin" | kb_to_units`"
+    fi
 }
 
 if [ -t 1 ]; then
