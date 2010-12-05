@@ -6,6 +6,7 @@ use File::Find;
 #use Cwd;
 
 my $script = $0;  $script =~ s,.*[/\\],,;
+my $force = 0;
 
 sub write_m3u ( $$@ ) {
   my ($file, $title, @list) = @_;
@@ -50,8 +51,8 @@ sub process_dir {
 
   my @mp3s = glob '*.mp3';
   if (@mp3s > 1) {
-    my @wpls = glob '00*.wpl';
-    if (@wpls) {
+    my $wpl = '00_playlist.wpl';
+    if (-e $wpl && !$force) {
       print "SKIP  $File::Find::name\n";
     } else {
       print "write $File::Find::name\n";
