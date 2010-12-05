@@ -6,7 +6,7 @@ use File::Find;
 #use Cwd;
 
 my $script = $0;  $script =~ s,.*[/\\],,;
-my $force = 0;
+my $force = 1;
 
 sub write_m3u ( $$@ ) {
   my ($file, $title, @list) = @_;
@@ -30,7 +30,8 @@ sub write_wpl ( $$@ ) {
   <body><seq>
 EndOfHeader
   for my $item (@list) {
-    $item =~ s/&/&amp;/g;
+    $item =~ s,/,\\,g;
+    $item =~ s,&,&amp;,g;
     $text .= qq[    <media src="$item"/>\n];
   }
   $text .= <<"EndOfFooter";
@@ -42,27 +43,44 @@ EndOfFooter
   print $FILE $text;
 }
 
-sub process_dir {
-  -d $_ or return;
-  /^\.\.?$/ and return;
+my (%mp3s, %children);
+sub process_mp3s {
+  /\.mp3$/ or return;
+  -f $_    or return;
 
-  my $dir = $_;
-  chdir $dir or die "chdir($_): $!";
+  my @dir = split m:/:, $File::Find::name;
+  my @file = pop @dir;
 
-  my @mp3s = glob '*.mp3';
-  if (@mp3s > 1) {
-    my $wpl = '00_playlist.wpl';
-    if (-e $wpl && !$force) {
-      print "SKIP  $File::Find::name\n";
-    } else {
-      print "write $File::Find::name\n";
-      write_wpl '00_playlist.wpl', $dir, sort @mp3s;
-    }
-  } elsif (@mp3s == 1) {
-    print "SKIP  $File::Find::name\n";
+  while (@dir) {
+    my $dir = join '/', @dir;
+    push @{$mp3s{$dir}}, join '/', @file;
+    $children{$dir}{$file[0]}++;
+    unshift @file, pop @dir;
   }
-
-  chdir '..' or die "chdir(..): $!";
 }
 
-find \&process_dir, '.';
+find +{ preprocess => sub { sort @_; }, wanted => \&process_mp3s }, '.';
+
+for my $dir (sort keys %mp3s) {
+  my $wpl = "$dir/00_playlist.wpl";
+
+  if (@{$mp3s{$dir}} <= 1 or keys %{$children{$dir}} <= 1) {
+    if (! -e $wpl) {
+      print "SKIP  $dir\n";
+    } elsif (!$force) {
+      print "LEAVE $dir\n";
+    } else {
+      print "rm    $dir\n";
+      unlink $wpl or warn "unlink($wpl): $!";
+    }
+    next;
+  }
+
+  if (-e $wpl && !$force) {
+    print "KEEP  $dir\n";
+  } else {
+    print "write $dir\n";
+    my $name = $dir;  $name =~ s,^.*/,,;
+    write_wpl $wpl, $name, @{$mp3s{$dir}};
+  }
+}
