@@ -29,10 +29,20 @@ done
     || fail "$backup isn't mounted!"
 
 Run () {
-    if [ -n "$dryrun" ]; then echo "WOULD run:      $*" >&2; else "$@"; fi
+    if [ -n "$dryrun" ]; then
+	echo "WOULD run:      $*" >&2
+    else
+	echo "# $*" >&2  # NB: this does go to the log file
+	"$@"
+    fi
 }
 TimeRun () {
-    if [ -n "$dryrun" ]; then echo "WOULD run: time $*" >&2; else time "$@"; fi
+    if [ -n "$dryrun" ]; then
+	echo "WOULD run: time $*" >&2
+    else
+	echo "# time $*" >&2  # NB: this does go to the log file
+	time "$@"
+    fi
 }
 
 TestBad () {
@@ -145,7 +155,7 @@ run_all_backups () {
     done
 
     for i in $tar_backup; do
-	run_backup "`partition_path $i`" "`backup_path $i`" ".tar.gz"
+	run_backup "`partition_path $i`" "`backup_path $i`" ".tar.bz2"
     done
 
     status "Min. observed disk margin:  `echo "$min_disk_free" | kb_to_units`"
