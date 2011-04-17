@@ -4,14 +4,15 @@ use warnings;
 use strict;
 use encoding 'UTF8';
 
-BEGIN {
-  use Config;
-  my $usr_site_dir = $Config{sitelib};
-  $usr_site_dir =~ s,^/usr/lib/,/home/bert/perl-lib/lib/,;
-  #use lib $usr_site_dir;  # doesn't work?
-  unshift @INC, $usr_site_dir;
-}
-use MP3::Info;
+#BEGIN {
+#  use Config;
+#  my $usr_site_dir = $Config{sitelib};
+#  $usr_site_dir =~ s,^/usr/lib/,/home/bert/perl-lib/lib/,;
+#  #use lib $usr_site_dir;  # doesn't work?
+#  unshift @INC, $usr_site_dir;
+#}
+#use MP3::Info;
+use Audio::Scan;
 
 our $RAW_COLUMNS = 0;
 our $DUMP_DATA   = 0;
@@ -42,20 +43,21 @@ sub field ( $$$ ) {
 }
 
 foreach my $file (@ARGV) {
-  my $tag = get_mp3tag($file) || {};
+  my $data = Audio::Scan->scan($file) || {};
+  my $tag = $data->{tags} || {};
   #use Data::Dumper; print Dumper $tag;
-  my ($track, $num_tracks) = split m!/!, ($tag->{TRACKNUM} || '');
+  my ($track, $num_tracks) = split m!/!, ($tag->{TRCK} || '');
   $track = $track ? sprintf("%2d", $track) : '  ';
-  my $ver = $tag->{TAGVERSION} || '';
+  my $ver = $data->{info}{id3_version} || '';
   $ver =~ s/^ID3v?//g;  $ver =~ s!/.*!+!;  $ver =~ s/[\s\.]//g;
   if ($DUMP_DATA) {
     require Data::Dumper;
     print Data::Dumper::Dumper($tag);
     next;
   }
-  print(field(20, $tag, 'ARTIST'), '|',
-	field(26, $tag, 'TITLE'),  '|',
+  print(field(20, $tag, 'TPE1'), '|',
+	field(26, $tag, 'TIT2'),  '|',
 	$track,                    '|',
-	field(22, $tag, 'ALBUM'),  '<',
+	field(22, $tag, 'TALB'),  '<',
 	'v' . wfmt_trunc(4, $ver), "\n");
 }
