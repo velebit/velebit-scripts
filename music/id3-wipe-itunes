@@ -1,0 +1,39 @@
+#!/usr/bin/perl
+# dump ID3 tags from a file
+use warnings;
+use strict;
+use encoding 'UTF8';
+
+#BEGIN {
+#  use Config;
+#  my $usr_site_dir = $Config{sitelib};
+#  $usr_site_dir =~ s,^/usr/lib/,/home/bert/perl-lib/lib/,;
+#  #use lib $usr_site_dir;  # doesn't work?
+#  unshift @INC, $usr_site_dir;
+#}
+#use MP3::Info;
+#use Audio::Scan;
+use MP3::Tag;
+
+foreach my $file (@ARGV) {
+  my $tag = MP3::Tag->new($file);
+  $tag->get_tags;
+
+  if (exists $tag->{ID3v2}) {
+    my $id3v2 = $tag->{ID3v2};
+#    my @comm_frame_ids = sort grep /^COMM(?:\d{2})?$/,
+#      keys %{ $id3v2->get_frame_ids };
+    my @comm_frame_ids = sort grep /^COMM$/,
+      keys %{ $id3v2->get_frame_ids };
+
+    my $updates = 0;
+    for my $fid (@comm_frame_ids) {
+      my ($frame, $desc) = $id3v2->get_frame($fid);
+      ($frame->{Description} || '') =~ /^iTun/ or next;
+      $id3v2->remove_frame($fid);
+      ++$updates;
+    }
+
+    $id3v2->write_tag if $updates;
+  }
+}
