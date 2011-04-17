@@ -55,6 +55,8 @@ sub process_mp3s {
     my $dir = join '/', @dir;
     push @{$mp3s{$dir}}, join '/', @file;
     $children{$dir}{$file[0]}++;
+    $dir[-1] eq 'christmas' and last;
+    $dir[-1] eq 'classical' and last;
     unshift @file, pop @dir;
   }
 }
