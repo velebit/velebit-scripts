@@ -1,0 +1,19 @@
+#!/usr/bin/perl
+# dump ID3 tags from a file
+use warnings;
+use strict;
+use encoding 'UTF8';
+
+BEGIN {
+  use Config;
+  my $usr_site_dir = $Config{sitelib};
+  $usr_site_dir =~ s,^/usr/lib/,/home/bert/perl-lib/lib/,;
+  #use lib $usr_site_dir;  # doesn't work?
+  unshift @INC, $usr_site_dir;
+}
+use MP3::Info;
+
+foreach my $file (@ARGV) {
+  my $tag = get_mp3tag($file) || {};
+  print "$_\n" for sort keys %$tag;
+}
