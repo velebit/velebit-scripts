@@ -1,0 +1,30 @@
+#!/bin/sh
+
+id3frames="`dirname "$0"`/id3dump -f"
+
+examine_frames () {
+    for i in "$@"; do
+	if [ -d "$i" ]; then
+	    find "$i" -type f -name '*.mp3' -print0 | xargs -0 $id3frames
+	elif [ -e "$i" ]; then
+	    $id3frames "$i"
+	else
+	    echo "Don't know what to do with entry" >&2
+	    echo "  $i" >&2
+	    exit 1
+	fi
+    done
+}
+
+TEMP=".tmp.frames"
+for i in "$@"; do
+    echo "*** $i"
+    echo "Saving initial frame data."
+    examine_frames "$i" > "$TEMP"
+    echo "...done.  Make any changes now, then press any key."
+    read dummy
+    examine_frames "$i" | diff -usa "$TEMP" - 2>&1 | less
+    #echo "Examine the changes, if any, then press any key."
+    #read dummy
+    rm -f "$TEMP"
+done
