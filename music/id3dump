@@ -46,14 +46,16 @@ sub field ( $$ ) {
 sub version ( $ ) {
   my ($tag) = @_;
 
+  my @ver;
   if (exists $tag->{ID3v2}) {
-    return 'ID3v2.' . $tag->{ID3v2}{version} if exists $tag->{ID3v2}{version};
-    return 'ID3v2.x';
+    push @ver, (exists $tag->{ID3v2}{version}
+		? 'ID3v2.' . $tag->{ID3v2}{version}
+		: 'ID3v2.x');
   }
   if (exists $tag->{ID3v1}) {
-    return 'ID3v1.x';
+    push @ver, 'ID3v1.x';
   }
-  return '';
+  return join '/', @ver;
 }
 
 sub dump_ID3v1 ( $ ) {
