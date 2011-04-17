@@ -4,16 +4,28 @@ use warnings;
 use strict;
 use encoding 'UTF8';
 
-BEGIN {
-  use Config;
-  my $usr_site_dir = $Config{sitelib};
-  $usr_site_dir =~ s,^/usr/lib/,/home/bert/perl-lib/lib/,;
-  #use lib $usr_site_dir;  # doesn't work?
-  unshift @INC, $usr_site_dir;
+#BEGIN {
+#  use Config;
+#  my $usr_site_dir = $Config{sitelib};
+#  $usr_site_dir =~ s,^/usr/lib/,/home/bert/perl-lib/lib/,;
+#  #use lib $usr_site_dir;  # doesn't work?
+#  unshift @INC, $usr_site_dir;
+#}
+#use MP3::Info;
+#use Audio::Scan;
+use MP3::Tag;
+
+sub uniq ( @ ) {
+  my %hash;
+  $hash{$_} = 1 for @_;
+  keys %hash;
 }
-use MP3::Info;
 
 foreach my $file (@ARGV) {
-  my $tag = get_mp3tag($file) || {};
-  print "$_\n" for sort keys %$tag;
+  my $tag = MP3::Tag->new($file);
+  $tag->get_tags;
+
+  if (exists $tag->{ID3v2}) {
+    print "$_\n" for sort uniq $tag->id3v2_frame_descriptors;
+  }
 }

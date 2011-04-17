@@ -12,7 +12,8 @@ use encoding 'UTF8';
 #  unshift @INC, $usr_site_dir;
 #}
 #use MP3::Info;
-use Audio::Scan;
+#use Audio::Scan;
+use MP3::Tag;
 
 our $RAW_COLUMNS = 0;
 our $DUMP_DATA   = 0;
@@ -35,29 +36,107 @@ sub wfmt_trunc ( $$ ) {
   substr($text, 0, $width);
 }
 
-sub field ( $$$ ) {
-  my ($width, $tag, $field) = @_;
-  my $val = (exists $tag->{$field} ? $tag->{$field} : '');
+sub field ( $$ ) {
+  my ($width, $val) = @_;
+  $val = '' if !defined $val;
   return $val if $RAW_COLUMNS;
   wfmt_dot $width, $val;
 }
 
-foreach my $file (@ARGV) {
-  my $data = Audio::Scan->scan($file) || {};
-  my $tag = $data->{tags} || {};
-  #use Data::Dumper; print Dumper $tag;
-  my ($track, $num_tracks) = split m!/!, ($tag->{TRCK} || '');
-  $track = $track ? sprintf("%2d", $track) : '  ';
-  my $ver = $data->{info}{id3_version} || '';
-  $ver =~ s/^ID3v?//g;  $ver =~ s!/.*!+!;  $ver =~ s/[\s\.]//g;
-  if ($DUMP_DATA) {
-    require Data::Dumper;
-    print Data::Dumper::Dumper($tag);
-    next;
+sub version ( $ ) {
+  my ($tag) = @_;
+
+  if (exists $tag->{ID3v2}) {
+    return 'ID3v2.' . $tag->{ID3v2}{version} if exists $tag->{ID3v2}{version};
+    return 'ID3v2.x';
   }
-  print(field(20, $tag, 'TPE1'), '|',
-	field(26, $tag, 'TIT2'),  '|',
-	$track,                    '|',
-	field(22, $tag, 'TALB'),  '<',
-	'v' . wfmt_trunc(4, $ver), "\n");
+  if (exists $tag->{ID3v1}) {
+    return 'ID3v1.x';
+  }
+  return '';
+}
+
+sub dump_ID3v1 ( $ ) {
+  my ($tag) = @_;
+
+  my %clone = %{$tag->{ID3v1}};        # shallow copy
+  $clone{parent} = '...removed...'
+    if exists $clone{parent};
+  $clone{mp3} = { %{ $clone{mp3} } }   # "deepen" a branch of the shallow copy
+    if exists $clone{mp3};
+  $clone{mp3}{parent} = '...removed...'
+    if exists $clone{mp3} and exists $clone{mp3}{parent};
+
+  require Data::Dumper;
+  print Data::Dumper->Dump([\%clone], ['ID3v1']);
+}
+
+sub dump_ID3v2 ( $ ) {
+  my ($tag) = @_;
+
+  my %clone = %{$tag->{ID3v2}};        # shallow copy
+  $clone{parent} = '...removed...'
+    if exists $clone{parent};
+  $clone{mp3} = { %{ $clone{mp3} } }   # "deepen" a branch of the shallow copy
+    if exists $clone{mp3};
+  $clone{mp3}{parent} = '...removed...'
+    if exists $clone{mp3} and exists $clone{mp3}{parent};
+
+  require Data::Dumper;
+  print Data::Dumper->Dump([\%clone], ['ID3v2']);
+}
+
+#sub show_ID3v1 ( $ ) { ... }
+
+sub show_ID3v2 ( $ ) {
+  my ($tag) = @_;
+
+  require Data::Dumper;
+
+#  my $id3v2     = $tag->{ID3v2};
+#  my @frame_ids = sort keys %{ $id3v2->get_frame_ids };
+#
+#  for my $fid (@frame_ids) {
+#    my $truename = $id3v2->get_frame_descr($fid);
+#    $truename = '?' . $fid unless defined $truename;
+#    my ($frame, $desc) = $id3v2->get_frame($fid);
+#    $desc = '?' unless defined $desc;
+#    print "$truename   ( $desc )\n";
+#    print '        ' . Data::Dumper->Dump([$frame], ['$data']);
+#  }
+
+  my @frame_descriptors = $tag->id3v2_frame_descriptors;
+
+  for my $fdesc (@frame_descriptors) {
+    my $fid = $fdesc;  $fid =~ s/[][)(].*$//;
+    my $label = $tag->{ID3v2}->supported_frames()->{$fid};
+    $label = '?' unless defined $label;
+    print "$fdesc   ( $label )\n";
+    print '        ' . Data::Dumper->Dump([$_->[1]], ['$data'])
+      for $tag->{ID3v2}->frame_list_by_descr($fdesc);
+  }
+}
+
+foreach my $file (@ARGV) {
+  my $tag = MP3::Tag->new($file);
+  $tag->get_tags;
+
+  if ($DUMP_DATA) {
+    dump_ID3v1 $tag if exists $tag->{ID3v1};
+    #show_ID3v2 $tag if exists $tag->{ID3v2};
+    dump_ID3v2 $tag if exists $tag->{ID3v2};
+    show_ID3v2 $tag if exists $tag->{ID3v2};
+
+  } else {
+    my ($track) = $tag->track1;  # just the track, no number of tracks...
+    $track = $track ? sprintf("%2d", $track) : '  ';
+    my $ver = version $tag;
+    $ver =~ s/^ID3v?//;  $ver =~ s!/.*!+!;  $ver =~ s/[\s\.]//g;
+
+    print(field(20, $tag->performer), '|',
+	  field(26, $tag->title),     '|',
+	  $track,                     '|',
+	  field(22, $tag->album),     '<',
+	  'v' . wfmt_trunc(4, $ver), "\n");
+  }
 }

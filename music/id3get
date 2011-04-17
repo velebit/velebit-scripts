@@ -4,19 +4,45 @@ use warnings;
 use strict;
 use encoding 'UTF8';
 
-BEGIN {
-  use Config;
-  my $usr_site_dir = $Config{sitelib};
-  $usr_site_dir =~ s,^/usr/lib/,/home/bert/perl-lib/lib/,;
-  #use lib $usr_site_dir;  # doesn't work?
-  unshift @INC, $usr_site_dir;
-}
-use MP3::Info;
+#BEGIN {
+#  use Config;
+#  my $usr_site_dir = $Config{sitelib};
+#  $usr_site_dir =~ s,^/usr/lib/,/home/bert/perl-lib/lib/,;
+#  #use lib $usr_site_dir;  # doesn't work?
+#  unshift @INC, $usr_site_dir;
+#}
+#use MP3::Info;
+#use Audio::Scan;
+use MP3::Tag;
 
-my $item = shift @ARGV;
+my $fdesc = shift @ARGV;
+
+sub qprint ( $ ) {
+  my ($text) = @_;
+  $text =~ s/\\/\\\\/g;  # \n is shown as |\n|, but '\n' is shown as |\\n|
+  $text =~ s/\n/\\n/g;
+  $text =~ s/\r/\\r/g;
+  $text =~ s/\0/\\0/g;
+  print "$text\n";
+}
+
 foreach my $file (@ARGV) {
-  my $tag = get_mp3tag($file) || {};
-  my $info = $tag->{$item};
-  $info = '' if !defined $info;
-  print "$info\n";
+  my $tag = MP3::Tag->new($file);
+  $tag->get_tags;
+
+  if (exists $tag->{ID3v2}) {
+    for my $item ($tag->{ID3v2}->frame_list_by_descr($fdesc)) {
+      my $info = $item->[1];
+
+      if (! ref $info) {
+	qprint $info;
+      } elsif ($fdesc =~ /^(?:COMM|TXXX)/) {
+	qprint $info->{Text};
+      } elsif ($fdesc =~ /^(?:UFID)/) {
+	qprint "$info->{Text} $info->{_Data}";
+      } else {
+	qprint "<object: " . ref($info) . ">";  ##XXX
+      }
+    }
+  }
 }
