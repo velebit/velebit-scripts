@@ -14,13 +14,21 @@ use encoding 'UTF8';
 #use MP3::Info;
 #use Audio::Scan;
 use MP3::Tag;
+use Getopt::Long;
 
-our $RAW_COLUMNS = 0;
-our $DUMP_DATA   = 0;
-# Really Dumbass Getopt =) :
-@ARGV and $ARGV[0] eq '-r' and shift(@ARGV), $RAW_COLUMNS = 1;
-@ARGV and $ARGV[0] eq '-d' and shift(@ARGV), $DUMP_DATA = 1;
-$RAW_COLUMNS and $DUMP_DATA and die;
+our ($RAW, $DUMP_DATA, $ALL_FRAMES, $TABLE);
+GetOptions('raw|r!'    => \$RAW,
+	   'dump|d!'   => \$DUMP_DATA,
+	   'frames|f!' => \$ALL_FRAMES,
+	   'table|t!'  => \$TABLE,
+	  ) or die;
+$TABLE = 1 if !defined($TABLE) and !$DUMP_DATA and !$ALL_FRAMES;
+
+sub uniq ( @ ) {
+  my %hash;
+  $hash{$_} = 1 for @_;
+  keys %hash;
+}
 
 sub wfmt_dot ( $$ ) {
   my ($width, $text) = @_;
@@ -39,7 +47,7 @@ sub wfmt_trunc ( $$ ) {
 sub field ( $$ ) {
   my ($width, $val) = @_;
   $val = '' if !defined $val;
-  return $val if $RAW_COLUMNS;
+  return $val if $RAW;
   wfmt_dot $width, $val;
 }
 
@@ -83,6 +91,10 @@ sub dump_ID3v2 ( $ ) {
     if exists $clone{mp3};
   $clone{mp3}{parent} = '...removed...'
     if exists $clone{mp3} and exists $clone{mp3}{parent};
+  $clone{raw_data} = '...removed...'
+    if exists $clone{raw_data} and !$RAW;
+  $clone{tag_data} = '...removed...'
+    if exists $clone{tag_data} and !$RAW;
 
   require Data::Dumper;
   print Data::Dumper->Dump([\%clone], ['ID3v2']);
@@ -108,14 +120,19 @@ sub show_ID3v2 ( $ ) {
 #  }
 
   my @frame_descriptors = $tag->id3v2_frame_descriptors;
+  s/^([A-Z\d]{4})\d{2}$/$1/ for @frame_descriptors;  # remove indexed descr.s
+  @frame_descriptors = sort(uniq(@frame_descriptors));
 
   for my $fdesc (@frame_descriptors) {
     my $fid = $fdesc;  $fid =~ s/[][)(].*$//;
     my $label = $tag->{ID3v2}->supported_frames()->{$fid};
     $label = '?' unless defined $label;
     print "$fdesc   ( $label )\n";
+    my @frames = $tag->{ID3v2}->frame_list_by_descr($fdesc);
+    ($fdesc eq 'UFID' or $fdesc eq 'PRIV')
+      and @frames = sort { $a->[1]{Text} cmp $b->[1]{Text} } @frames;
     print '        ' . Data::Dumper->Dump([$_->[1]], ['$data'])
-      for $tag->{ID3v2}->frame_list_by_descr($fdesc);
+      for @frames;
   }
 }
 
@@ -123,13 +140,18 @@ foreach my $file (@ARGV) {
   my $tag = MP3::Tag->new($file);
   $tag->get_tags;
 
-  if ($DUMP_DATA) {
-    dump_ID3v1 $tag if exists $tag->{ID3v1};
-    #show_ID3v2 $tag if exists $tag->{ID3v2};
-    dump_ID3v2 $tag if exists $tag->{ID3v2};
-    show_ID3v2 $tag if exists $tag->{ID3v2};
+  print "* $file *\n" if $DUMP_DATA or $ALL_FRAMES;
 
-  } else {
+  if ($DUMP_DATA) {
+    dump_ID3v2 $tag if exists $tag->{ID3v2};
+    dump_ID3v1 $tag if exists $tag->{ID3v1};
+  }
+  if ($ALL_FRAMES) {
+    show_ID3v2 $tag if exists $tag->{ID3v2};
+    #show_ID3v1 $tag if exists $tag->{ID3v1};
+  }
+
+  if ($TABLE) {
     my ($track) = $tag->track1;  # just the track, no number of tracks...
     $track = $track ? sprintf("%2d", $track) : '  ';
     my $ver = version $tag;
