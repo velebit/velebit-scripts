@@ -14,6 +14,12 @@ use encoding 'UTF8';
 #use MP3::Info;
 #use Audio::Scan;
 use MP3::Tag;
+use Getopt::Long;
+
+our $VERBOSE = 0;
+GetOptions('verbose|v+' => \$VERBOSE,
+	  ) or die;
+
 
 sub uniq ( @ ) {
   my %hash;
@@ -21,11 +27,25 @@ sub uniq ( @ ) {
   keys %hash;
 }
 
+my $id2label;
 foreach my $file (@ARGV) {
   my $tag = MP3::Tag->new($file);
   $tag->get_tags;
 
   if (exists $tag->{ID3v2}) {
-    print "$_\n" for sort uniq $tag->id3v2_frame_descriptors;
+    $id2label = $tag->{ID3v2}->supported_frames() unless $id2label;
+    my @desc = $tag->id3v2_frame_descriptors;
+    s/^([A-Z\d]{4})\d{2}$/$1/ for @desc;  # HACK: remove indexed descriptors
+    for my $desc (sort uniq @desc) {
+      #print "$file: ";
+      if (! $VERBOSE) {
+	print "$desc\n";
+      } else {
+	my $fid = $desc;  $fid =~ s/[][)(].*$//;
+	my $label = $id2label->{$fid};
+	$label = '?' unless defined $label;
+	print "$desc   ( $label )\n";
+      }
+    }
   }
 }
