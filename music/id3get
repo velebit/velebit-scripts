@@ -15,15 +15,72 @@ use encoding 'UTF8';
 #use Audio::Scan;
 use MP3::Tag;
 
+use Getopt::Long;
+
+my @latinCharacterCodes =
+  ( 0x20 .. 0x7E,
+    # Croatian:
+    0x0106, 0x0107, 0x010C, 0x010D, 0x0110, 0x0111, 0x0160, 0x0161,
+    0x017D, 0x017E,
+    # French etc:
+    0x00C0, 0x00E0, 0x00C1, 0x00E1, 0x00C8, 0x00E8, 0x00C9, 0x00E9,
+    0x00CA, 0x00EA, 0x00CB, 0x00EB, 0x00CE, 0x00EE, 0x00D3, 0x00F3,
+    0x00DA, 0x00FA,
+    # Spanish:
+    0x00D1, 0x00F1,
+    # German:
+    0x00DF,           # eszett (lowercase only)
+    # punctuation:
+    0x00AB, 0x00BB,   # guillemets (French double_angle quotes)
+    0x00A1, 0x00BF,   # inverted exclamation and question mark
+    0x2018, 0x2019,   # single quotation marks (R "preferred" for apostrophe)
+    0x201C, 0x201D,   # double quotation marks
+    0x2013, 0x2014,   # en dash and em dash
+    0x2026,           # ellipsis
+  );
+my $latinCharacters = pack 'U*', @latinCharacterCodes;
+
+
+our ($ONLY_IF_MATCHES, $USE_DUMPER);
+GetOptions('unicode|u'      => sub { $ONLY_IF_MATCHES = qr/[^\x20-\x7E]/ },
+	   'non-latin|l'    => sub { my $chars = $latinCharacters;
+				     $ONLY_IF_MATCHES = qr/[^\Q$chars\E]/ },
+	   'characters|c=s' => sub { my $chars = pack 'U*',
+				       map hex($_), split /,/, $_[1];
+				     $ONLY_IF_MATCHES = qr/[\Q$chars\E]/ },
+	   'dumper|d!'      => \$USE_DUMPER,
+	  ) or die;
+
+@ARGV or die;
 my $fdesc = shift @ARGV;
+
+#die ">$ONLY_IF_MATCHES";
+
 
 sub qprint ( $ ) {
   my ($text) = @_;
+  # The eval protects us from a crash if $text isn't valid utf8.
+  $ONLY_IF_MATCHES and eval { $text !~ $ONLY_IF_MATCHES } and return;
+  if ($ONLY_IF_MATCHES) {
+    printf "* \\x%04X %s\n",ord($_),$_ for grep /$ONLY_IF_MATCHES/, split //, $text;
+  }
   $text =~ s/\\/\\\\/g;  # \n is shown as |\n|, but '\n' is shown as |\\n|
   $text =~ s/\n/\\n/g;
   $text =~ s/\r/\\r/g;
   $text =~ s/\0/\\0/g;
   print "$text\n";
+}
+
+sub dprint ( $ ) {
+  my ($data) = @_;
+
+  require Data::Dumper;
+  local $Data::Dumper::Indent;
+  $Data::Dumper::Indent = 0;
+  my $text = Data::Dumper::Dumper($data);
+  $text =~ s/^\$VAR1 = //;
+  $text =~ s/;$//;
+  qprint $text;
 }
 
 foreach my $file (@ARGV) {
@@ -34,7 +91,9 @@ foreach my $file (@ARGV) {
     for my $item ($tag->{ID3v2}->frame_list_by_descr($fdesc)) {
       my $info = $item->[1];
 
-      if (! ref $info) {
+      if ($USE_DUMPER) {
+	dprint $info;
+      } elsif (! ref $info) {
 	qprint $info;
       } elsif ($fdesc =~ /^(?:COMM|TXXX)/) {
 	qprint $info->{Text};
