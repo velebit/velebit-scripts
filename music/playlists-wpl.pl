@@ -6,7 +6,11 @@ use File::Find;
 #use Cwd;
 
 my $script = $0;  $script =~ s,.*[/\\],,;
+
+# Overwrite/remove existing playlists?
 my $force = 1;
+# Generate playlists in directories with only one MP3 file or subdirectory?
+my $even_single = 1;
 
 sub write_m3u ( $$@ ) {
   my ($file, $title, @list) = @_;
@@ -43,7 +47,7 @@ EndOfFooter
   print $FILE $text;
 }
 
-my (%mp3s, %children);
+my (%mp3s_deep, %mp3s_here, %children);
 sub process_mp3s {
   /\.mp3$/ or return;
   -f $_    or return;
@@ -53,20 +57,29 @@ sub process_mp3s {
 
   while (@dir) {
     my $dir = join '/', @dir;
-    push @{$mp3s{$dir}}, join '/', @file;
+    push @{$mp3s_deep{$dir}}, join '/', @file;
+    push @{$mp3s_here{$dir}}, join '/', @file if @file == 1;
     $children{$dir}{$file[0]}++;
     $dir[-1] eq 'christmas' and last;
     $dir[-1] eq 'classical' and last;
+    $dir[-1] eq 'kids'      and last;
     unshift @file, pop @dir;
   }
 }
 
 find +{ preprocess => sub { sort @_; }, wanted => \&process_mp3s }, '.';
 
-for my $dir (sort keys %mp3s) {
+for my $dir (sort keys %mp3s_deep) {
   my $wpl = "$dir/00_playlist.wpl";
 
-  if (@{$mp3s{$dir}} <= 1 or keys %{$children{$dir}} <= 1) {
+  # A playlist is expected only if
+  # - $even_single is true and there are some MP3s or subdirs here, OR
+  # - $even_single is false and there are at least 2 MP3s or subdirs here
+  my $count = ( ($mp3s_here{$dir} ? @{$mp3s_here{$dir}} : 0) +
+		($children{$dir} ? keys %{$children{$dir}} : 0) );
+  my $limit = ($even_single ? 1 : 2);
+
+  if ($count < $limit) {
     if (! -e $wpl) {
       print "SKIP  $dir\n";
     } elsif (!$force) {
@@ -83,6 +96,6 @@ for my $dir (sort keys %mp3s) {
   } else {
     print "write $dir\n";
     my $name = $dir;  $name =~ s,^.*/,,;
-    write_wpl $wpl, $name, @{$mp3s{$dir}};
+    write_wpl $wpl, $name, @{$mp3s_deep{$dir}};
   }
 }
