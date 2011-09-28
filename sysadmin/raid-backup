@@ -13,6 +13,7 @@ status () {
 backup=/backup
 full_backup="home"
 tar_backup="scratch root boot"
+tar_type=".tar.gz"
 
 dryrun=
 
@@ -87,7 +88,7 @@ run_backup () {
     local dst="$dst_base$dst_ext"
 
     set --
-    for ext in '' '.tar.gz' '.tar.bz2'; do
+    for ext in '' '.tar' '.tar.gz' '.tar.bz2'; do
 	local xdst="$dst_base$ext"
 	if [ -e "$xdst.old" -a -e "$xdst" ]; then
 	    status "Cleaning up previous $xdst..."
@@ -112,6 +113,15 @@ run_backup () {
 	    ;;
 	*.tar.bz2)
 	    TimeRun tar -C "$src" --one-file-system -cjf "$dst" . \
+		|| fail "The tarballing went kaboom."
+#	    local tmp="$dst.tar"
+#	    (TimeRun tar -C "$src" --one-file-system -cf "$tmp" . \
+#		&& TimeRun bzip2 -c < "$tmp" > "$dst" \
+#		&& rm -f "$tmp") \
+#		|| fail "The tarballing went kaboom."
+	    ;;
+	*.tar)
+	    TimeRun tar -C "$src" --one-file-system -cf "$dst" . \
 		|| fail "The tarballing went kaboom."
 	    ;;
 	*)
@@ -155,7 +165,7 @@ run_all_backups () {
     done
 
     for i in $tar_backup; do
-	run_backup "`partition_path $i`" "`backup_path $i`" ".tar.bz2"
+	run_backup "`partition_path $i`" "`backup_path $i`" "$tar_type"
     done
 
     status "Min. observed disk margin:  `echo "$min_disk_free" | kb_to_units`"
