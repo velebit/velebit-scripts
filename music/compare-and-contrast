@@ -5,7 +5,8 @@ id3frames="`dirname "$0"`/id3dump -f"
 examine_frames () {
     for i in "$@"; do
 	if [ -d "$i" ]; then
-	    find "$i" -type f -name '*.mp3' -print0 | xargs -0 $id3frames
+	    find "$i" -type f -name '*.mp3' -print0 | sort -z \
+		| xargs -0 $id3frames
 	elif [ -e "$i" ]; then
 	    $id3frames "$i"
 	else
@@ -16,15 +17,21 @@ examine_frames () {
     done
 }
 
-TEMP=".tmp.frames"
+if [ "$#" -lt 1 ]; then
+    echo "Warning: no files/directories specified." >&2
+fi
+
+TEMP0=".tmp.frames0.txt"
+TEMP1=".tmp.frames1.txt"
 for i in "$@"; do
     echo "*** $i"
     echo "Saving initial frame data."
-    examine_frames "$i" > "$TEMP"
+    examine_frames "$i" > "$TEMP0"
     echo "...done.  Make any changes now, then press any key."
     read dummy
-    examine_frames "$i" | diff -usa "$TEMP" - 2>&1 | less
+    examine_frames "$i" > "$TEMP1"
+    diff -usa -I "'encoding' =>" "$TEMP0" "$TEMP1" 2>&1 | less
     #echo "Examine the changes, if any, then press any key."
     #read dummy
-    rm -f "$TEMP"
+    rm -f "$TEMP0" "$TEMP1"
 done
