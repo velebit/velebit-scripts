@@ -47,7 +47,10 @@ sub process ( $$$@ ) {
 		 and die "mkdir failed.\n");
 
     #my $d = "$dest/${auth}_${idx}_$i";
-    my $d = "$dest/${idx}_${auth}_$i";
+    my $n = $i;
+    $n =~ s/^LT-//;
+    $n =~ s/^DH_//;
+    my $d = "$dest/${idx}_${auth}_$n";
     system('cp', $i, $d) and die "cp failed.\n";
     $adjust_gain and (system('mp3gain', '-r', '-k', '-s', 's', '-q', $d)
 		      and die "mp3gain failed.\n");
@@ -55,78 +58,70 @@ sub process ( $$$@ ) {
   1;
 }
 
+my $use_piano = 1;  # use the piano accompaniment MP3 if voice not available?
 my $dir;
 if (!@ARGV or have_initial_match('Kata', @ARGV)) {
   $dir = "../../Kata";
   system('rm', '-rf', $dir) and die "rm -rf $dir failed.\n";
-  process $dir, '01', 'DH', 'Ancestral*Sop*';
-  process $dir, '02', 'DH', 'Reflex*Soprano*';
-  process $dir, '03', 'xx', 'Mirror*HiSoprano*';
-  process $dir, '04', 'LM', 'Beauty*Kids*';
-  process $dir, '05', 'xx', '{,A}Tower*KidsHi_3*';
-  process $dir, '06', 'LM', 'Barks*Kids*';
-  process $dir, '07', 'DH', 'Lan{g,}uage*Soprano*';
-  process $dir, '08', 'DH', 'SoundSight*Soprano*';
-  process $dir, '09', 'xx', '{,A_}Para*Soprano*';
-  process $dir, '10', 'LM', 'Faster*Hi*';
+  process $dir, '01', 'DH', '*Birth*melody*';
+  process $dir, '02', 'DH', '*Eras*HiMelody*';
+  process $dir, '03', 'DH', '*LivingLight*melody*';
+  process $dir, '04', 'DH', '*Mutate*melody*'
+    or ($use_piano and process $dir, '04', 'DH', '*Mutate*Orch*');
+  process $dir, '05', 'DH', '*Reptiles*melody*';
+  process $dir, '06', 'DH', '*Taxonomy*Sop*';
+  process $dir, '07', 'DH', '*Axolotl*melody*';
+  process $dir, '08', 'DH', '*Cetac[ei]ans*melody*';
+  process $dir, '09', 'DH', '*4E9Years*melody*';
+  process $dir, '10', 'DH', '*Hedgehog*melody*';
+  #process $dir, '11', 'DH', '*Virus*melody*';
   print "\n";
 }
 
 if (!@ARGV or have_initial_match('Abbe', @ARGV)) {
   $dir = "../../Abbe";
   system('rm', '-rf', $dir) and die "rm -rf $dir failed.\n";
-  process $dir, '01', 'DH', 'Ancestral*Alto*';
-  process $dir, '02', 'DH', 'Reflex*Alto*';
-  process $dir, '03', 'xx', 'Mirror*Alto*';
-  process $dir, '04', 'LM', 'Beauty*Alto*';
-  process $dir, '05', 'xx', '{,A}Tower*Alto*';
-  process $dir, '06', 'LM', 'Barks*Alto*';
-  process $dir, '07', 'DH', 'Lan{g,}uage*Alto*';
-  process $dir, '08', 'DH', 'SoundSight*Alto*';
-  process $dir, '09', 'xx', '{,A_}Para*Alto*';
-  process $dir, '10', 'LM', 'Faster*Lo*';
+  process $dir, '01', 'DH', '*Birth*Alto*'
+    or ($use_piano and process $dir, '01', 'DH', '*Birth*Piano*');
+  process $dir, '02', 'DH', '*Eras*Alto*';
+  process $dir, '03', 'DH', '*LivingLight*Alto*'
+    or ($use_piano and process $dir, '03', 'DH', '*LivingLight*Piano*');
+  process $dir, '04', 'DH', '*Mutate*Alto*'
+    or ($use_piano and process $dir, '04', 'DH', '*Mutate*Orch*');
+  process $dir, '05', 'DH', '*Reptiles*melody*';
+  process $dir, '06', 'DH', '*Taxonomy*Alto*';
+  process $dir, '07', 'DH', '*Axolotl*melody*';
+  process $dir, '08', 'DH', '*Cetac[ei]ans*melody*';
+  process $dir, '09', 'DH', '*4E9Years*Alto*'
+    or ($use_piano and process $dir, '09', 'DH', '*FourBillion*Piano*');
+  process $dir, '10', 'DH', '*Hedgehog*melody*';
+  #process $dir, '11', 'DH', '*Virus*melody*';
   print "\n";
 }
 
 if (!@ARGV or have_initial_match('bert', @ARGV)) {
   $dir = "../../bert";
   system('rm', '-rf', $dir) and die "rm -rf $dir failed.\n";
-  process $dir, '01', 'DH', 'Ancestral*Bass*';
-  process $dir, '02', 'DH', 'Reflex*Baritone*';
-  process $dir, '03', 'xx', 'Mirror*Bass*';
-  process $dir, '04', 'LM', 'Beauty*n_Baritone*'
-    or process $dir, '04', 'LM', 'Beauty*Baritone*';
-  process $dir, '05', 'xx', '{,A}Tower*Bass*';
-  process $dir, '06', 'LM', 'Barks*Bass*', 'Barks*SopranoHi*';
-  process $dir, '07', 'DH', 'Lan{g,}uage*Baritone*';
-  process $dir, '08', 'DH', 'SoundSight*Tenor*';
-  process $dir, '09', 'xx', '{,A_}Para*Bass*';
-  process $dir, '10', 'LM', 'Faster*Lo*';
+  process $dir, '01', 'DH', '*Birth*Bass*'
+    or ($use_piano and process $dir, '01', 'DH', '*Birth*Piano*');
+  process $dir, '02', 'DH', '*Eras*Bass*';
+  process $dir, '03', 'DH', '*LivingLight*Bass*'
+    or ($use_piano and process $dir, '03', 'DH', '*LivingLight*Piano*');
+  process $dir, '04', 'DH', '*Mutate*Bass*'
+    or ($use_piano and process $dir, '04', 'DH', '*Mutate*Orch*');
+  process $dir, '05', 'DH', '*Reptiles*melody*';
+  process $dir, '06', 'DH', '*Taxonomy*Bass*';
+  process $dir, '07', 'DH', '*Axolotl*melody*';
+  process $dir, '08', 'DH', '*Cetac[ei]ans*melody*';
+  process $dir, '09', 'DH', '*4E9Years*Bass*'
+    or ($use_piano and process $dir, '09', 'DH', '*FourBillion*Piano*');
+  process $dir, '10', 'DH', '*Hedgehog*melody*';
+  #process $dir, '11', 'DH', '*Virus*melody*';
   print "\n";
 }
 
-if (!@ARGV or have_initial_match('demo', @ARGV)) {
+if (0 and (!@ARGV or have_initial_match('demo', @ARGV))) {
   $dir = "../../demo";
   system('rm', '-rf', $dir) and die "rm -rf $dir failed.\n";
-  process $dir, '01', 'DH', '*performance*Ancestral*'
-    or process $dir, '01', 'DH', 'Ancestral*Demo*';
-  process $dir, '02', 'DH', '*performance*Reflex*'
-    or process $dir, '02', 'DH', 'Reflex*Demo*';
-  #process $dir,      '03', 'xx', '*performance*Mirror*' or
-  process $dir, '03', 'xx', 'Mirror*Demo*'
-    or process $dir, '03', 'xx', 'Mirror*Piano*';
-  #process $dir, '04', 'LM', '*performance*Beauty*'
-  process $dir, '04', 'LM', 'Beauty*Demo*';
-  #process $dir, '05', 'xx', '*performance*{,A}Tower*' or
-  process $dir, '05', 'xx', '{,A}Tower*Demo*';
-  #process $dir, '06', 'LM', '*performance*Barks*' or
-  process $dir, '06', 'LM', 'Barks*Demo*';
-  process $dir, '07', 'DH', '*performance*Lan{g,}uage*'
-    or process $dir, '07', 'DH', 'Lan{g,}uage*Demo*';
-  process $dir, '08', 'DH', '*performance*AnimalChat*'
-    or process $dir, '08', 'DH', 'SoundSight*Demo*';
-  #process $dir, '09', 'xx', '*performance*{,A_}Para*' or
-  process $dir, '09', 'xx', '{,A_}Para*Demo*';
-  #process $dir, '10', 'LM', '*performance*Faster*All*' or
-  process $dir, '10', 'LM', 'Faster*All*';
+  process $dir, '01', 'DH', '*performance*Xxx*';
 }

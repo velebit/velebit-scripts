@@ -19,13 +19,16 @@ generate_wpl () {
 
 make_wpl () {
     local dir="$1"
+    local suffix="$2"
+    local tracks="$3"
     local sep="/"   #"_"
-    generate_wpl "$dir practice" \
-	`ls "$dir"/*.[Mm][Pp]3 | sort -t "$sep" -k 2n` > "$dir.wpl"
-    unix2dos "$dir.wpl"
+    set -- `ls "$dir"/*.[Mm][Pp]3 | egrep "$tracks" | sort -t "$sep" -k 2n`
+    if [ "$#" -lt 1 ]; then rm -f "$dir$suffix.wpl"; return; fi
+    generate_wpl "$dir practice" "$@" > "$dir$suffix.wpl"
+    unix2dos "$dir$suffix.wpl"
 }
 
-make_wpl Abbe
-make_wpl bert
-make_wpl Kata
-make_wpl demo
+for who in Abbe bert Kata demo; do
+    make_wpl "$who" _all .
+    make_wpl "$who" '' 'Eras|LivingLight|Mutate|Reptiles'
+done
