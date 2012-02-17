@@ -30,6 +30,7 @@ sub have_initial_match ( $@ ) {
 }
 
 my $adjust_gain = ! have_initial_match('nogain', @ARGV);
+my $wipe_id3    = ! have_initial_match('nowipe', @ARGV);
 
 sub process ( $$$@ ) {
   my ($dest, $idx, $auth, @globs) = @_;
@@ -42,18 +43,25 @@ sub process ( $$$@ ) {
     and warn "--- WARNING: $nfiles files found with @globs [copying all]\n";
 
   for my $i (@files) {
-    print "[$i]\n";
+    my $n = $i;
+    $n =~ s,^.*/,,;
+    print "[$n]\n";
+    $n =~ s/^\d\d[-_ ]//;
+    $n =~ s/^LT-//;
+    $n =~ s/^(?:DH|AG|SH)_//;
+    $n =~ s/\s/_/g;
+    $n =~ s/_{2,}/_/g;
+
     -d $dest or (system('mkdir', '-p', $dest)
 		 and die "mkdir failed.\n");
 
     #my $d = "$dest/${auth}_${idx}_$i";
-    my $n = $i;
-    $n =~ s/^LT-//;
-    $n =~ s/^DH_//;
     my $d = "$dest/${idx}_${auth}_$n";
     system('cp', $i, $d) and die "cp failed.\n";
+    $wipe_id3 and (system("$ENV{HOME}/scripts/music/id3wipe", '-f', $d)
+		   and warn "id3wipe failed.\n");
     $adjust_gain and (system('mp3gain', '-r', '-k', '-s', 's', '-q', $d)
-		      and die "mp3gain failed.\n");
+		      and warn "mp3gain failed.\n");
   }
   1;
 }
@@ -71,7 +79,7 @@ if (!@ARGV or have_initial_match('Kata', @ARGV)) {
   process $dir, '05', 'DH', '*Reptiles*melody*';
   process $dir, '06', 'DH', '*Taxonomy*Sop*';
   process $dir, '07', 'DH', '*Axolotl*melody*';
-  process $dir, '08', 'DH', '*Cetac[ei]ans*melody*';
+  process $dir, '08', 'DH', '*Cetac{e,i}ans*melody*';
   process $dir, '09', 'DH', '*4E9Years*melody*';
   process $dir, '10', 'DH', '*Hedgehog*melody*';
   #process $dir, '11', 'DH', '*Virus*melody*';
@@ -83,15 +91,15 @@ if (!@ARGV or have_initial_match('Abbe', @ARGV)) {
   system('rm', '-rf', $dir) and die "rm -rf $dir failed.\n";
   process $dir, '01', 'DH', '*Birth*Alto*'
     or ($use_piano and process $dir, '01', 'DH', '*Birth*Piano*');
-  process $dir, '02', 'DH', '*Eras*Alto*';
+  process $dir, '02', 'DH', '*Eras*AltoP*';
   process $dir, '03', 'DH', '*LivingLight*Alto*'
     or ($use_piano and process $dir, '03', 'DH', '*LivingLight*Piano*');
-  process $dir, '04', 'DH', '*Mutate*Alto*'
+  process $dir, '04', 'DH', '*Mutate*melody*'
     or ($use_piano and process $dir, '04', 'DH', '*Mutate*Orch*');
   process $dir, '05', 'DH', '*Reptiles*melody*';
   process $dir, '06', 'DH', '*Taxonomy*Alto*';
   process $dir, '07', 'DH', '*Axolotl*melody*';
-  process $dir, '08', 'DH', '*Cetac[ei]ans*melody*';
+  process $dir, '08', 'DH', '*Cetac{e,i}ans*melody*';
   process $dir, '09', 'DH', '*4E9Years*Alto*'
     or ($use_piano and process $dir, '09', 'DH', '*FourBillion*Piano*');
   process $dir, '10', 'DH', '*Hedgehog*melody*';
@@ -107,12 +115,12 @@ if (!@ARGV or have_initial_match('bert', @ARGV)) {
   process $dir, '02', 'DH', '*Eras*Bass*';
   process $dir, '03', 'DH', '*LivingLight*Bass*'
     or ($use_piano and process $dir, '03', 'DH', '*LivingLight*Piano*');
-  process $dir, '04', 'DH', '*Mutate*Bass*'
+  process $dir, '04', 'DH', '*Mutate*melody*'
     or ($use_piano and process $dir, '04', 'DH', '*Mutate*Orch*');
   process $dir, '05', 'DH', '*Reptiles*melody*';
   process $dir, '06', 'DH', '*Taxonomy*Bass*';
   process $dir, '07', 'DH', '*Axolotl*melody*';
-  process $dir, '08', 'DH', '*Cetac[ei]ans*melody*';
+  process $dir, '08', 'DH', '*Cetac{e,i}ans*melody*';
   process $dir, '09', 'DH', '*4E9Years*Bass*'
     or ($use_piano and process $dir, '09', 'DH', '*FourBillion*Piano*');
   process $dir, '10', 'DH', '*Hedgehog*melody*';
@@ -120,8 +128,20 @@ if (!@ARGV or have_initial_match('bert', @ARGV)) {
   print "\n";
 }
 
-if (0 and (!@ARGV or have_initial_match('demo', @ARGV))) {
+if (!@ARGV or have_initial_match('demo', @ARGV)) {
   $dir = "../../demo";
+  my $demo = "../../../../mp3/David*Haines/Lifetime*";
   system('rm', '-rf', $dir) and die "rm -rf $dir failed.\n";
-  process $dir, '01', 'DH', '*performance*Xxx*';
+  process $dir, '01', 'DH', "$demo/*Birth*";
+  process $dir, '02', 'DH', "$demo/*Eras*";
+  process $dir, '03', 'DH', "$demo/*Living*Light*";
+  process $dir, '04', 'DH', "$demo/*Mutate*";
+  process $dir, '05', 'DH', "$demo/*Reptiles*";
+  process $dir, '06', 'DH', "$demo/*Taxonomy*";
+  process $dir, '07', 'DH', "$demo/*Axolotl*";
+  process $dir, '08', 'DH', "$demo/*Cetac{e,i}ans*";
+  process $dir, '09', 'DH', "$demo/*Four*Billion*";
+  process $dir, '10', 'DH', "$demo/*Hedgehog*";
+  process $dir, '11', 'DH', "$demo/*Virus*";
+  print "\n";
 }
