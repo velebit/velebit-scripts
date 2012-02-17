@@ -1,0 +1,29 @@
+#!/usr/bin/perl
+# *Utterly erase* ID3 tags from a file
+use warnings;
+use strict;
+use encoding 'UTF8';
+
+use MP3::Tag;
+use Getopt::Long;
+
+our $BACKUP = 1;
+GetOptions('force|f'   => sub { $BACKUP = 0; },
+	  ) or die;
+
+foreach my $file (@ARGV) {
+  if ($BACKUP) {
+    my $backup = $file . '.bak';
+    unlink $backup;  # if it fails that's OK
+    rename $file, $backup
+      or die "rename($file -> $backup): $!";
+    system 'cp', $backup, $file
+      and warn("Copy failed"),
+	(rename $backup, $file or warn "rename($backup -> $file): $!"),
+	  exit 1;
+  }
+
+  my $tag = MP3::Tag->new($file);
+  $tag->delete_tag('ID3v1');
+  $tag->delete_tag('ID3v2');
+}
