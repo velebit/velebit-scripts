@@ -32,7 +32,7 @@ make_wpl () {
     unix2dos "$dir$suffix.wpl"
 }
 
-if [ "$#" -eq 0 ]; then set -- Abbe bert Kata demo; fi
+if [ "$#" -eq 0 ]; then set -- Abbe bert Kata demo other/Sue; fi
 for who in "$@"; do
     make_wpl "$who" _all . ''
     make_wpl "$who" '' \
@@ -41,4 +41,14 @@ for who in "$@"; do
     if diff -q "${who}.wpl" "${who}_all.wpl" > /dev/null; then
 	rm -f "${who}_all.wpl"
     fi
+    make_wpl "$who" _burn_tmp . 'Piano|Orch'
 done
+
+./download/merge-playlists.pl \
+    ./Kata.wpl ./Abbe.wpl ./bert.wpl \
+    ./Kata_burn_tmp.wpl ./Abbe_burn_tmp.wpl ./bert_burn_tmp.wpl \
+    > burn.wpl
+./download/merge-playlists.pl \
+    ./other/Sue_burn_tmp.wpl ./Kata_burn_tmp.wpl \
+    > other/Sue_burn.wpl
+rm -f *_burn_tmp.wpl */*_burn_tmp.wpl
