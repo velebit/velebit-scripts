@@ -29,7 +29,7 @@ make_wpl () {
 
     if [ "$#" -lt 1 ]; then rm -f "$dir$suffix.wpl"; return; fi
     generate_wpl "$dir practice" "$@" > "$dir$suffix.wpl"
-    unix2dos "$dir$suffix.wpl"
+    unix2dos -q "$dir$suffix.wpl"
 }
 
 if [ "$#" -eq 0 ]; then set -- Abbe bert Kata demo other/Sue; fi
@@ -50,5 +50,5 @@ done
     > burn.wpl
 ./download/merge-playlists.pl \
     ./other/Sue_burn_tmp.wpl ./Kata_burn_tmp.wpl \
-    > other/Sue_burn.wpl
+    > Sue_burn.wpl
 rm -f *_burn_tmp.wpl */*_burn_tmp.wpl
