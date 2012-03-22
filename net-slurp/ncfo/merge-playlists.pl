@@ -1,6 +1,11 @@
 #!/usr/bin/perl
 use warnings;
 use strict;
+use Getopt::Long;
+
+our $KEEP_DUPLICATES = 0;
+GetOptions('keep-duplicates|k!' => \$KEEP_DUPLICATES,
+	  ) or die "Usage: $0 [-k] [files...]\n";
 
 my @lists;
 my (@tracks, %saw_track);
@@ -9,7 +14,7 @@ while (<>) {
   if (/\<media src=\"(.*?)\"/) {
     my ($line, $track) = ($_, $1);
     $track =~ s,^.*[/\\],,;
-    push @tracks, $line unless $saw_track{$track};
+    push @tracks, $line if $KEEP_DUPLICATES or ! $saw_track{$track};
     ++$saw_track{$track};
   } elsif (/\<title\>(.*?)\</) {
     my ($title) = $1;

@@ -110,16 +110,16 @@ sub process ( $$$@ ) {
 
     #my $d = "$dest/${auth}_${idx}_$i";
     my $d = "$dest/$u";
-    if (exists $already_processed{$u}) {
-      #warn "USING SHORTCUT for $d\n"; # <- $already_processed{$u}\n";
-      system('cp', $already_processed{$u}, $d) and die "cp failed.\n";
+    if (exists $already_processed{$i}) {
+      #warn "USING SHORTCUT for $d\n"; # <- $already_processed{$i}\n";
+      system('cp', $already_processed{$i}, $d) and die "cp failed.\n";
     } else {
       system('cp', $i, $d) and die "cp failed.\n";
       $wipe_id3 and (system("$ENV{HOME}/scripts/music/id3wipe", '-f', $d)
 		     and warn "id3wipe failed.\n");
       $adjust_gain and (system('mp3gain', '-r', '-k', '-s', 's', '-q', $d)
 			and warn "mp3gain failed.\n");
-      $already_processed{$u} = $d;
+      $already_processed{$i} = $d;
     }
   }
   1;
@@ -155,8 +155,7 @@ if (!@ARGV or have_initial_match('Kata,all', @ARGV)) {
   process $dir, '01', 'DH', '*Birth*melody*';
   process $dir, '02', 'DH', '*Eras*HiMelody*';
   process $dir, '03', 'DH', '*LivingLight*melody*';
-  process $dir, '04', 'DH', '*Mutate*melody*'
-    or ($use_piano and process $dir, '04', 'DH', '*Mutate*Orch*');
+  process $dir, '04', 'DH', '*Mutate*melody*';
   process $dir, '05', 'DH', '*Reptiles*melody*';
   process $dir, '06', 'DH', '*Taxonomy*Alt*';
   process $dir, '07', 'DH', '*Axolotl*melody*';
@@ -165,7 +164,7 @@ if (!@ARGV or have_initial_match('Kata,all', @ARGV)) {
   process $dir, '10a', 'DH', '*Hedgehog*melody*'; # no Tutti for Kata
   process $dir, '11', 'DH', '*Virus*Practice*';
   process $dir, '12', 'DH', '*Darwin*melody*';
-  process $dir, '13', 'DH', '*Queen*Bee*melody*';
+  process $dir, '13a', 'DH', '*Queen*Bee*melody*';
   process $dir, '14', 'DH', '*Life*That*Lives*Chorus*';
   process $dir, '15', 'DH', '*Extremophile*melody*';
   process $dir, '16', 'GT', '*DNA*Sop*';
@@ -187,10 +186,12 @@ if (have_initial_match('Sue,all', @ARGV)) {
   process $dir, '08', 'DH', '*Cetac{e,i}ans*melody*';
   process $dir, '09', 'DH', '*4E9Years*Sop*';  # different!
   process $dir, '10a', 'DH', '*Hedgehog*melody*';
-  process $dir, '10b', 'DH', '*Hedgehog*Tutti*';
+  process $dir, '10b', 'DH', '*Hedgehog*Harmony*';
+  process $dir, '10c', 'DH', '*Hedgehog*Tutti*';
   process $dir, '11', 'DH', '*Virus*Practice*';
   process $dir, '12', 'DH', '*Darwin*melody*';
-  process $dir, '13', 'DH', '*Queen*Bee*melody*';
+  process $dir, '13a', 'DH', '*Queen*Bee*melody*';
+  process $dir, '13b', 'DH', '*Queen*Bee*harmony*';
   process $dir, '14', 'DH', '*Life*That*Lives*Chorus*';
   process $dir, '15', 'DH', '*Extremophile*melody*';
   process $dir, '16', 'GT', '*DNA*Sop*';
@@ -202,24 +203,23 @@ if (!@ARGV or have_initial_match('Abbe,all', @ARGV)) {
   $dir = "../../Abbe";
   print "=== preparing $dir ===\n";
   system('rm', '-rf', $dir) and die "rm -rf $dir failed.\n";
-  process $dir, '01', 'DH', '*Birth*Stf4*'
-    or ($use_piano and process $dir, '01', 'DH', '*Birth*Piano*');
+  process $dir, '01', 'DH', '*Birth*Stf4*';
   process $dir, '02', 'DH', '*Eras*AltoP*';
   process $dir, '03', 'DH', '*LivingLight*Alto*'
     or ($use_piano and process $dir, '03', 'DH', '*LivingLight*Piano*');
-  process $dir, '04', 'DH', '*Mutate*melody*'
-    or ($use_piano and process $dir, '04', 'DH', '*Mutate*Orch*');
+  process $dir, '04', 'DH', '*Mutate*melody*';
   process $dir, '05', 'DH', '*Reptiles*melody*';
   process $dir, '06', 'DH', '*Taxonomy*Alto*';
   process $dir, '07', 'DH', '*Axolotl*melody*';
   process $dir, '08', 'DH', '*Cetac{e,i}ans*melody*';
-  process $dir, '09', 'DH', '*4E9Years*melody*'  # this is correct
-    or ($use_piano and process $dir, '09', 'DH', '*FourBillion*Piano*');
+  process $dir, '09', 'DH', '*4E9Years*melody*';
   process $dir, '10a', 'DH', '*Hedgehog*melody*';
-  process $dir, '10b', 'DH', '*Hedgehog*Tutti*';
+  process $dir, '10b', 'DH', '*Hedgehog*Harmony*';
+  process $dir, '10c', 'DH', '*Hedgehog*Tutti*';
   process $dir, '11', 'DH', '*Virus*Practice*';
   process $dir, '12', 'DH', '*Darwin*melody*';
-  process $dir, '13', 'DH', '*Queen*Bee*melody*';
+  process $dir, '13b', 'DH', '*Queen*Bee*harmony*';
+  process $dir, '13c', 'DH', '*Queen*Bee*low*';
   process $dir, '14', 'DH', '*Life*That*Lives*Chorus*';
   process $dir, '15', 'DH', '*Extremophile*melody*';
   process $dir, '16', 'GT', '*DNA*Alt*';
@@ -231,28 +231,28 @@ if (!@ARGV or have_initial_match('bert,all', @ARGV)) {
   $dir = "../../bert";
   print "=== preparing $dir ===\n";
   system('rm', '-rf', $dir) and die "rm -rf $dir failed.\n";
-  process $dir, '01', 'DH', '*Birth*Bass*'
-    or ($use_piano and process $dir, '01', 'DH', '*Birth*Piano*');
+  process $dir, '01', 'DH', '*Birth*Bass*';
   process $dir, '02', 'DH', '*Eras*Bass*';
   process $dir, '03', 'DH', '*LivingLight*Bass*'
+    or process $dir, '03', 'DH', '../../midi-stuff/*LivingLight*bass*.mp3'
     or ($use_piano and process $dir, '03', 'DH', '*LivingLight*Piano*');
-  process $dir, '04', 'DH', '*Mutate*melody*'
-    or ($use_piano and process $dir, '04', 'DH', '*Mutate*Orch*');
+  process $dir, '04', 'DH', '*Mutate*melody*';
   process $dir, '05', 'DH', '*Reptiles*melody*';
   process $dir, '06', 'DH', '*Taxonomy*Bass*';
   process $dir, '07', 'DH', '*Axolotl*melody*';
   process $dir, '08', 'DH', '*Cetac{e,i}ans*melody*';
-  process $dir, '09', 'DH', '*4E9Years*Bass*'
-    or ($use_piano and process $dir, '09', 'DH', '*FourBillion*Piano*');
+  process $dir, '09', 'DH', '*4E9Years*Bass*';
   process $dir, '10a', 'DH', '*Hedgehog*melody*';
-  process $dir, '10b', 'DH', '*Hedgehog*Tutti*';
+  process $dir, '10b', 'DH', '*Hedgehog*Harmony*';
+  process $dir, '10c', 'DH', '*Hedgehog*Tutti*';
   process $dir, '11', 'DH', '*Virus*Practice*';
   process $dir, '12', 'DH', '*Darwin*melody*';
-  process $dir, '13', 'DH', '*Queen*Bee*melody*';
+  process $dir, '13a', 'DH', '*Queen*Bee*melody*';
+  process $dir, '13c', 'DH', '*Queen*Bee*low*';
   process $dir, '14', 'DH', '*Life*That*Lives*Chorus*';
   process $dir, '15', 'DH', '*Extremophile*Baritone*';
-  process $dir, '16', 'GT', '*DNA*Alt*';  #?
-  process $dir, '17', 'GT', '*Octopus*HarmonyLow*';  #?
+  process $dir, '16', 'GT', '*DNA*Alt*';
+  process $dir, '17', 'GT', '*Octopus*Melody*';
   print "\n";
 }
 
@@ -276,5 +276,7 @@ if (!@ARGV or have_initial_match('demo,all', @ARGV)) {
   process $dir, '13', 'DH', "$demo/*Queen*Bee*";
   #process $dir, '14', 'DH', "$demo/*Life*That*Lives*";
   #process $dir, '15', 'DH', "$demo/*Extremophile*";
+  #process $dir, '16', 'GT', "$demo/*DNA*";
+  #process $dir, '17', 'GT', "$demo/*Octopus*";
   print "\n";
 }
