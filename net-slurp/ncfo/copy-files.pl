@@ -184,6 +184,7 @@ if (have_initial_match('Sue,all', @ARGV)) {
   process $dir, '06', 'DH', '*Taxonomy*Sop*';  # different!
   process $dir, '07', 'DH', '*Axolotl*melody*';
   process $dir, '08', 'DH', '*Cetac{e,i}ans*melody*';
+  process $dir, '08x', 'DH', '../../midi-stuff/*Cetaceans*all*.mp3';
   process $dir, '09', 'DH', '*4E9Years*Sop*';  # different!
   process $dir, '10a', 'DH', '*Hedgehog*melody*';
   process $dir, '10b', 'DH', '*Hedgehog*Harmony*';
@@ -211,13 +212,16 @@ if (!@ARGV or have_initial_match('Abbe,all', @ARGV)) {
   process $dir, '05', 'DH', '*Reptiles*melody*';
   process $dir, '06', 'DH', '*Taxonomy*Alto*';
   process $dir, '07', 'DH', '*Axolotl*melody*';
-  process $dir, '08', 'DH', '*Cetac{e,i}ans*melody*';
+  process $dir, '08', 'DH', '*Cetac{e,i}ans*Alt*'
+    or process $dir, '08', 'DH', '../../midi-stuff/*Cetaceans*alto*.mp3';
+  process $dir, '08x', 'DH', '../../midi-stuff/*Cetaceans*all*.mp3';
   process $dir, '09', 'DH', '*4E9Years*melody*';
   process $dir, '10a', 'DH', '*Hedgehog*melody*';
   process $dir, '10b', 'DH', '*Hedgehog*Harmony*';
   process $dir, '10c', 'DH', '*Hedgehog*Tutti*';
   process $dir, '11', 'DH', '*Virus*Practice*';
   process $dir, '12', 'DH', '*Darwin*melody*';
+  process $dir, '12x', 'DH', '../../midi-stuff/*Darwin*alto*.mp3';
   process $dir, '13b', 'DH', '*Queen*Bee*harmony*';
   process $dir, '13c', 'DH', '*Queen*Bee*low*';
   process $dir, '14', 'DH', '*Life*That*Lives*Chorus*';
@@ -236,17 +240,21 @@ if (!@ARGV or have_initial_match('bert,all', @ARGV)) {
   process $dir, '03', 'DH', '*LivingLight*Bass*'
     or process $dir, '03', 'DH', '../../midi-stuff/*LivingLight*bass*.mp3'
     or ($use_piano and process $dir, '03', 'DH', '*LivingLight*Piano*');
-  process $dir, '04', 'DH', '*Mutate*melody*';
+  #process $dir, '04', 'DH', '*Mutate*melody*';
+  process $dir, '04', 'DH', '../../midi-stuff/*Mutate*bass*.mp3';
   process $dir, '05', 'DH', '*Reptiles*melody*';
   process $dir, '06', 'DH', '*Taxonomy*Bass*';
   process $dir, '07', 'DH', '*Axolotl*melody*';
-  process $dir, '08', 'DH', '*Cetac{e,i}ans*melody*';
+  process $dir, '08', 'DH', '*Cetac{e,i}ans*Bass*'
+    or process $dir, '08', 'DH', '../../midi-stuff/*Cetaceans*bass*.mp3';
+  process $dir, '08x', 'DH', '../../midi-stuff/*Cetaceans*all*.mp3';
   process $dir, '09', 'DH', '*4E9Years*Bass*';
   process $dir, '10a', 'DH', '*Hedgehog*melody*';
   process $dir, '10b', 'DH', '*Hedgehog*Harmony*';
   process $dir, '10c', 'DH', '*Hedgehog*Tutti*';
   process $dir, '11', 'DH', '*Virus*Practice*';
   process $dir, '12', 'DH', '*Darwin*melody*';
+  process $dir, '12x', 'DH', '../../midi-stuff/*Darwin*bass*.mp3';
   process $dir, '13a', 'DH', '*Queen*Bee*melody*';
   process $dir, '13c', 'DH', '*Queen*Bee*low*';
   process $dir, '14', 'DH', '*Life*That*Lives*Chorus*';
