@@ -46,7 +46,6 @@ sub change_tempo ( $$$ ) {
   my @tracks = $opus->tracks;
   for my $t (0..$#tracks) {
     my $modified;
-    use Data::Dumper;
     $_->[0] eq 'set_tempo' and $_->[2] = round($_->[2]*$ratio), ++$modified
       for $tracks[$t]->events;
     print "$modified tempo events modified in track $t.\n" if $modified;
