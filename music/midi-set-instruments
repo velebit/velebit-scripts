@@ -1,0 +1,126 @@
+#!/usr/bin/perl
+# Set the instrument (patch) info.
+#
+use warnings;
+use strict;
+use MIDI;
+use Getopt::Long;
+
+### usage stuff
+
+sub Usage ( @ ) {
+  print STDERR join "\n\n", @_, <<EndOfUsage;
+Usage:
+  $0 [-p <patch>[,...]] [-i] [-o outfile] [-n] files...
+EndOfUsage
+  exit 1;
+}
+
+use vars qw( @PATCHES $MODIFY $DRY_RUN @OUTPUT );
+GetOptions('patch-id|p=s'    => \@PATCHES,
+	   'modify|i!'       => \$MODIFY,
+	   'output|o|to|t=s' => \@OUTPUT,
+	   'dry-run|n!'      => \$DRY_RUN,
+          ) or Usage;
+
+@ARGV
+  or  Usage "Error: you must specify at least one input file.";
+$MODIFY and @OUTPUT
+  and Usage "Error: --modify and --output are mutually exclusive.";
+@OUTPUT and @OUTPUT != 1
+  and Usage "Error: you must specify --output at most once.";
+@OUTPUT and @ARGV != 1
+  and Usage "Error: you must specify exactly one input when using --output.";
+
+@PATCHES = map split(/,/), @PATCHES;
+
+### convert patch names into numbers
+
+our %decode_patch = %MIDI::patch2number;
+for my $k (keys %MIDI::patch2number) {
+  $decode_patch{lc $k}  = $MIDI::patch2number{$k};
+  my $k0 = $k;
+  $k0 =~ s/\s+//g;
+  $decode_patch{$k0}    = $MIDI::patch2number{$k};
+  $decode_patch{lc $k0} = $MIDI::patch2number{$k};
+  $k0 =~ s/\W+//g;
+  $decode_patch{$k0}    = $MIDI::patch2number{$k};
+  $decode_patch{lc $k0} = $MIDI::patch2number{$k};
+}
+$decode_patch{piano} = $decode_patch{'Acoustic Grand'};
+
+sub decode_patch ( $ ) {
+  my ($p) = @_;
+  $p =~ /^\d+$/ and return $p;   # if already a number, it's OK
+  defined $decode_patch{$p} and return $decode_patch{$p};
+
+  die "Unknown instrument name '$p'!\n";
+}
+
+@PATCHES = map decode_patch($_), @PATCHES;
+
+### code to perform the MIDI patch modification
+
+sub find_first_patch ( $$ ) {
+  my ($file, $opus) = @_;
+
+  my @tracks = $opus->tracks;
+  for my $t (0..$#tracks) {
+    for my $e ($tracks[$t]->events) {
+      $e->[0] eq 'patch_change' and return $e->[3];
+    }
+  }
+  die "No patch (instrument) info found";
+  return;
+}
+
+sub change_patches_in_opus ( $$$ ) {
+  my ($file, $opus, $patches) = @_;
+  ($patches and UNIVERSAL::isa($patches, 'ARRAY') and @$patches) or die;
+
+  my @p;
+  my @tracks = $opus->tracks;
+  for my $t (0..$#tracks) {
+    my $events = $tracks[$t]->events_r;
+    for my $e (@$events) {
+      $e->[0] eq 'patch_change' or next;
+      @p = @$patches unless @p;
+      $e->[3] = shift @p;
+    }
+  }
+  $opus;
+}
+
+sub update_patches ( $$ ) {
+  my ($in, $out) = @_;
+
+  my $opus = MIDI::Opus->new({from_file => $in}) or die;
+
+  my @patches = @PATCHES;
+  @patches = ( find_first_patch $in, $opus ) unless @patches;
+
+  change_patches_in_opus $in, $opus, \@patches;
+
+  print "WOULD DO: " if $DRY_RUN;
+  print "$in -> $out\n";
+  $opus->write_to_file($out) unless $DRY_RUN;
+}
+
+### do it!
+
+sub make_output_name ( $ ) {
+  my ($file) = @_;
+  return shift @OUTPUT if @OUTPUT;
+  return $file if $MODIFY;
+
+  $file =~ s/\.midi?$//i;
+  $file =~ /_instr$/
+    and die("I refuse to auto-generate a file name for an already modified"
+	    . " file\n    '$_[0]'\n ");
+  $file . "_instr.mid";
+}
+
+for my $input (@ARGV) {
+  my $output = make_output_name $input;
+  update_patches($input, $output);
+}

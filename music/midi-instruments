@@ -33,8 +33,6 @@ EndOfUsage
 
 ### code to perform the MIDI speed modification
 
-sub round ( $ ) { int($_[0] + .5); }
-
 sub show_track_info ( $ ) {
   my ($in) = @_;
 

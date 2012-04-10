@@ -14,22 +14,25 @@ sub Usage ( @ ) {
 Usage:
   $0 [-s PERCENT[,PERCENT...]] infiles...
 or:
-  $0 -s PERCENT infile --to outfile
+  $0 -s PERCENT infile -o outfile
 EndOfUsage
   exit 1;
 }
 
-use vars qw( @SPEED @OUTPUT );
+use vars qw( @SPEED @OUTPUT $DRY_RUN );
 GetOptions('speed|s=s'       => \@SPEED,
 	   'output|o|to|t=s' => \@OUTPUT,
+	   'dry-run|n!'      => \$DRY_RUN,
           ) or Usage;
 
 @ARGV
   or  Usage "Error: you must specify at least one input file.";
-@OUTPUT and (@ARGV != 1 or @OUTPUT != 1)
-  and Usage "Error: you can't use --to with more than one file.";
+@OUTPUT and @OUTPUT != 1
+  and Usage "Error: you must specify --output at most once.";
+@OUTPUT and @ARGV != 1
+  and Usage "Error: you must specify exactly one input when using --output.";
 @OUTPUT and @SPEED != 1
-  and Usage "Error: you must specify -s exactly once when using --to.";
+  and Usage "Error: you must specify -s exactly once when using --output.";
 
 @SPEED = map split(/,/), @SPEED;
 @SPEED = qw( 50 66.667 80 90 ) unless @SPEED;
@@ -52,8 +55,9 @@ sub change_tempo ( $$$ ) {
     print "  (Why aren't they in track 0?)\n" if $modified and $t;
   }
 
-  $opus->write_to_file($out);
-  print "$out written.\n";
+  print "WOULD DO: " if $DRY_RUN;
+  print "$in -> $out\n";
+  $opus->write_to_file($out) unless $DRY_RUN;
 }
 
 ### do it!
