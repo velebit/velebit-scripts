@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 # -*- cperl -*-
-# $Id$
+# $Id: c32741677f4a3bf7e275ae4ca6e42266785e7d1c $
 use warnings;
 use strict;
 use Getopt::Long;
@@ -66,12 +66,31 @@ s/(?:(\\.)|(.))/ $1 || $glob2re{$2} || quotemeta($2) /ges, $_ = qr/^$_$/
 
 ### code helpers: generic list folding operations
 
+sub uniq ( @ ) {
+  # WARNING: uniq('a','a') will NOT return 1 in scalar context!
+  # Use is_only_one if you're just checking if all entries are the same.
+  @_ == 2 and return ($_[0] eq $_[1] ? $_[0] : @_);
+  my (@uniq, $e);
+  for $e (@_) {
+    grep($_ eq $e, @uniq) or push @uniq, $e;
+  }
+  @uniq;
+}
+
 sub uniq_by_count ( @ ) {
-  my (@list) = @_;
-  return unless @list;
+  # WARNING: uniq('a','a') will NOT return 1 in scalar context!
+  # Use is_only_one if you're just checking if all entries are the same.
+  @_ == 2 and return ($_[0] eq $_[1] ? $_[0] : @_);
   my %count;
-  ++$count{$_} for @list;
+  ++$count{$_} for @_;
   sort { $count{$b} <=> $count{$a} } keys %count;
+}
+
+sub is_only_one ( @ ) {
+  @_ <= 1 and return @_ == 1;
+  @_ == 2 and return $_[0] eq $_[1];
+  # if no element is different from the first, then all are equal.
+  ! grep $_[$_] ne $_[0], 1..$#_;
 }
 
 sub most_common ( @ ) {
@@ -82,12 +101,6 @@ sub most_common ( @ ) {
   my @mcl = sort { $count{$b} <=> $count{$a} } keys %count;
   return $mcl[0] if (@mcl == 1) || ($count{$mcl[0]} != $count{$mcl[1]});
   return;
-}
-
-sub is_only_one ( @ ) {
-  my (@list) = @_;
-  my @uniq = uniq_by_count(@list);
-  @uniq == 1;
 }
 
 ### code helpers: UNIX file modes and devices
@@ -188,7 +201,7 @@ sub tdiff_entries ( $$@ ) {
 
   ## segregate by file type
   my @types = map $_->mode & S_IFMT, @stat;
-  my @uniq_types = uniq_by_count @types;
+  my @uniq_types = uniq @types;
   if (@uniq_types > 1) {
     msg_differ($info[$_], $rpath, "is @{[file_type $types[$_]]}") for 0..$#info;
   }
@@ -304,7 +317,7 @@ sub tdiff_files ( $$@ ) {
 
   my (@info_groups, @done_groups);
   if ($CHECK_SIZE_BEFORE_CONTENTS) {
-    my @sizes = uniq_by_count map $_->{stat}->size, @info;
+    my @sizes = uniq map $_->{stat}->size, @info;
     if (@sizes > 1) {
       msg_differ($info[$_], $rpath, "size is %d bytes", $info[$_]{stat}->size)
         for 0..$#info;
@@ -333,6 +346,9 @@ sub tdiff_files ( $$@ ) {
       # followed by the block of data from the file.
     FILE:
       for my $i (0..$#group) {
+	# Profiling shows a lot of time spent in IO::Handle::read here, but
+	# almost all of it is actually in Perl's read() call.  So there's
+	# no benefit in switching from the method call to read(FH, ...).
         my $ret = $group[$i]{handle}->read($buffers[$i], FILE_READ_LEN, 4);
         $ret and length($buffers[$i]) != $ret+4
           and die "internal error: mismatch @{[length($buffers[$i]), $ret]}";
@@ -347,7 +363,7 @@ sub tdiff_files ( $$@ ) {
       }
 
       # compare results (including status)
-      my @uniq_buf = uniq_by_count @buffers;
+      my @uniq_buf = uniq @buffers;
       @uniq_buf == 1 and $uniq_buf[0] eq 'eof' and last BLOCKS;
       @uniq_buf == 1 and $uniq_buf[0] ne 'ERR' and next BLOCKS;
 

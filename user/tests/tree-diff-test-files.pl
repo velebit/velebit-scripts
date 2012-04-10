@@ -73,9 +73,9 @@ for my $c (@codes) {
   }
 }
 
-# Run tree-diff.pl itself
+# Run tree-diff itself
 
-my $td = dirname($0) . "/../tree-diff.pl";
+my $td = dirname($0) . "/../tree-diff";
 system "$^X '$td' -s d? >actual.out 2>&1";
 
 # Compare the results
