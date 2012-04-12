@@ -54,3 +54,9 @@ done
     ./other/Sue_burn_tmp.wpl ./Kata_burn_tmp.wpl \
     > Sue_burn.wpl
 rm -f *_burn_tmp.wpl */*_burn_tmp.wpl
+
+# the double pass through merge-playlists puts all-voices flavors last
+sort -t / -k 2n -k 1 ./Abbe.wpl ./bert.wpl \
+    | tac | ./download/merge-playlists.pl \
+    | tac | ./download/merge-playlists.pl \
+    > ./Abbe+bert.wpl

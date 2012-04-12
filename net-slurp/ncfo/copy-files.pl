@@ -145,6 +145,8 @@ if (have_initial_match('show', @ARGV)) {
   show $dir, '15', 'DH', '*Extremophile*';
   show $dir, '16', 'GT', '*DNA*';
   show $dir, '17', 'GT', '*Octopus*';
+  show $dir, '90', 'DH', '*Medl{e,}y*1*';
+  show $dir, '91', 'DH', '*Medl{e,}y*2*';
   print "\n";
 }
 
@@ -159,7 +161,7 @@ if (!@ARGV or have_initial_match('Kata,all', @ARGV)) {
   process $dir, '05', 'DH', '*Reptiles*melody*';
   process $dir, '06', 'DH', '*Taxonomy*Alt*';
   process $dir, '07', 'DH', '*Axolotl*melody*';
-  process $dir, '08', 'DH', '*Cetac{e,i}ans*melody*';
+  #process $dir, '08', 'DH', '*Cetac{e,i}ans*melody*';
   process $dir, '09', 'DH', '*4E9Years*melody*';
   process $dir, '10a', 'DH', '*Hedgehog*melody*'; # no Tutti for Kata
   process $dir, '11', 'DH', '*Virus*Practice*';
@@ -169,6 +171,8 @@ if (!@ARGV or have_initial_match('Kata,all', @ARGV)) {
   process $dir, '15', 'DH', '*Extremophile*melody*';
   process $dir, '16', 'GT', '*DNA*Sop*';
   process $dir, '17', 'GT', '*Octopus*melody*';
+  process $dir, '90', 'DH', '*Medl{e,}y*1*';
+  process $dir, '91', 'DH', '*Medl{e,}y*2*';
   print "\n";
 }
 
@@ -183,8 +187,8 @@ if (have_initial_match('Sue,all', @ARGV)) {
   process $dir, '05', 'DH', '*Reptiles*melody*';
   process $dir, '06', 'DH', '*Taxonomy*Sop*';  # different!
   process $dir, '07', 'DH', '*Axolotl*melody*';
-  process $dir, '08', 'DH', '*Cetac{e,i}ans*melody*';
-  process $dir, '08x', 'DH', '../../midi-stuff/*Cetaceans*all*.mp3';
+  #process $dir, '08', 'DH', '*Cetac{e,i}ans*melody*';
+  #process $dir, '08x', 'DH', '../../midi-stuff/*Cetaceans*all*.mp3';
   process $dir, '09', 'DH', '*4E9Years*Sop*';  # different!
   process $dir, '10a', 'DH', '*Hedgehog*melody*';
   process $dir, '10b', 'DH', '*Hedgehog*Harmony*';
@@ -196,6 +200,8 @@ if (have_initial_match('Sue,all', @ARGV)) {
   process $dir, '15', 'DH', '*Extremophile*melody*';
   process $dir, '16', 'GT', '*DNA*Sop*';
   process $dir, '17', 'GT', '*Octopus*melody*';
+  process $dir, '90', 'DH', '*Medl{e,}y*1*';
+  process $dir, '91', 'DH', '*Medl{e,}y*2*';
   print "\n";
 }
 
@@ -212,9 +218,9 @@ if (!@ARGV or have_initial_match('Abbe,all', @ARGV)) {
   process $dir, '05', 'DH', '*Reptiles*melody*';
   process $dir, '06', 'DH', '*Taxonomy*Alto*';
   process $dir, '07', 'DH', '*Axolotl*melody*';
-  process $dir, '08', 'DH', '*Cetac{e,i}ans*Alt*'
-    or process $dir, '08', 'DH', '../../midi-stuff/*Cetaceans*alto*.mp3';
-  process $dir, '08x', 'DH', '../../midi-stuff/*Cetaceans*all*.mp3';
+  #process $dir, '08', 'DH', '*Cetac{e,i}ans*Alt*'
+  #  or process $dir, '08', 'DH', '../../midi-stuff/*Cetaceans*alto*.mp3';
+  #process $dir, '08x', 'DH', '../../midi-stuff/*Cetaceans*all*.mp3';
   process $dir, '09', 'DH', '*4E9Years*melody*';
   process $dir, '10a', 'DH', '*Hedgehog*melody*';
   process $dir, '10b', 'DH', '*Hedgehog*Harmony*';
@@ -227,6 +233,8 @@ if (!@ARGV or have_initial_match('Abbe,all', @ARGV)) {
   process $dir, '15', 'DH', '*Extremophile*melody*';
   process $dir, '16', 'GT', '*DNA*Alt*';
   process $dir, '17', 'GT', '*Octopus*HarmonyLow*';
+  process $dir, '90', 'DH', '*Medl{e,}y*1*';
+  process $dir, '91', 'DH', '*Medl{e,}y*2*';
   print "\n";
 }
 
@@ -244,9 +252,9 @@ if (!@ARGV or have_initial_match('bert,all', @ARGV)) {
   process $dir, '05', 'DH', '*Reptiles*melody*';
   process $dir, '06', 'DH', '*Taxonomy*Bass*';
   process $dir, '07', 'DH', '*Axolotl*melody*';
-  process $dir, '08', 'DH', '*Cetac{e,i}ans*Bass*'
-    or process $dir, '08', 'DH', '../../midi-stuff/*Cetaceans*bass*.mp3';
-  process $dir, '08x', 'DH', '../../midi-stuff/*Cetaceans*all*.mp3';
+  #process $dir, '08', 'DH', '*Cetac{e,i}ans*Bass*'
+  #  or process $dir, '08', 'DH', '../../midi-stuff/*Cetaceans*bass*.mp3';
+  #process $dir, '08x', 'DH', '../../midi-stuff/*Cetaceans*all*.mp3';
   process $dir, '09', 'DH', '*4E9Years*Bass*';
   process $dir, '10a', 'DH', '*Hedgehog*melody*';
   process $dir, '10b', 'DH', '*Hedgehog*Harmony*';
@@ -259,6 +267,8 @@ if (!@ARGV or have_initial_match('bert,all', @ARGV)) {
   process $dir, '15', 'DH', '*Extremophile*Baritone*';
   process $dir, '16', 'GT', '*DNA*Alt*';
   process $dir, '17', 'GT', '*Octopus*Melody*';
+  process $dir, '90', 'DH', '*Medl{e,}y*1*';
+  process $dir, '91', 'DH', '*Medl{e,}y*2*';
   print "\n";
 }
 
