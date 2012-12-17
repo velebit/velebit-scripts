@@ -90,6 +90,26 @@ sub show ( $$$@ ) {
 
 my %already_processed;
 
+sub process_file ( $$ ) {
+  my ($in, $out) = @_;
+  my $outdir = dirname($out);
+  -d $outdir or (system('mkdir', '-p', $outdir)
+		 and die "mkdir failed.\n");
+
+  if (exists $already_processed{$in}) {
+    #warn "USING SHORTCUT for $out\n"; # <- $already_processed{$in}\n";
+    system('cp', $already_processed{$in}, $out) and die "cp failed.\n";
+  } else {
+    system('cp', $in, $out) and die "cp failed.\n";
+    $wipe_id3 and (system("$ENV{HOME}/scripts/music/id3wipe", '-f', $out)
+		   and warn "id3wipe failed.\n");
+    $adjust_gain and (system('mp3gain', '-r', '-k', '-s', 's', '-q', $out)
+		      and warn "mp3gain failed.\n");
+    $already_processed{$in} = $out;
+  }
+  1;
+}
+
 sub process ( $$$@ ) {
   my ($dest, $idx, $auth, @globs) = @_;
   my @files = map glob($_), map case_expand($_), map curly_expand($_), @globs;
@@ -110,17 +130,7 @@ sub process ( $$$@ ) {
 
     #my $d = "$dest/${auth}_${idx}_$i";
     my $d = "$dest/$u";
-    if (exists $already_processed{$i}) {
-      #warn "USING SHORTCUT for $d\n"; # <- $already_processed{$i}\n";
-      system('cp', $already_processed{$i}, $d) and die "cp failed.\n";
-    } else {
-      system('cp', $i, $d) and die "cp failed.\n";
-      $wipe_id3 and (system("$ENV{HOME}/scripts/music/id3wipe", '-f', $d)
-		     and warn "id3wipe failed.\n");
-      $adjust_gain and (system('mp3gain', '-r', '-k', '-s', 's', '-q', $d)
-			and warn "mp3gain failed.\n");
-      $already_processed{$i} = $d;
-    }
+    process_file($i, $d);
   }
   1;
 }

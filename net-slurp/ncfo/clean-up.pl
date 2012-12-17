@@ -53,11 +53,11 @@ my @all = sort keys %{ +{ %referenced, %found } };
 my ($rm_ok, $rm_fail);
 for my $f (@all) {
   if ($found{$f} and !$referenced{$f}) {
-    if (unlink $f) {
-      print "'$f' is old, removed.\n";
-    } else {
-      warn "remove($f): $!";
-    }
+    $f =~ /\/index\.html$/
+      and print("'$f' was ignored.\n"), next;
+    unlink $f
+      or warn("remove($f): $!"), next;
+    print "'$f' is old, removed.\n";
 
   } elsif ($referenced{$f} and !$found{$f}) {
     print "'$f' downloaded but not found.\n";
