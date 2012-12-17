@@ -32,7 +32,7 @@ make_wpl () {
     unix2dos -q "$dir$suffix.wpl"
 }
 
-if [ "$#" -eq 0 ]; then set -- Abbe bert Kata demo other/Sue; fi
+if [ "$#" -eq 0 ]; then set -- Abbe Katarina Meredith; fi
 for who in "$@"; do
     rm -f "$who".wpl "$who"_*.wpl
     #make_wpl "$who" '_all' . ''
@@ -44,19 +44,19 @@ for who in "$@"; do
     #fi
     make_wpl "$who" '' . ''
     rm -f "${who}_all.wpl"
-    make_wpl "$who" _burn_tmp . 'Piano|Orch'
+    #make_wpl "$who" _burn_tmp . 'Piano|Orch'
 done
 
 #./download/merge-playlists.pl -k \
 #    ./Abbe.wpl ./bert.wpl \
 #    > Abbert_burn.wpl
-./download/merge-playlists.pl \
-    ./other/Sue_burn_tmp.wpl ./Kata_burn_tmp.wpl \
-    > Sue_burn.wpl
+#./download/merge-playlists.pl \
+#    ./other/Sue_burn_tmp.wpl ./Kata_burn_tmp.wpl \
+#    > Sue_burn.wpl
 rm -f *_burn_tmp.wpl */*_burn_tmp.wpl
 
 # the double pass through merge-playlists puts all-voices flavors last
-sort -t / -k 2n -k 1 ./Abbe.wpl ./bert.wpl \
-    | tac | ./download/merge-playlists.pl \
-    | tac | ./download/merge-playlists.pl \
-    > ./Abbe+bert.wpl
+#sort -t / -k 2n -k 1 ./Abbe.wpl ./bert.wpl \
+#    | tac | ./download/merge-playlists.pl \
+#    | tac | ./download/merge-playlists.pl \
+#    > ./Abbe+bert.wpl
