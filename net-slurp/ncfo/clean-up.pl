@@ -13,7 +13,7 @@ while (<$LOG>) {
   s/[\r\n]+//g;
   if (/^(?:Saving to:|Server file no newer than local file) /) {
     #print ":$_\n";
-    my ($file) = /\`([^\`\']+)\'/
+    my ($file) = /\`(.+)\'\s*(?:$|--\s)/
       or die "Format error: no file name found in\n    $_\n ";
     #print "F $file\n";
     push @referenced, $file
