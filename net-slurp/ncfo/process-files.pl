@@ -38,6 +38,7 @@ sub process_file ( $$ ) {
   -d $outdir or (system('mkdir', '-p', $outdir)
 		 and die "mkdir failed.\n");
 
+  print STDERR "--- $out\n";
   if (exists $already_processed{$in}) {
     #warn "USING SHORTCUT for $out\n"; # <- $already_processed{$in}\n";
     system('cp', $already_processed{$in}, $out) and die "cp failed.\n";
