@@ -34,7 +34,7 @@ make_playlist () {
     if [ -z "$ignore" ]; then ignore='^$'; fi  # cop-out
     local sep="/"   #"_"
     set -- `ls "$dir"/*.[Mm][Pp]3 \
-        | egrep "$tracks" | egrep -v "$ignore" | sort -t "$sep" -k 2n`
+        | egrep "$tracks" | egrep -v "$ignore" | sort -t "$sep" -k 2`
 
     if [ "$#" -lt 1 ]; then rm -f "$dir$suffix".{wpl,m3u}; return; fi
     generate_wpl "$dir practice" "$@" > "$dir$suffix.wpl"
