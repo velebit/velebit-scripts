@@ -11,8 +11,9 @@ status () {
 }
 
 backup=/backup
-full_backup="home"
-tar_backup="scratch root boot"
+full_backup="home shared scratch"
+tar_backup="root boot"
+ignored="proc sys dev tmp var/lib/nfs"
 tar_type=".tar.gz"
 
 dryrun=
@@ -20,6 +21,7 @@ dryrun=
 while [ "$#" -gt 0 ]; do
     case "$1" in
        -n)  dryrun=yes ;;
+       -c)  partition_check=yes ;;
        -*)  fail "Unknown flag '$1'" ;;
         *)  fail "Unexpected argument '$1'" ;;
     esac
@@ -97,6 +99,9 @@ run_backup () {
 	    status "...done."
 	    CheckSpace
 	fi
+    done
+    for ext in '.tar' '.tar.gz' '.tar.bz2'; do
+	local xdst="$dst_base$ext"
 	if [ -e "$xdst" ]; then
 	    set -- "$@" "$xdst"
 	    Run mv "$xdst" "$xdst.old" || fail "couldn't move old $xdst"
@@ -125,9 +130,17 @@ run_backup () {
 		|| fail "The tarballing went kaboom."
 	    ;;
 	*)
-	    Run mkdir -p "$dst" || fail "couldn't create new directory $dst"
-	    (TimeRun tar -C "$src" --one-file-system -cf - . \
-		| Run tar -C "$dst" -xpf -) || fail "The copying went kaboom."
+	    if [ -d "$dst" ]; then
+		TimeRun rsync -h --one-file-system --archive --delete \
+		    "$src/." "$dst" || fail "The updating went kaboom."
+#		    --inplace --hard-links --sparse \
+	    else
+		Run mkdir -p "$dst" || fail "couldn't create directory $dst"
+		# For some reason, rsync is *slower* for the initial copy.
+		(TimeRun tar -C "$src" --one-file-system -cf - . \
+		    | Run tar -C "$dst" -xpf -) \
+		    || fail "The initial copying went kaboom."
+	    fi
 	    ;;
     esac
     status "...done."
@@ -156,6 +169,9 @@ partition_path () {
 backup_path () {
     echo "$backup/$1"
 }
+partition_name () {
+    echo "$1" | sed -e 's,^/,,' -e 's/^$/root/'
+}
 
 run_all_backups () {
     CheckSpace
@@ -175,6 +191,33 @@ run_all_backups () {
 	status "Min. projected disk margin: `echo "$margin" | kb_to_units`"
     fi
 }
+
+check_partitions () {
+    header='Mounted partitions NOT configured for full backups:'
+    mountpoints="`mount | awk '{print $3}'`"
+    for path in $mountpoints; do
+	name="`partition_name "$path"`"
+	for i in $full_backup $tar_backup $ignored backup; do
+	    case "$name" in
+		"$i")    continue 2 ;;
+		"$i"/*)  continue 2 ;;
+	    esac
+	done
+	if [ -n "$header" ]; then
+	    echo "${COLOR_FAIL}$header${COLOR_NONE}"; header=''
+	fi
+	echo "    $name"
+    done
+    if [ -n "$header" ]; then
+	echo "${COLOR_GOOD}All relevant mounted partitions" \
+	    "are configured for backups.${COLOR_NONE}"
+    fi
+}
+
+if [ -n "$partition_check" ]; then
+    check_partitions
+    exit 0
+fi
 
 if [ -t 1 ]; then
     # Only create a log file if the output is being sent to a terminal,
