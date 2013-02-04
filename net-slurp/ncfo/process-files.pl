@@ -40,7 +40,7 @@ sub process_file ( $$ ) {
 
   print STDERR "--- $out\n";
   if (exists $already_processed{$in}) {
-    #warn "USING SHORTCUT for $out\n"; # <- $already_processed{$in}\n";
+    print STDERR "  Copying $out\n";
     system('cp', $already_processed{$in}, $out) and die "cp failed.\n";
   } else {
     system('cp', $in, $out) and die "cp failed.\n";

@@ -42,7 +42,11 @@ make_playlist () {
     generate_m3u "$dir practice" "$@" > "$dir$suffix.m3u"
 }
 
-if [ "$#" -eq 0 ]; then set -- Abbe Katarina Meredith; fi
+default_playlist_dirs () {
+    ls */*.mp3 | sed -e 's,/[^/]*$,,' | sort | uniq
+}
+
+if [ "$#" -eq 0 ]; then set -- `default_playlist_dirs`; fi
 for who in "$@"; do
     rm -f "$who".{wpl,m3u} "$who"_*.{wpl,m3u}
     #make_playlist "$who" '_all' . ''
