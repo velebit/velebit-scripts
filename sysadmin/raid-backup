@@ -1,13 +1,34 @@
 #!/bin/sh
 
+COLOR_NONE=$'\033[0m'
+COLOR_FAIL=$'\033[31m'
+COLOR_STAT=$'\033[33m'
+COLOR_GOOD=$'\033[32m'
+COLOR_DATE=$'\033[36m'
+
+no_colors () {
+    COLOR_NONE=''
+    COLOR_FAIL=''
+    COLOR_STAT=''
+    COLOR_GOOD=''
+    COLOR_DATE=''
+}
+if [ ! -t 1 ]; then no_colors; fi
+
 fail () {
     if [ "$#" -eq 0 ]; then set -- "Something has gone very wrong!"; fi
-    echo "$*" >&2
+    echo "${COLOR_FAIL}$*${COLOR_NONE}" >&2
     exit 1
 }
 
 status () {
-    echo "-- [`date +'%Y-%m-%d %H:%M:%S'`] -- $*"
+    date="`date +'%Y-%m-%d %H:%M:%S'`"
+    echo "-- ${COLOR_DATE}[$date]${COLOR_NONE} -- ${COLOR_STAT}$*${COLOR_NONE}"
+}
+
+status_ok () {
+    date="`date +'%Y-%m-%d %H:%M:%S'`"
+    echo "-- ${COLOR_DATE}[$date]${COLOR_NONE} -- ${COLOR_GOOD}$*${COLOR_NONE}"
 }
 
 backup=/backup
@@ -33,7 +54,7 @@ done
 
 Run () {
     if [ -n "$dryrun" ]; then
-	echo "WOULD run:      $*" >&2
+	echo "${COLOR_STAT}WOULD run:${COLOR_NONE}      $*" >&2
     else
 	echo "# $*" >&2  # NB: this does go to the log file
 	"$@"
@@ -41,7 +62,7 @@ Run () {
 }
 TimeRun () {
     if [ -n "$dryrun" ]; then
-	echo "WOULD run: time $*" >&2
+	echo "${COLOR_STAT}WOULD run:${COLOR_NONE} time $*" >&2
     else
 	echo "# time $*" >&2  # NB: this does go to the log file
 	time "$@"
@@ -96,7 +117,7 @@ run_backup () {
 	    status "Cleaning up previous $xdst..."
 	    Run rm -rf "$xdst.old" || fail "couldn't remove $xdst.old"
 	    TestBad -e "$xdst.old" && fail "didn't actually remove $xdst.old"
-	    status "...done."
+	    status_ok "...done."
 	    CheckSpace
 	fi
     done
@@ -143,7 +164,7 @@ run_backup () {
 	    fi
 	    ;;
     esac
-    status "...done."
+    status_ok "...done."
     CheckSpace
 
     local free_after="`disk_free_kb`"
@@ -158,7 +179,7 @@ run_backup () {
     for xdst in "$@"; do
 	status "Cleaning up previous $xdst..."
 	Run rm -rf "$xdst.old"
-	status "...done."
+	status_ok "...done."
 	CheckSpace
     done
 }
@@ -240,5 +261,6 @@ if [ -t 1 ]; then
 	run_all_backups
     fi
 else
+    no_colors
     run_all_backups
 fi
