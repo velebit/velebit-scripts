@@ -2,6 +2,9 @@
 use warnings;
 use strict;
 
+our $DIR = 'mp3/';
+our $EXT = '.mp3';
+
 ############################################################
 
 sub _add_prefix ( $$ ) { map $_[0] . $_, @{$_[1]}; }
@@ -56,26 +59,39 @@ sub uniform_filename ( $$$ ) {
 
 sub flags ( $@ ) {
   my ($who, @flag_sets) = @_;
-  my %flags;
-  for my $f (@flag_sets) {
-    %flags = (%flags, %$f);
-    # need to do this here, not after the loop, or collisions cause problems:
-    %flags = (%flags, %{$f->{'*'}})
-      if exists $f->{'*'} and ref $f->{'*'};
-    %flags = (%flags, %{$f->{$who}})
-      if exists $f->{$who} and ref $f->{$who};
+  my $use_wildcards = 1;
+ GATHER_FLAGS:
+  {
+    my %flags;
+    for my $f (@flag_sets) {
+      %flags = (%flags, %$f);
+      # need to do this here, not after the loop, or collisions cause problems:
+      %flags = (%flags, %{$f->{'*'}})
+	if $use_wildcards and exists $f->{'*'} and ref $f->{'*'};
+      %flags = (%flags, %{$f->{$who}})
+	if exists $f->{$who} and ref $f->{$who};
+    }
+    # If we weren't supposed to use wildcards, we have to redo the whole thing.
+    exists $flags{no_wildcard_cfg} and $flags{no_wildcard_cfg}
+      and $use_wildcards
+	and $use_wildcards = 0, redo GATHER_FLAGS;
+    !$use_wildcards
+      and !(exists $flags{no_wildcard_cfg} and $flags{no_wildcard_cfg})
+	and die "Configuration error: should I use wildcards or not?!?";
+
+    #delete $flags{$_} for @groups;
+    \%flags;
   }
-  #delete $flags{$_} for @groups;
-  \%flags;
 }
 
 sub matches ( $ ) {
   my ($flags) = @_;
   my $idx = $flags->{id};
+  my @name_flags = grep length, @$flags{sort grep /^name/, keys %$flags};
   my @match_flags = grep length, @$flags{sort grep /^match/, keys %$flags};
   my @ignore_flags = grep length, @$flags{sort grep /^ignore/, keys %$flags};
 
-  my $glob = join '*', 'mp3/', $flags->{name}, @match_flags, '.mp3';
+  my $glob = join '*', $DIR, @name_flags, @match_flags, $EXT;
   my @xglobs = map case_expand($_), map curly_expand($_), $glob;
   my @files = map glob($_), @xglobs;
 
@@ -85,7 +101,7 @@ sub matches ( $ ) {
       print STDERR "$_\n" for @files;
     }
 
-    my $iglob = join '*', 'mp3/', $flags->{name}, @ignore_flags, '.mp3';
+    my $iglob = join '*', $DIR, @name_flags, @ignore_flags, $EXT;
     my @ixglobs = map case_expand($_), map curly_expand($_), $iglob;
     my @ifiles = map glob($_), @ixglobs;
 
@@ -114,25 +130,28 @@ sub find_files ( $@ ) {
   return ($flags, $flags, \@files) if @files;
 
   my @fallback = @{$flags->{fallback}} if exists $flags->{fallback};
+  # No cascading failures (we don't try the fallback's fallbacks)
   for my $fbwho (@fallback) {
     my $fbflags = flags $fbwho, @flag_sets;
     @files = matches $fbflags;
     return ($flags, $fbflags, \@files) if @files;
   }
 
+  # At this point, we've failed; the rest of this is for diagnostics.
   my $showflags = flags 'show', @flag_sets;
-  @files = matches $showflags;
+  @files = matches $showflags if $who ne 'show';
+  my $label = "[$flags->{id}] $flags->{name}";
   if (@files) {
     warn join("\n    ",
-	      "*** No files found for $flags->{name}!  Possibly relevant:",
+	      "*** No files found for $label!  Possibly relevant:",
 	      @files) . "\n";
   } else {
-    warn "*** No files found for $flags->{name}, and nothing seems relevant\n";
+    warn "*** No files found for $label, and nothing seems relevant\n";
   }
   ($flags, $showflags, []);
 }
 
-sub process ( $@ ) {
+sub generate ( $@ ) {
   my ($who, @flag_sets) = @_;
   my ($flags, $fbflags, $files) = find_files $who, @flag_sets;
 
@@ -148,7 +167,7 @@ sub process ( $@ ) {
     print STDERR "    $_\n" for @$files;
   }
 
-  defined $destdir or return;
+  defined $destdir or return @$files;
 
   for my $i (@$files) {
     my $n = base_filename $i;
@@ -156,13 +175,16 @@ sub process ( $@ ) {
     my $d = "$destdir/$u";
     print "$i=$d\n";
   }
-  1;
+  @$files;
 }
 
 ############################################################
 
 my @group_info =
-  ( show => { display => 1, no_copy => 1, no_auto => 1 },
+  ( show => { display => 1, no_copy => 1, show_unmatched => 1,
+	      no_wildcard_cfg => 1, no_auto => 1 },
+    demo => { match => 'demo', no_wildcard_cfg => 1, no_auto => 1 },
+    piano => { match => 'piano', no_wildcard_cfg => 1, no_auto => 1 },
 
     Kata => { match => '{kid,sop}' },
     Abbe => { match => 'alt' },
@@ -189,7 +211,8 @@ my @tracks =
       Kata => { match => 'melody' }, Abbe => { match => 'melody' },
       bert => { match => 'harmony' } },
     # 09
-    { id => '10',  name => 'Pond*Song' },
+    { id => '10',  name => 'Pond*Song',
+      '*' => { match => 'unison' }, 'demo' => { match => 'unison' }, },
 
     #M1  Great White Shark
     #M2  Amazing Water
@@ -202,16 +225,21 @@ my @tracks =
       '*' => { match => '' } },
   );
 
-@ARGV = @auto_groups if ! @ARGV;
+@ARGV = ('all') if ! @ARGV;
 
-for my $arg (@ARGV) {
-  if (exists $groups{$arg}) {
+while (@ARGV) {
+  my $arg = shift @ARGV;
+  if ($arg eq 'all') {
+    unshift @ARGV, @auto_groups;
+
+  } elsif (exists $groups{$arg}) {
     my $dir = "../$arg" if ! $groups{$arg}{no_copy};
     print STDERR "@@@ preparing $dir @@@\n" if $dir;
     for my $track (@tracks) {
-      process  $arg, \%groups, $track, {destdir => $dir};
+      generate $arg, \%groups, $track, {destdir => $dir};
     }
+
   } else {
-    die "Unknown argument '$arg' (known: @groups)\n  encountered";
+    die "Unknown argument '$arg' (known: @groups all)\n  encountered";
   }
 }
