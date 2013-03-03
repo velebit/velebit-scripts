@@ -110,7 +110,7 @@ sub matches ( $ ) {
       print STDERR "$_\n" for @ifiles;
     }
 
-    my %ifiles = map $_ => 1, @ifiles;
+    my %ifiles = map +($_ => 1), @ifiles;
     @files = grep !$ifiles{$_}, @files;
   }
 
@@ -183,26 +183,30 @@ sub generate ( $@ ) {
 my @group_info =
   ( show => { display => 1, no_copy => 1, show_unmatched => 1,
 	      no_wildcard_cfg => 1, no_auto => 1 },
-    demo => { match => 'demo', no_wildcard_cfg => 1, no_auto => 1 },
-    piano => { match => 'piano', no_wildcard_cfg => 1, no_auto => 1 },
 
     Kata => { match => '{kid,sop}' },
     Abbe => { match => 'alt' },
     bert => { match => '{bass,baritone}' },
+
+    demo => { match => 'demo', no_wildcard_cfg => 1, fallback => ['piano'] },
+    piano => { match => 'piano', no_wildcard_cfg => 1, no_auto => 1 },
   );
 my %groups = @group_info;
 my @groups = map $group_info[2*$_], 0..int($#group_info/2);
 my @auto_groups = grep !($groups{$_}{no_auto}), @groups;
 
 my @tracks =
-  ( { id => '01',  name => 'Cetac{e,i}ans' },
+  ( { id => '01',  name => 'Cetac{e,i}an' },
     { id => '02',  name => 'Living*Light',
       bert => { match => 'bass_hi' } },
-    { id => '03',  name => 'Tamar*Valley' },
+    { id => '03',  name => 'Tamar' },
     { id => '04',  name => 'Clouds',
-      Kata => { match => 'kids_hi' } },
-    { id => '05a', name => 'Sea*Fever*Intro' },
-    { id => '05b', name => 'Sea*Fever',
+      Kata => { match => 'kids_hi' }, Abbe => { match => 'alto_lo' } },
+    { id => '05a', name => 'Sea*Fever*intro' },
+    { id => '05c', name => 'Sea*Fever*slow',
+      Kata => { match => 'hi' }, Abbe => { match => 'lo' },
+      bert => { match => 'lo' } },
+    { id => '05d', name => 'Sea*Fever', ignore => '{slow,intro}',
       Kata => { match => 'hi' }, Abbe => { match => 'lo' },
       bert => { match => 'lo' } },
     { id => '06',  name => 'Nine*Days' },
@@ -214,15 +218,9 @@ my @tracks =
     { id => '10',  name => 'Pond*Song',
       '*' => { match => 'unison' }, 'demo' => { match => 'unison' }, },
 
-    #M1  Great White Shark
-    #M2  Amazing Water
-    #M3  Clouds
-    #M4  Water from Drips to Oceans
-    #M5  About Liquids
-    #M6  Watery Seasons
-    #M7  Water and Sand
+    { id => 'M0',  name => 'CPS*Medley' },
     { id => 'M8',  name => 'Water*Cycle',
-      '*' => { match => '' } },
+      'piano' => { match => 'TVTrack' } },
   );
 
 @ARGV = ('all') if ! @ARGV;
@@ -235,8 +233,21 @@ while (@ARGV) {
   } elsif (exists $groups{$arg}) {
     my $dir = "../$arg" if ! $groups{$arg}{no_copy};
     print STDERR "@@@ preparing $dir @@@\n" if $dir;
+
+    my @used_files;
     for my $track (@tracks) {
-      generate $arg, \%groups, $track, {destdir => $dir};
+      push @used_files, generate $arg, \%groups, $track, {destdir => $dir};
+    }
+
+    if ($groups{$arg}{show_unmatched}) {
+      my @all_files = map glob($_),
+	map case_expand($_), map curly_expand($_), "$DIR*$EXT";
+      my %used = map +($_ => 1), @used_files;
+      my @unused_files = grep ! $used{$_}, @all_files;
+      if (@unused_files) {
+	print STDERR "--- Unmatched files:\n";
+	print STDERR "    $_\n" for @unused_files;
+      }
     }
 
   } else {
