@@ -122,6 +122,15 @@ sub matches ( $ ) {
   @files;
 }
 
+sub apply_replacements ( $@ ) {
+  my ($text, @replace) = @_;
+  for my $rr (@replace) {
+    my ($regex, $repl) = @$rr;
+    $text =~ s/$regex/$repl/;
+  }
+  $text;
+}
+
 sub find_files ( $@ ) {
   my ($who, @flag_sets) = @_;
 
@@ -130,7 +139,7 @@ sub find_files ( $@ ) {
   return ($flags, $flags, \@files) if @files;
 
   my @fallback = @{$flags->{fallback}} if exists $flags->{fallback};
-  # No cascading failures (we don't try the fallback's fallbacks)
+  # No cascading failover (we don't try the fallback's fallbacks)
   for my $fbwho (@fallback) {
     my $fbflags = flags $fbwho, @flag_sets;
     @files = matches $fbflags;
@@ -171,6 +180,9 @@ sub generate ( $@ ) {
 
   for my $i (@$files) {
     my $n = base_filename $i;
+    if (exists $flags->{replace}) {
+      $n = apply_replacements $n, @{$flags->{replace}};
+    }
     my $u = uniform_filename $flags->{id}, '', $n;
     my $d = "$destdir/$u";
     print "$i=$d\n";
@@ -182,45 +194,70 @@ sub generate ( $@ ) {
 
 my @group_info =
   ( show => { display => 1, no_copy => 1, show_unmatched => 1,
-	      no_wildcard_cfg => 1, no_auto => 1 },
+	      no_wildcard_cfg => 1 },
 
-    Kata => { match => '{kid,sop}' },
+    Katarina => { match => '{kid,sop}' },
     Abbe => { match => 'alt' },
     bert => { match => '{bass,baritone}' },
 
+    soprano => { match => 'sop' },
+    alto => { match => 'alt' },
+    tenor => { match => '{tenor,baritone}' },
+    Sara => { match => '{alt,tenor}' },
+
     demo => { match => 'demo', no_wildcard_cfg => 1, fallback => ['piano'] },
-    piano => { match => 'piano', no_wildcard_cfg => 1, no_auto => 1 },
+    piano => { match => 'piano', no_wildcard_cfg => 1 },
   );
 my %groups = @group_info;
 my @groups = map $group_info[2*$_], 0..int($#group_info/2);
-my @auto_groups = grep !($groups{$_}{no_auto}), @groups;
+my @auto_groups = ( qw(Katarina Abbe bert demo) );
+my @extra_groups = grep !/^\#/, ( qw(soprano alto tenor Sara) );
+my @all_groups = ( @auto_groups, @extra_groups );
 
 my @tracks =
-  ( { id => '01',  name => 'Cetac{e,i}an' },
+  ( { id => '01',  name => 'Cetac{e,i}an', tenor => { match => 'bass' } },
     { id => '02',  name => 'Living*Light',
       bert => { match => 'bass_hi' } },
     { id => '03',  name => 'Tamar' },
     { id => '04',  name => 'Clouds',
-      Kata => { match => 'kids_hi' }, Abbe => { match => 'alto_lo' } },
+      Katarina => { match => 'kids_hi' }, Abbe => { match => 'alto_lo' } },
     { id => '05a', name => 'Sea*Fever*intro' },
-    { id => '05c', name => 'Sea*Fever*slow',
-      Kata => { match => 'hi' }, Abbe => { match => 'lo' },
-      bert => { match => 'lo' } },
-    { id => '05d', name => 'Sea*Fever', ignore => '{slow,intro}',
-      Kata => { match => 'hi' }, Abbe => { match => 'lo' },
-      bert => { match => 'lo' } },
+    { id => '05c', name => 'Sea*Fever', ignore => '{slow,intro}',
+      Katarina => { match => 'hi' }, Abbe => { match => 'lo' },
+      bert => { match => 'lo' },
+      soprano => { match => 'hi' }, alto => { match => 'lo' },
+      tenor => { match => 'hi' }, Sara => { match => '{hi,lo,SaraXXX}' } },
+    { id => '05d', name => 'Sea*Fever*slow',
+      Katarina => { match => 'hi' }, Abbe => { match => 'lo' },
+      bert => { match => 'lo' },
+      soprano => { match => 'hi' }, alto => { match => 'lo' },
+      tenor => { match => 'hi' }, Sara => { match => '{hi,lo,SaraXXX}' } },
     { id => '06',  name => 'Nine*Days' },
     { id => '07',  name => 'Water*March' },
     { id => '08',  name => 'River*Waltz',
-      Kata => { match => 'melody' }, Abbe => { match => 'melody' },
-      bert => { match => 'harmony' } },
+      Katarina => { match => 'melody' }, Abbe => { match => 'melody' },
+      bert => { match => 'harmony' },
+      soprano => { match => 'melody' }, alto => { match => 'melody' },
+      tenor => { match => 'harmony' },
+      Sara => { match => '{melody,harmony,SaraXXX}' } },
     # 09
     { id => '10',  name => 'Pond*Song',
-      '*' => { match => 'unison' }, 'demo' => { match => 'unison' }, },
+      '*' => { match => 'practice' }, 'demo' => { match => 'practice' } },
+    { id => '11a',  name => 'Big*Ice', ignore => '72',
+      replace => [['_86', '']],
+      tenor => { match => '{tenor,bass}' } },
+    { id => '11b',  name => 'Big*Ice*72',
+      replace => [['72', 'slow']],
+      tenor => { match => '{tenor,bass}' } },
+    { id => '12',  name => 'Water*Cycle',
+      Katarina => { match => '{HiHarmony,Melody}' },
+      Abbe => { match => 'Melody' }, bert => { match => 'HiBass' },
+      soprano => { match => '{HiHa,Mel}' }, alto => { match => '{Mel,LoHa}' },
+      tenor => { match => 'LoHa' }, Sara => { match => '{Mel,LoHa}' },
+      piano => { match => 'TVTrack' } },
+    { id => '90',  name => 'Keep*Cool', tenor => { match => 'bass' } },
 
     { id => 'M0',  name => 'CPS*Medley' },
-    { id => 'M8',  name => 'Water*Cycle',
-      'piano' => { match => 'TVTrack' } },
   );
 
 @ARGV = ('all') if ! @ARGV;
@@ -228,10 +265,15 @@ my @tracks =
 while (@ARGV) {
   my $arg = shift @ARGV;
   if ($arg eq 'all') {
+    unshift @ARGV, @all_groups;
+  } elsif ($arg eq 'auto') {
     unshift @ARGV, @auto_groups;
+  } elsif ($arg eq 'extra') {
+    unshift @ARGV, @extra_groups;
 
   } elsif (exists $groups{$arg}) {
     my $dir = "../$arg" if ! $groups{$arg}{no_copy};
+    $dir = "../extra/$arg" if $dir and scalar grep($_ eq $arg, @extra_groups);
     print STDERR "@@@ preparing $dir @@@\n" if $dir;
 
     my @used_files;
