@@ -40,6 +40,7 @@ make_playlist () {
     generate_wpl "$dir practice" "$@" > "$dir$suffix.wpl"
     unix2dos -q "$dir$suffix.wpl"
     generate_m3u "$dir practice" "$@" > "$dir$suffix.m3u"
+    echo "Generated $dir$suffix.wpl and $dir$suffix.m3u"
 }
 
 default_playlist_dirs () {
