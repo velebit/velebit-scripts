@@ -12,4 +12,5 @@ while true; do
     esac
 done
 
-./make-process-list.pl "$@" | ./process-files.pl $PF_ARGS
+./make-process-list.pl "$@" | ./extras2process.pl mp3-extras.* \
+    | ./process-files.pl $PF_ARGS

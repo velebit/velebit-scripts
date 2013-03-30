@@ -135,6 +135,7 @@ sub find_files ( $@ ) {
   my ($who, @flag_sets) = @_;
 
   my $flags = flags $who, @flag_sets;
+  exists $flags->{skip} and $flags->{skip} and return ($flags, $flags, []);
   my @files = matches $flags;
   return ($flags, $flags, \@files) if @files;
 
@@ -142,6 +143,7 @@ sub find_files ( $@ ) {
   # No cascading failover (we don't try the fallback's fallbacks)
   for my $fbwho (@fallback) {
     my $fbflags = flags $fbwho, @flag_sets;
+    # No cascading skip (we don't honor skip during fallback)
     @files = matches $fbflags;
     return ($flags, $fbflags, \@files) if @files;
   }
@@ -232,7 +234,8 @@ my @tracks =
       bert => { match => 'lo' },
       soprano => { match => 'hi' }, alto => { match => 'lo' },
       tenor => { match => 'hi' }, Sara => { match => '{hi,lo,SaraXXX}' } },
-    { id => '07',  name => 'Water*March' },
+    { id => '07',  name => 'Water*March',
+      bert => { skip => 'yes_I_have_a_hand_mixed_version' } },
     { id => '08',  name => 'River*Waltz',
       Katarina => { match => 'melody' }, Abbe => { match => 'melody' },
       bert => { match => 'harmony' },
@@ -261,14 +264,17 @@ my @tracks =
     { id => '15',  name => 'River*Rock',
       tenor => { match => 'bass' } },
 
-    { id => 'M0',  name => 'CPS*Medley' },
+    { id => 'M0',  name => 'CPS*Medley', bert => { match => 'tenor' } },
 
-    ## advanced group stuff
-    #{ id => '06',  name => 'Nine*Days' },
-    #{ id => 'A1',  name => '{Water,Lovely}*Lake' },
-    #{ id => 'A2',  name => 'Winter*Odyssey' },
-    #{ id => 'A3',  name => 'Clouds*Baldwin' },
-    #{ id => 'A4',  name => 'Currents*Ocean' },
+    ## advanced group PLUS KIDS
+    { id => 'Z3',  name => 'Clouds*Baldwin',
+      Katarina => { match => 'Demo', skip => 0 }, '*' => { skip => 1 } },
+
+    ## advanced group only stuff
+    { id => '06',  name => 'Nine*Days', '*' => { skip => 1 } },
+    { id => 'Z1',  name => '{Water,Lovely}*Lake', '*' => { skip => 1 } },
+    { id => 'Z2',  name => 'Winter*Odyssey', '*' => { skip => 1 } },
+    { id => 'Z4',  name => 'Currents*Ocean', '*' => { skip => 1 } },
   );
 
 @ARGV = ('all') if ! @ARGV;
