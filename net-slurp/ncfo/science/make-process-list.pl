@@ -219,9 +219,9 @@ my @tracks =
     { id => '02',  name => 'Living*Light',
       bert => { match => 'bass_hi' } },
     { id => '03',  name => 'Tamar' },
-    { id => '04',  name => 'Clouds',
+    { id => '04',  name => 'Clouds', ignore => 'Full*Baldwin',
       Katarina => { match => 'kids_hi' }, Abbe => { match => 'alto_lo' } },
-    { id => '05a', name => 'Sea*Fever*intro' },
+    #{ id => '05a', name => 'Sea*Fever*intro' },
     { id => '05c', name => 'Sea*Fever', ignore => '{slow,intro}',
       Katarina => { match => 'hi' }, Abbe => { match => 'lo' },
       bert => { match => 'lo' },
@@ -232,7 +232,6 @@ my @tracks =
       bert => { match => 'lo' },
       soprano => { match => 'hi' }, alto => { match => 'lo' },
       tenor => { match => 'hi' }, Sara => { match => '{hi,lo,SaraXXX}' } },
-    { id => '06',  name => 'Nine*Days' },
     { id => '07',  name => 'Water*March' },
     { id => '08',  name => 'River*Waltz',
       Katarina => { match => 'melody' }, Abbe => { match => 'melody' },
@@ -240,7 +239,7 @@ my @tracks =
       soprano => { match => 'melody' }, alto => { match => 'melody' },
       tenor => { match => 'harmony' },
       Sara => { match => '{melody,harmony,SaraXXX}' } },
-    # 09
+    # 09... number nine... number nine...
     { id => '10',  name => 'Pond*Song',
       '*' => { match => 'practice' }, 'demo' => { match => 'practice' } },
     { id => '11a',  name => 'Big*Ice', ignore => '72',
@@ -250,14 +249,26 @@ my @tracks =
       replace => [['72', 'slow']],
       tenor => { match => '{tenor,bass}' } },
     { id => '12',  name => 'Water*Cycle',
-      Katarina => { match => '{HiHarmony,Melody}' },
+      Katarina => { match => 'melody' },
       Abbe => { match => 'Melody' }, bert => { match => 'HiBass' },
       soprano => { match => '{HiHa,Mel}' }, alto => { match => '{Mel,LoHa}' },
       tenor => { match => 'LoHa' }, Sara => { match => '{Mel,LoHa}' },
-      piano => { match => 'TVTrack' } },
-    { id => '90',  name => 'Keep*Cool', tenor => { match => 'bass' } },
+      piano => { match => '{piano,TVTrack}' } },
+    { id => '13',  name => 'Keep*Cool',
+      Katarina => { match => 'Hi*Soprano' },
+      tenor => { match => 'bass' } },
+    { id => '14',  name => 'Water*Drops' },
+    { id => '15',  name => 'River*Rock',
+      tenor => { match => 'bass' } },
 
     { id => 'M0',  name => 'CPS*Medley' },
+
+    ## advanced group stuff
+    #{ id => '06',  name => 'Nine*Days' },
+    #{ id => 'A1',  name => '{Water,Lovely}*Lake' },
+    #{ id => 'A2',  name => 'Winter*Odyssey' },
+    #{ id => 'A3',  name => 'Clouds*Baldwin' },
+    #{ id => 'A4',  name => 'Currents*Ocean' },
   );
 
 @ARGV = ('all') if ! @ARGV;
