@@ -220,7 +220,7 @@ my @tracks =
   ( { id => '01',  name => 'Cetac{e,i}an', tenor => { match => 'bass' } },
     { id => '02',  name => 'Living*Light',
       bert => { match => 'bass_hi' } },
-    { id => '03',  name => 'Tamar' },
+    { id => '03',  name => 'Tamar', demo => { match => 'All*Voices' } },
     { id => '04',  name => 'Clouds', ignore => 'Full*Baldwin',
       Katarina => { match => 'kids_hi' }, Abbe => { match => 'alto_lo' } },
     #{ id => '05a', name => 'Sea*Fever*intro' },
@@ -268,13 +268,18 @@ my @tracks =
 
     ## advanced group PLUS KIDS
     { id => 'Z3',  name => 'Clouds*Baldwin',
-      Katarina => { match => 'Demo', skip => 0 }, '*' => { skip => 1 } },
+      Katarina => { match => 'Demo', skip => 0 }, '*' => { skip => 1 },
+      'demo' => { skip => 1 }, 'piano' => { skip => 1 } },
 
     ## advanced group only stuff
-    { id => '06',  name => 'Nine*Days', '*' => { skip => 1 } },
-    { id => 'Z1',  name => '{Water,Lovely}*Lake', '*' => { skip => 1 } },
-    { id => 'Z2',  name => 'Winter*Odyssey', '*' => { skip => 1 } },
-    { id => 'Z4',  name => 'Currents*Ocean', '*' => { skip => 1 } },
+    { id => '06',  name => 'Nine*Days', '*' => { skip => 1 },
+      'demo' => { skip => 1 }, 'piano' => { skip => 1 } },
+    { id => 'Z1',  name => '{Water,Lovely}*Lake', '*' => { skip => 1 },
+      'demo' => { skip => 1 }, 'piano' => { skip => 1 } },
+    { id => 'Z2',  name => 'Winter*Odyssey', '*' => { skip => 1 },
+      'demo' => { skip => 1 }, 'piano' => { skip => 1 } },
+    { id => 'Z4',  name => 'Currents*Ocean', '*' => { skip => 1 },
+      'demo' => { skip => 1 }, 'piano' => { skip => 1 } },
   );
 
 @ARGV = ('all') if ! @ARGV;
