@@ -270,6 +270,7 @@ my @tracks =
 
     ## advanced group PLUS KIDS
     { id => 'Z3',  name => 'Clouds*Baldwin',
+      replace => [['(?:The)?Full', ''], ['Baldwin', 'DavidH']],
       Katarina => { match => 'Demo', skip => 0 }, '*' => { skip => 1 },
       'demo' => { skip => 1 }, 'piano' => { skip => 1 } },
 

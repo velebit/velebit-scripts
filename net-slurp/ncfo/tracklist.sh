@@ -43,6 +43,6 @@ fi
 show_tracks "$@" \
     | sed -e 's,.*/,,;s/\.mp3$//i' \
     | ${SORT_BY_NUMBER:-cat} \
-    | sed -e 's/^\([0-9M][0-9]\)[a-z]_/\1_/;s/^[0-9M][0-9]_//' \
+    | sed -e 's/^\([0-9A-Z][0-9]\)[a-z]_/\1_/;s/^[0-9A-Z][0-9]_//' \
     | ${SORT_BY_NAME:-cat} \
     | cat -n
