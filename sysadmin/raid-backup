@@ -36,6 +36,7 @@ full_backup="home shared scratch"
 tar_backup="root boot"
 ignored="proc sys dev tmp var/lib/nfs"
 tar_type=".tar.gz"
+last_backup=/scratch/backups
 
 dryrun=
 
@@ -213,6 +214,20 @@ run_all_backups () {
     fi
 }
 
+mark_last_backup () {
+    backup_file="$1"
+    set -- `cd "$backup"; echo DISK_*`
+    if [ "$#" -ne 1 -o "$1" = "DISK_*" ]; then
+	status "Could not determine disk ID, last not updated!"
+    else
+	if [ ! -e "$last_backup" ]; then mkdir "$last_backup"; fi
+	last_backup_file="$last_backup"/last_backup."$1".txt
+	if echo "$backup_file" > "$last_backup_file"; then
+	    status "Updated $last_backup_file"
+	fi
+    fi
+}
+
 check_partitions () {
     header='Mounted partitions NOT configured for full backups:'
     mountpoints="`mount | awk '{print $3}'`"
@@ -243,21 +258,22 @@ fi
 if [ -t 1 ]; then
     # Only create a log file if the output is being sent to a terminal,
     # and if this isn't a dry run.
-    log="$backup/log.`date +'%Y-%m-%d'`.txt"
-    if [ -e "$log" ]; then
-	log="$backup/log.`date +'%Y-%m-%d.%H-%M'`.txt"
-	if [ -e "$log" ]; then
+    log="log.`date +'%Y-%m-%d'`.txt"
+    if [ -e "$backup/$log" ]; then
+	log="log.`date +'%Y-%m-%d.%H-%M'`.txt"
+	if [ -e "$backup/$log" ]; then
 	    for x in a b c d e f g h i j k l m n o p q r s t u v w x y z; do
-		log="$backup/log.`date +'%Y-%m-%d.%H-%M'`.$x.txt"
-		if [ ! -e "$log" ]; then break; fi
+		log="log.`date +'%Y-%m-%d.%H-%M'`.$x.txt"
+		if [ ! -e "$backup/$log" ]; then break; fi
 	    done
 	fi
     fi
     if [ -z "$dryrun" ]; then
-	status "Will write log to $log"
-	run_all_backups 2>&1 | tee "$log"
+	status "Will write log to $backup/$log"
+	run_all_backups 2>&1 | tee "$backup/$log"
+	mark_last_backup "$backup/$log"
     else
-	status "Would write log to $log"
+	status "Would write log to $backup/$log"
 	run_all_backups
     fi
 else
