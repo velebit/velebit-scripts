@@ -220,10 +220,14 @@ mark_last_backup () {
     if [ "$#" -ne 1 -o "$1" = "DISK_*" ]; then
 	status "Could not determine disk ID, last not updated!"
     else
-	if [ ! -e "$last_backup" ]; then mkdir "$last_backup"; fi
 	last_backup_file="$last_backup"/last_backup."$1".txt
-	if echo "$backup_file" > "$last_backup_file"; then
-	    status "Updated $last_backup_file"
+	if [ -n "$dryrun" ]; then
+	    status "Would update $last_backup_file"
+	else
+	    if [ ! -e "$last_backup" ]; then mkdir "$last_backup"; fi
+	    if echo "$backup_file" > "$last_backup_file"; then
+		status "Updated $last_backup_file"
+	    fi
 	fi
     fi
 }
@@ -271,11 +275,11 @@ if [ -t 1 ]; then
     if [ -z "$dryrun" ]; then
 	status "Will write log to $backup/$log"
 	run_all_backups 2>&1 | tee "$backup/$log"
-	mark_last_backup "$backup/$log"
     else
 	status "Would write log to $backup/$log"
 	run_all_backups
     fi
+    mark_last_backup "$backup/$log"
 else
     no_colors
     run_all_backups
