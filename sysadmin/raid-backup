@@ -162,6 +162,12 @@ run_backup () {
 		(TimeRun tar -C "$src" --one-file-system -cf - . \
 		    | Run tar -C "$dst" -xpf -) \
 		    || fail "The initial copying went kaboom."
+		# If we just copied in the tree for the first time, we
+		# can't rely on the backup size; the tree is not going
+		# to grow by that much during sync.  (Note this is not
+		# true for tarballing, just syncing!)  Guesstimate the
+		# growth as 0, for now.
+		free_before="`disk_free_kb`"
 	    fi
 	    ;;
     esac
