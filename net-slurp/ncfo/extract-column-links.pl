@@ -64,25 +64,29 @@ sub slurp ( $ ) {
   @rows > 2 or die "short table (@{[scalar @rows]} rows)";
 
   my @cells;
-  my @is_missing = map [], 1..@rows;
+  my @in_rowspan = map [], 1..@rows;
   for my $r (0..$#rows) {
     my $c = -1;
     for my $cell ($rows[$r]->content_list) {
       $cell->tag =~ /^t[hd]$/ or die "unexpected tag @{[$cell->tag]}";
-      ++$c;
-      ++$c while $is_missing[$r][$c];
-      $cells[$r][$c] = $cell;
-      ++$is_missing[$r][$c+$_] for 1..(($cell->attr('colspan') || 1)-1);
-      ++$is_missing[$r+$_][$c] for 1..(($cell->attr('rowspan') || 1)-1);
+      ++$c while $in_rowspan[$r][$c+1];
+      for (0..(($cell->attr('colspan') || 1)-1)) {
+	++$c;
+	$in_rowspan[$r][$c]
+	  and die "row span/column span intersection";
+	$cells[$r][$c] = $cell;
+	$cells[$r+$_][$c] = $cell, ++$in_rowspan[$r+$_][$c]
+	  for 1..(($cell->attr('rowspan') || 1)-1);
+      }
     }
-    ++$c while $c <= $#{$is_missing[$r]} && $is_missing[$r][$c];
+    ++$c while $c < $#{$in_rowspan[$r]} && $in_rowspan[$r][$c+1];
     $c < $#{$cells[$r]} and die;
+    $c > $#{$cells[$r]} and warn "short line";
     $#{$cells[$r]} = $c;
   }
   for my $r (0..$#rows) {
     my $n0 = @{$cells[0]};
     my $nR = @{$cells[$r]};
-    #print "M[$r]: " . join(' ', map $_ || 0, @{$is_missing[$r]}) . "\n";
     $nR < $n0 and die "too few cells in row $r ($nR < $n0)";
     $nR > $n0 and die "too many cells in row $r ($nR > $n0)";
   }
