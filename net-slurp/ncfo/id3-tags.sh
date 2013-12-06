@@ -4,6 +4,7 @@ cd ..
 
 PATH="${PATH}:${HOME}/perl-lib/bin"
 mp3info2='mp3info2'
+verbose=
 
 update_tags_from_playlist () {
     local playlist="$1"
@@ -23,6 +24,9 @@ update_tags_from_playlist () {
 	##$mp3info2 -d ID3v1,ID3v2 -p "" "$file"
 	$mp3info2 -t "$name" -a "NCFO practice" -l "$title: $who practice" \
 	    -n "$track/$num_tracks" -p "" "$file"
+	if [ -n "$verbose" ]; then
+	    $mp3info2 -D "$file"
+	fi
     done < tracks.tmp
     rm -f tracks.tmp
 }
@@ -31,7 +35,13 @@ default_playlists () {
     ls *.m3u | sort | uniq
 }
 
-if [ "$1" = "-n" ]; then mp3info2='mp3info2 -D'; shift; fi
+while true; do
+    case "$1" in
+	-n) mp3info2='mp3info2 -D'; shift ;;
+	-v) verbose=yes; shift ;;
+	*)  break ;;
+    esac
+done
 
 if [ "$#" -eq 0 ]; then set -- `default_playlists`; fi
 for playlist in "$@"; do
