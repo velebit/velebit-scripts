@@ -1,6 +1,9 @@
 #!/bin/sh
 INDEX="${1-mp3/index.html}"
 rm -f *.urllist
+ ~/scripts/net-slurp/plinks.pl "$INDEX" \
+     | sed -e '/\.pdf$/!d;/Score/!d' > score.pdf.urllist
+
 ./extract-column-links.pl "$INDEX" \
     'Soprano Chorus MP3s' +0 'All' \
     | sed -e '/SopHi/d' > Katarina.mp3.urllist
