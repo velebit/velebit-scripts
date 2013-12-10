@@ -6,6 +6,14 @@ use HTML::TreeBuilder;
 
 # ----------------------------------------------------------------------
 
+sub Usage ( @ ) {
+  die join "\n", @_, <<"EndOfMessage";
+Usage: $0 {HTML_FILE} {TABLE_LABEL} [+{TABLE_INDEX}] {COLUMN_LABEL}
+EndOfMessage
+  exit 1;  # backstop
+}
+
+
 our $VERBOSITY = 0;
 
 while (@ARGV and $ARGV[0] =~ /^-/) {
@@ -14,6 +22,7 @@ while (@ARGV and $ARGV[0] =~ /^-/) {
 }
 my $file      = shift @ARGV or die "too few args";
 my $tbl_label = shift @ARGV or die "too few args";
+my $tbl_idx   = shift @ARGV if @ARGV and $ARGV[0] =~ /^\+\d+$/;
 my $col_label = shift @ARGV or die "too few args";
 @ARGV and die "too many args";
 
@@ -45,12 +54,21 @@ sub slurp ( $ ) {
   @matches      or die "No results found";
   @matches == 1 or die "Multiple results found";
 
+  my $node = $matches[0];
+  my $index = $tbl_idx || 0;
   my $table;
   {
-    my $node = $matches[0];
-    for (1..3) {
-      $node->tag eq 'table' and $table = $node, last;
-      $node = $node->right or die;
+  TABLE:
+    while (1) {
+      my @tables = $node->look_down(_tag => 'table');
+      @tables and $index < @tables
+	and $table = $tables[$index], last TABLE;
+      $index -= @tables;
+      while (1) {
+	my $rnode;
+	$node->right and $node = $node->right, next TABLE;
+	$node = $node->parent or last TABLE;
+      }
     }
     $table or die;
     #$table->dump;
