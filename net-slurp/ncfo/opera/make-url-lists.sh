@@ -10,3 +10,8 @@ rm -f *.urllist
     'Bass Chorus MP3s' 'All' \
     | sed -e '/XXXnonesuchXXX/d' > bert.mp3.urllist
 # ...???... > bert.pdf.urllist
+
+./extract-column-links.pl "$INDEX" \
+    'Alto Chorus MP3s' 'All' \
+    | sed -e '/XXXnonesuchXXX/d' > alto.mp3.urllist
+# ...???... > alto.pdf.urllist
