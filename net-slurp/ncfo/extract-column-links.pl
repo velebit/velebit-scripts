@@ -22,7 +22,8 @@ while (@ARGV and $ARGV[0] =~ /^-/) {
 }
 my $file      = shift @ARGV or die "too few args";
 my $tbl_label = shift @ARGV or die "too few args";
-my $tbl_idx   = shift @ARGV if @ARGV and $ARGV[0] =~ /^\+\d+$/;
+my $tbl_idx   = 0;
+$tbl_idx      = 0 + shift @ARGV if @ARGV and $ARGV[0] =~ /^\+\d+$/;
 my $col_label = shift @ARGV or die "too few args";
 @ARGV and die "too many args";
 
@@ -55,7 +56,7 @@ sub slurp ( $ ) {
   @matches == 1 or die "Multiple results found";
 
   my $node = $matches[0];
-  my $index = $tbl_idx || 0;
+  my $index = $tbl_idx;
   my $table;
   {
   TABLE:
@@ -102,11 +103,13 @@ sub slurp ( $ ) {
     $c > $#{$cells[$r]} and warn "short line";
     $#{$cells[$r]} = $c;
   }
-  for my $r (0..$#rows) {
+  for my $r (1..$#rows) {
     my $n0 = @{$cells[0]};
     my $nR = @{$cells[$r]};
-    $nR < $n0 and die "too few cells in row $r ($nR < $n0)";
-    $nR > $n0 and die "too many cells in row $r ($nR > $n0)";
+    $nR < $n0 and warn("warning: too few cells ($nR < $n0) in row $r" .
+		       " of table $tbl_idx for '$tbl_label'");
+    $nR > $n0 and warn("warning: too many cells ($nR > $n0) in row $r" .
+		       " of table $tbl_idx for '$tbl_label'");
   }
   print STDERR "done.\n" if $VERBOSITY;
 
