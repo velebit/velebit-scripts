@@ -16,5 +16,7 @@ done
 ./urllist2process.pl *.mp3.urllist | ./extras2process.pl mp3-extras.* \
     | ./gain-cache.pl | ./canonicalize-filenames.pl \
     | ./process-files.pl $PF_ARGS
+./urllist2process.pl -s video/ -d ../video/ *.video.urllist \
+    | ./process-files.pl $PF_ARGS
 ./playlists.sh
 ./id3-tags.sh

@@ -45,11 +45,13 @@ sub process_file ( $$ ) {
     system('cp', $already_processed{$in}, $out) and die "cp failed.\n";
   } else {
     system('cp', $in, $out) and die "cp failed.\n";
-    $wipe_id3 and (system("$ENV{HOME}/scripts/music/id3wipe", '-f', $out)
-		   and warn "id3wipe failed.\n");
-    $adjust_gain and (system('mp3gain', '-r', '-k', '-s', 's', '-q', $out)
-		      and warn "mp3gain failed.\n");
-    $already_processed{$in} = $out;
+    if (/\.mp3$/i) {
+      $wipe_id3 and (system("$ENV{HOME}/scripts/music/id3wipe", '-f', $out)
+		     and warn "id3wipe failed.\n");
+      $adjust_gain and (system('mp3gain', '-r', '-k', '-s', 's', '-q', $out)
+			and warn "mp3gain failed.\n");
+      $already_processed{$in} = $out;
+    }
   }
   1;
 }
