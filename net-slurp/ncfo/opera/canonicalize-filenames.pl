@@ -17,6 +17,7 @@ sub canonicalize_file ( $ ) {
   $file =~ s/\.mp3$//i;
   $file =~ s/^[^\.]*?(?=\d)/${short_name}/
     or $file =~ s/practice//i;
+  $file =~ s/^(\Q${short_name}\E\d+)[-_](\d+)/$1.$2/;
   #$file =~ s/(\d+)/sprintf "%02d", $1/ge;
   $file . '.mp3';
 }
