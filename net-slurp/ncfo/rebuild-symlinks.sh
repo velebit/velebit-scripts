@@ -4,7 +4,7 @@ if [ $# -lt 1 ]; then
     # guess the subdirectory
     set -- "`find * -type d -prune -o -type l -print0 \
 	    | xargs -0 -r -n 1 readlink \
-	    | sed -e 's,/[^/]*$,/,;s,.*/ncfo/,,;/^$/d;s,/$,,;/\//d' \
+	    | sed -e 's,/[^/]*$,/,;/ncfo/!d;s,.*/ncfo/,,;/^$/d;s,/$,,;/\//d' \
             | uniq`"
     if [ -z "$1" ]; then
 	echo "Could not guess link type..." >&2
@@ -30,3 +30,4 @@ find * -type d -prune -o -type l -print0 | xargs -0 -r rm -f
 
 # Recreate symlinks.
 ln -s /home/bert/scripts/net-slurp/ncfo{,/$subdir}/*.*[^~] .
+ln -s /home/bert/scripts/net-slurp/plinks.pl .

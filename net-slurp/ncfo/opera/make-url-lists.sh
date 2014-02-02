@@ -14,7 +14,7 @@ rm -f *.urllist
 ./extract-column-links.pl "$INDEX" \
     'Soprano Chorus MP3s' +2 'Meerkats' \
     | sed -e '/SopHi/d;/OldHi/d' >> Katarina.mp3.urllist
-~/scripts/net-slurp/plinks.pl -t "$INDEX_VIDEO" \
+./plinks.pl -t "$INDEX_VIDEO" \
     | sed -e '/\.mp4$/I!d;/^[^	]*chorus/I!d;s/^[^	]*	//' \
     > Katarina.video.urllist
 
@@ -27,7 +27,7 @@ rm -f *.urllist
 ./extract-column-links.pl "$INDEX" \
     'Bass Chorus MP3s' +2 'All' \
     | sed -e '/XXXnonesuchXXX/d' >> bert.mp3.urllist
-~/scripts/net-slurp/plinks.pl -t "$INDEX_VIDEO" \
+./plinks.pl -t "$INDEX_VIDEO" \
     | sed -e '/rain.*dance[^\/	]*\.mp4$/I!d;s/^[^	]*	//' \
     > bert.video.urllist
 
@@ -41,5 +41,5 @@ rm -f *.urllist
     'Alto Chorus MP3s' +2 'All' \
     | sed -e '/XXXnonesuchXXX/d' >> alto_all.mp3.urllist
 
-~/scripts/net-slurp/plinks.pl "$INDEX_PDF" \
+./plinks.pl "$INDEX_PDF" \
      | sed -e '/\.pdf$/I!d;/Score/!d' > score.pdf.urllist
