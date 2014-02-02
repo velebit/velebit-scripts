@@ -39,7 +39,11 @@ rm -f *.urllist
     | sed -e '/XXXnonesuchXXX/d' >> alto.mp3.urllist
 ./extract-column-links.pl "$INDEX" \
     'Alto Chorus MP3s' +2 'All' \
-    | sed -e '/XXXnonesuchXXX/d' >> alto_all.mp3.urllist
+    | sed -e '/XXXnonesuchXXX/d' >> alto.mp3.urllist
+
+./plinks.pl -h -t "$INDEX" \
+    | sed -e '/\.mp3$/I!d;/^[^	]*demo/I!d;/complete	/Id;s/.*	//' \
+    > demo.mp3.urllist
 
 ./plinks.pl "$INDEX_PDF" \
      | sed -e '/\.pdf$/I!d;/Score/!d' > score.pdf.urllist
