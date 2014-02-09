@@ -8,13 +8,21 @@ use File::Spec qw( splitpath catpath splitdir );
 # ----------------------------------------------------------------------
 
 my $short_name = (split(m!/!, getcwd))[-2];
-$short_name =~ s/[^A-Z0-9]+//g;
+$short_name =~ s/[\[\]]+//g;
+$short_name =~ s/(?<!\S)(\w[A-Z0-9]*)/[$1]/g;
+$short_name =~ s/^/\]/;
+$short_name =~ s/$/\[/;
+$short_name =~ s/\].*?\[//g;
+$short_name =~ /[\[\]]/ and die "bad short name generated: '$short_name'\n ";
+
+my @EXTRA_STRIPPED_PREFIXES = qw( 14P10 );
 
 # ----------------------------------------------------------------------
 
 sub canonicalize_file ( $ ) {
   my ($file) = @_;
   $file =~ s/\.mp3$//i;
+  $file =~ s/^\Q$_\E[-_]// for @EXTRA_STRIPPED_PREFIXES;
   $file =~ s/^[^\.]*?(?=\d)/${short_name}/
     or $file =~ s/practice//i;
   $file =~ s/^(\Q${short_name}\E\d+)[-_](\d+)/$1.$2/;

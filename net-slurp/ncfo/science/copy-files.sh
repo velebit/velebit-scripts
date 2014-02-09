@@ -12,5 +12,9 @@ while true; do
     esac
 done
 
-./make-process-list.pl "$@" | ./extras2process.pl mp3-extras.* \
+./make-url-lists.sh
+./urllist2process.pl *.mp3.urllist | ./extras2process.pl mp3-extras.* \
+    | ./gain-cache.pl | ./canonicalize-filenames.pl \
     | ./process-files.pl $PF_ARGS
+./playlists.sh
+./id3-tags.sh
