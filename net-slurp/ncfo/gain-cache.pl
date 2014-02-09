@@ -29,7 +29,7 @@ sub fixed_gain ( $ ) {
   my ($in) = @_;
   my ($out) = fixed_gain_name $in;
   my ($t_in) = (stat $in)[9];
-  defined $t_in or die;
+  defined $t_in or die "Input file modtime not found for '$in'";
   my ($t_out) = (stat $out)[9];
   if (!defined($t_out) || ($t_out < $t_in)) {
     print STDERR "$out: updating gain.\n";

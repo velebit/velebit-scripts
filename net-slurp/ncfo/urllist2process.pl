@@ -15,6 +15,7 @@ GetOptions('source-prefix|s=s' => \$SRC_PREFIX,
 while (<>) {
   chomp;
   s,.*/,,;
+  s,\%(2[0-9A-E]),chr(hex($1)),eig;
   my $dir = $ARGV;  $dir =~ s,.*/,,;  $dir =~ s,\..*,,;
   print "$SRC_PREFIX$_=$DST_PREFIX$dir/$_\n";
 }

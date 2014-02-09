@@ -4,26 +4,30 @@ cd ..
 
 generate_wpl () {
     local name="$1"; shift
+    local list="$1"; shift
 
     echo "<?wpl version=\"1.0\"?>"
     echo "<smil>"
     echo "  <head><title>$name</title></head>"
     echo "  <body><seq>"
-    for i in "$@"; do
-	q="`echo "$i" | sed -e 's/&/&amp;/g'`"
-	echo "    <media src=\"$q\"/>"
-    done
+    sed -e 's/&/&amp;/g' -e 's,^,    <media src=",;s,$,"/>,' < "$list"
     echo "  </seq></body>"
     echo "</smil>"
 }
 
 generate_m3u () {
     local name="$1"; shift
+    local list="$1"; shift
 
     echo "## $name"
-    for i in "$@"; do
-	echo "$i"
-    done
+    cat "$list"
+}
+
+sort_tracks () {
+#    sort -t "$sep" -k 2
+    perl -lne '$o=$_;s,.*/,,;s,[-_].*,,;print "$_\t$o"' \
+	| sort -k 1,1 -k 2 \
+	| sed -e 's/.*	//'
 }
 
 make_playlist () {
@@ -33,13 +37,15 @@ make_playlist () {
     local ignore="$4"
     if [ -z "$ignore" ]; then ignore='^$'; fi  # cop-out
     local sep="/"   #"_"
-    set -- `ls "$dir"/*.[Mm][Pp]3 \
-        | egrep "$tracks" | egrep -v "$ignore" | sort -t "$sep" -k 2`
-
-    if [ "$#" -lt 1 ]; then rm -f "$dir$suffix".{wpl,m3u}; return; fi
-    generate_wpl "$dir practice" "$@" > "$dir$suffix.wpl"
+    ls "$dir"/*.[Mm][Pp]3 \
+        | egrep "$tracks" | egrep -v "$ignore" | sort_tracks \
+	> tracks.tmp
+    lines=`wc -l < tracks.tmp`
+    if [ "$lines" -lt 1 ]; then rm -f "$dir$suffix".{wpl,m3u}; return; fi
+    generate_wpl "$dir practice" tracks.tmp > "$dir$suffix.wpl"
     unix2dos -q "$dir$suffix.wpl"
-    generate_m3u "$dir practice" "$@" > "$dir$suffix.m3u"
+    generate_m3u "$dir practice" tracks.tmp > "$dir$suffix.m3u"
+    rm -f tracks.tmp
     echo "Generated $dir$suffix.wpl and $dir$suffix.m3u"
 }
 
