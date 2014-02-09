@@ -16,7 +16,7 @@ rm -f video/$NODE.orig
 
 rm -f video/index.html; mv video/$NODE video/index.html
 ./make-url-lists.sh video/index.html
-sort *.video.urllist | uniq | sed -e '/\.[Mm][Pp]4/!d' > video-master.urllist
+sort *.video.urllist | uniq > video-master.urllist
 wget --load-cookies cookies.txt -i video-master.urllist \
     -nd -P video -N --restrict-file-names=windows \
     --progress=bar:force \

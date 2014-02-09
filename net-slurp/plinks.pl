@@ -15,9 +15,14 @@ sub Usage () {
 
 our $SHOW_HEADING = 0;
 our $SHOW_TEXT = 0;
+our $SHOW_PARENT1_TEXT = 0;
+our $STRONG_IS_HEADING_TOO = 0;
 our $TABLE_LEVEL;
 GetOptions('--show-heading|h!' => \$SHOW_HEADING,
+	   '--bold-is-heading|b' =>
+	   sub { $STRONG_IS_HEADING_TOO = 1;  $SHOW_HEADING = 1 },
 	   '--show-text|t!' => \$SHOW_TEXT,
+	   '--show-parent-text|pt!' => \$SHOW_PARENT1_TEXT,
 	   '--table-level|tl=i' => \$TABLE_LEVEL,
 	   '--not-in-table' => sub { $TABLE_LEVEL = 0 },
           ) or Usage;
@@ -31,6 +36,7 @@ $tree->objectify_text();
 
 sub get_text ( $ ) {
   my ($node) = @_;
+  return '' unless $node;
   $node = $node->clone;
   $node->deobjectify_text();
   my $text = $node->as_text;
@@ -41,9 +47,25 @@ sub get_text ( $ ) {
 }
 
 
+sub nonempty ( @ ) {
+  grep(($_->tag ne '~text' or $_->attr('text') !~ /^[\s\xA0]+$/s), @_);
+}
+
+
+sub get_headings ( $ ) {
+  my ($node) = @_;
+  return unless $node;
+  return $node->look_down(_tag => qr/^(?:h\d|title)$/)
+    unless $STRONG_IS_HEADING_TOO;
+  grep(($_->tag ne 'strong'
+	or ($_->parent->tag =~ /^(?:p|dt)$/
+	    and nonempty($_->parent->content_list) == 1)),
+       $node->look_down(_tag => qr/^(?:h\d|title|strong)$/));
+}
+
 sub find_heading ( $ ) {
   my ($node) = @_;
-  my (@headings) = $node->look_down(_tag => qr/^(?:h\d|title)$/);
+  my (@headings) = get_headings($node);
   @headings and return $headings[0];
  SEARCH_LEFT:
   while ($node) {
@@ -53,7 +75,7 @@ sub find_heading ( $ ) {
       $node = $node->parent;
       redo SEARCH_LEFT;
     }
-    @headings = $node->look_down(_tag => qr/^(?:h\d|title)$/);
+    @headings = get_headings($node);
     @headings and return $headings[-1];
   }
   return;
@@ -69,14 +91,18 @@ for my $tag ($tree->look_down(_tag => 'a')) {
     and scalar(@{[$tag->look_up(_tag => 'table')]}) != $TABLE_LEVEL
       and next;
   my $text = get_text($tag) if $SHOW_TEXT;
+  my $parent1_text = get_text($tag->parent) if $SHOW_PARENT1_TEXT;
   my $heading = find_heading($tag) if $SHOW_HEADING;
   $heading = $heading ? get_text($heading) : '' if $SHOW_HEADING;
-  push @pages, { heading => $heading, text => $text, href => $href };
+  push @pages, { href => $href, heading => $heading,
+		 parent1_text => $parent1_text, text => $text };
 }
 
-my @fields = ( 'href' );
-$SHOW_TEXT and unshift @fields, 'text';
-$SHOW_HEADING and unshift @fields, 'heading';
-
+my @fields = ();
+# should be in order of appearance!
+push @fields, 'heading' if $SHOW_HEADING;
+push @fields, 'parent1_text' if $SHOW_PARENT1_TEXT;
+push @fields, 'text' if $SHOW_TEXT;
+push @fields, 'href';
 
 print join("\t", @$_{@fields}) . "\n" for @pages;
