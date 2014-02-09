@@ -44,6 +44,10 @@ while true; do
 done
 
 if [ "$#" -eq 0 ]; then set -- `default_playlists`; fi
+rm -f id3-tags.*.log
 for playlist in "$@"; do
-    update_tags_from_playlist "$playlist"
+    echo "Updating tags for playlist $playlist..."
+    LOG=id3-tags."$playlist".log
+    update_tags_from_playlist "$playlist" > "$LOG" 2>&1
+    sed -e '/^Updating tags for /d;/^Need to change /d' "$LOG"
 done
