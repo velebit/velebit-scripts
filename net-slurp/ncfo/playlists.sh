@@ -23,6 +23,7 @@ generate_m3u () {
     cat "$list"
 }
 
+## should match the code in tracklist.sh
 sort_tracks () {
 #    sort -t "$sep" -k 2
     perl -lne '$o=$_;s,.*/,,;s,[-_].*,,;print "$_\t$o"' \
