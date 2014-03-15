@@ -63,10 +63,31 @@ sed -e '/Fingers/Id' \
 sed -ne '/Fingers/Ip' \
     "$DIR"/tenor-adults-small.mp3.urllist >> Abbe.mp3.urllist
 
-sed -e '/Fingers/Id' \
+sed -e '/Fingers/Id;/Bacteria/Id' \
     "$DIR"/bass-adults-mob.mp3.urllist > bert.mp3.urllist
-sed -ne '/Fingers/Ip' \
+#sed -ne '/Fingers/Ip;/Bacteria/Ip' \
+sed -e '/Tamar/Id;/Moon/Id' \
     "$DIR"/tenor-adults-mob.mp3.urllist >> bert.mp3.urllist
 
 ln -s "$DIR"/demo.mp3.urllist demo.mp3.urllist
 #ln -s "$DIR"/score.pdf.urllist score.pdf.urllist
+
+## other people:
+
+for v in soprano alto; do
+    file="$v"-kids-mob.mp3.urllist
+    ln -s "$DIR"/"$file" X-"$file"
+done
+
+for v in soprano alto tenor bass; do
+    file="$v"-adults-mob.mp3.urllist
+    ln -s "$DIR"/"$file" X-"$file"
+done
+
+ln -s "$DIR"/alto-adults-small.mp3.urllist X-alto-adults-small.mp3.urllist
+
+cat "$DIR"/soprano-{kids,adults}-mob.mp3.urllist \
+    | sort | uniq > X-soprano-a+k-mob.mp3.urllist
+
+cat "$DIR"/{tenor,bass}-adults-mob.mp3.urllist \
+    | sort | uniq > X-tenor+bass-adults-mob.mp3.urllist

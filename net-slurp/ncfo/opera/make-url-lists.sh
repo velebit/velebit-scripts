@@ -53,18 +53,29 @@ rm -f *.urllist
 ### MP3s
 ./extract-column-links.pl "$INDEX" \
     'Alto Chorus MP3s' +0 'All' \
-    | sed -e '/XXXnonesuchXXX/d' > alto.mp3.urllist
+    | sed -e '/XXXnonesuchXXX/d' > X-alto-gazelle.mp3.urllist
 ./extract-column-links.pl "$INDEX" \
     'Alto Chorus MP3s' +1 'All' \
-    | sed -e '/XXXnonesuchXXX/d' >> alto.mp3.urllist
+    | sed -e '/XXXnonesuchXXX/d' >> X-alto-gazelle.mp3.urllist
 ./extract-column-links.pl "$INDEX" \
     'Alto Chorus MP3s' +2 'All' \
-    | sed -e '/XXXnonesuchXXX/d' >> alto.mp3.urllist
+    | sed -e '/XXXnonesuchXXX/d' >> X-alto-gazelle.mp3.urllist
+# unstructured MP3 links following the table...
+./plinks.pl -b -pt -t -tl 1 mp3/index.html \
+    | sed -e '/\.mp3$/I!d' \
+          -e '/^Alto/!d;s/^[^	]*	//' \
+          -e '/^[^	]*Gazelle/I!d;s/^[^	]*	//' \
+          -e 's/^[^	]*	//' >> X-alto-gazelle.mp3.urllist
 
 ### demo MP3s
 ./plinks.pl -h -t "$INDEX" \
     | sed -e '/\.mp3$/I!d;/^[^	]*demo/I!d;/complete	/Id;s/.*	//' \
     > demo.mp3.urllist
+
+### orchestra-only MP3s
+./plinks.pl -h -t "$INDEX" \
+    | sed -e '/\.mp3$/I!d;/^[^	]*orchestra/I!d;/complete	/Id;s/.*	//' \
+    > orchestra.mp3.urllist
 
 ### score PDFs
 ./plinks.pl "$INDEX_PDF" \
