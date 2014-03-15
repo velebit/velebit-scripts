@@ -17,7 +17,7 @@ wget --load-cookies cookies.txt \
 if [ -f $DIR/$PAGE_FILE ]; then
     rm -f $DIR/index.html $DIR/$PAGE_FILE.orig
     mv $DIR/$PAGE_FILE $DIR/index.html
-    ./clean-up.pl $LOG
+    ./clean-up.pl -i "$PAGE_DIR" $LOG
 elif [ -f $DIR/$PAGE_FILE.orig ]; then
     rm -f $DIR/index.html $DIR/$PAGE_FILE
     mv $DIR/$PAGE_FILE.orig $DIR/index.html

@@ -1,8 +1,17 @@
 #!/usr/bin/perl
 use warnings;
 use strict;
+use Getopt::Long;
+
+our @IGNORED = ( 'index.html' );
+GetOptions('ignore|i=s' => \@IGNORED,
+          ) or die "Usage: $0 [-i IGNORE] LOG_FILE\n";
+@ARGV > 1  and die "Usage: $0 [-i IGNORE] LOG_FILE\n";
 
 my $log = @ARGV ? shift @ARGV : 'download.log';
+
+my $ignored_re = '(?:^|/)(?:\d+|' . join('|', map "\Q$_", @IGNORED) . ')$';
+$ignored_re =~ qr/$ignored_re/;
 
 ### Get a list of referenced files from the download log.
 
@@ -17,7 +26,7 @@ while (<$LOG>) {
     my ($file) = /\`(.+)\'\s*(?:$|--\s)/
       or die "Format error: no file name found in\n    $_\n ";
     #print "F $file\n";
-    if ($file !~ m!(?:^|/)(?:\d+|index\.html)$!) {
+    if ($file !~ $ignored_re) {
       push @referenced, $file;
       push @added, $file if /^Saving to: /;
     }
@@ -59,7 +68,7 @@ my @all = sort keys %{ +{ %referenced, %found } };
 my ($rm_ok, $rm_fail);
 for my $f (@all) {
   if ($found{$f} and !$referenced{$f}) {
-    $f =~ /\/index\.html$/
+    $f =~ $ignored_re
       and print("'$f' was ignored.\n"), next;
     unlink $f
       or warn("remove($f): $!"), next;
