@@ -57,8 +57,16 @@ rm -f *.tmplist "$DIR"/*.tmplist
      | sed -e '/\.pdf$/I!d;/Score/!d' > "$DIR"/score.pdf.urllist
 
 ln -s "$DIR"/soprano-kids-small.mp3.urllist Katarina.mp3.urllist
-ln -s "$DIR"/alto-adults-small.mp3.urllist Abbe.mp3.urllist
-ln -s "$DIR"/bass-adults-mob.mp3.urllist bert.mp3.urllist
+
+sed -e '/Fingers/Id' \
+    "$DIR"/alto-adults-small.mp3.urllist > Abbe.mp3.urllist
+sed -ne '/Fingers/Ip' \
+    "$DIR"/tenor-adults-small.mp3.urllist >> Abbe.mp3.urllist
+
+sed -e '/Fingers/Id' \
+    "$DIR"/bass-adults-mob.mp3.urllist > bert.mp3.urllist
+sed -ne '/Fingers/Ip' \
+    "$DIR"/tenor-adults-mob.mp3.urllist >> bert.mp3.urllist
 
 ln -s "$DIR"/demo.mp3.urllist demo.mp3.urllist
 #ln -s "$DIR"/score.pdf.urllist score.pdf.urllist
