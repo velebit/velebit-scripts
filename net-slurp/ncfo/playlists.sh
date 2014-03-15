@@ -1,5 +1,7 @@
 #!/bin/sh
 
+SHORT="`./canonicalize-filenames.pl --print-short`"
+
 cd ..
 
 generate_wpl () {
@@ -43,9 +45,9 @@ make_playlist () {
 	> tracks.tmp
     lines=`wc -l < tracks.tmp`
     if [ "$lines" -lt 1 ]; then rm -f "$dir$suffix".{wpl,m3u}; return; fi
-    generate_wpl "$dir practice" tracks.tmp > "$dir$suffix.wpl"
+    generate_wpl "$dir$suffix" tracks.tmp > "$dir$suffix.wpl"
     unix2dos -q "$dir$suffix.wpl"
-    generate_m3u "$dir practice" tracks.tmp > "$dir$suffix.m3u"
+    generate_m3u "$dir$suffix" tracks.tmp > "$dir$suffix.m3u"
     rm -f tracks.tmp
     echo "Generated $dir$suffix.wpl and $dir$suffix.m3u"
 }
@@ -67,7 +69,8 @@ for who in "$@"; do
     #if diff -q "${who}.m3u" "${who}_all.m3u" > /dev/null; then
     #    rm -f "${who}_all.m3u"
     #fi
-    make_playlist "$who" '' . ''
+    make_playlist "$who" " $SHORT practice" . ''
+    rm -f "${who}.wpl" "${who}.m3u"
     rm -f "${who}_all.wpl" "${who}_all.m3u"
     #make_playlist "$who" _burn_tmp . 'Piano|Orch'
 done

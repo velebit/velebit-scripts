@@ -4,10 +4,21 @@ use strict;
 
 use Cwd qw( getcwd );
 use File::Spec qw( splitpath catpath splitdir );
+use Getopt::Long;
 
 # ----------------------------------------------------------------------
 
-my $short_name = (split(m!/!, getcwd))[-2];
+our $PRINT_SHORT_NAME;
+GetOptions('print-short-name|short-name|ps!' => \$PRINT_SHORT_NAME,
+          ) or die "Usage: $0 [--ps | files...]\n";
+
+# ----------------------------------------------------------------------
+
+my @EXTRA_STRIPPED_PREFIXES = qw( 14P10 );
+
+my @wd_elements = split(m!/!, getcwd);
+pop @wd_elements if @wd_elements and $wd_elements[-1] =~ /^download/;
+my $short_name = $wd_elements[-1];
 $short_name =~ s/[\[\]]+//g;
 $short_name =~ s/(?<!\S)(\w[A-Z0-9]*)/[$1]/g;
 $short_name =~ s/^/\]/;
@@ -15,7 +26,10 @@ $short_name =~ s/$/\[/;
 $short_name =~ s/\].*?\[//g;
 $short_name =~ /[\[\]]/ and die "bad short name generated: '$short_name'\n ";
 
-my @EXTRA_STRIPPED_PREFIXES = qw( 14P10 );
+if ($PRINT_SHORT_NAME) {
+  print "$short_name\n";
+  exit 0;
+}
 
 # ----------------------------------------------------------------------
 

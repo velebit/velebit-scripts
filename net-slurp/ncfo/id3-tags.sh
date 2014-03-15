@@ -8,7 +8,7 @@ verbose=
 
 update_tags_from_playlist () {
     local playlist="$1"
-    local who="`echo "$playlist" | sed -e 's/\..*//'`"
+    local who="`echo "$playlist" | sed -e 's/\..*//;s/ .*//'`"
     local title="`/bin/pwd | sed -e 's,.*[\\/],,'`"
     ##local year="`date +'%Y'`"
     # This extracts just the file names from either a M3U or WPL playlist.
@@ -35,6 +35,27 @@ default_playlists () {
     ls *.m3u | sort | uniq
 }
 
+process_playlist () {
+    local playlist="$1"
+    echo "Updating tags for playlist $playlist..."
+    LOG=id3-tags."$playlist".log
+    update_tags_from_playlist "$playlist" > "$LOG" 2>&1
+    sed -e '/^Updating tags for /d;/^Need to change /d' "$LOG"
+}
+
+process_playlist_args () {
+    local playlist
+    for playlist in "$@"; do
+	process_playlist "$playlist"
+    done
+}
+process_playlist_lines () {
+    local playlist
+    while IFS='' read -r playlist; do
+	process_playlist "$playlist"
+    done
+}
+
 while true; do
     case "$1" in
 	-n) mp3info2='mp3info2 -D'; shift ;;
@@ -43,11 +64,9 @@ while true; do
     esac
 done
 
-if [ "$#" -eq 0 ]; then set -- `default_playlists`; fi
-rm -f id3-tags.*.log
-for playlist in "$@"; do
-    echo "Updating tags for playlist $playlist..."
-    LOG=id3-tags."$playlist".log
-    update_tags_from_playlist "$playlist" > "$LOG" 2>&1
-    sed -e '/^Updating tags for /d;/^Need to change /d' "$LOG"
-done
+if [ "$#" -eq 0 ]; then
+    rm -f id3-tags.*.log
+    default_playlists | process_playlist_lines
+else
+    process_playlist_args "$@"
+fi
