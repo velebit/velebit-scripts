@@ -32,7 +32,7 @@ update_tags_from_playlist () {
 }
 
 default_playlists () {
-    ls *.m3u | sort | uniq
+    ls *.m3u | sort | uniq | sed -e '/^X-/d'
 }
 
 process_playlist () {
