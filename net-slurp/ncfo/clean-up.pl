@@ -7,6 +7,7 @@ my $log = @ARGV ? shift @ARGV : 'download.log';
 ### Get a list of referenced files from the download log.
 
 my @referenced;
+my @added;
 
 open my $LOG, '<', $log or die "open($log): $!";
 while (<$LOG>) {
@@ -16,8 +17,10 @@ while (<$LOG>) {
     my ($file) = /\`(.+)\'\s*(?:$|--\s)/
       or die "Format error: no file name found in\n    $_\n ";
     #print "F $file\n";
-    push @referenced, $file
-      unless $file =~ m!(?:^|/)(?:\d+|index\.html)$!;
+    if ($file !~ m!(?:^|/)(?:\d+|index\.html)$!) {
+      push @referenced, $file;
+      push @added, $file if /^Saving to: /;
+    }
 
   } elsif (/^\d{4}-\d{2}-\d{2} /) {
     # Don't complain about `...' in date lines; just skip them.
@@ -31,6 +34,9 @@ while (<$LOG>) {
 my %ref_dir;
 m,^(.+)/, and $1 ne '.' and ++$ref_dir{$1} foreach @referenced;
 my @ref_dir = sort { $ref_dir{$b} <=> $ref_dir{$a} } keys %ref_dir;
+
+printf "%4d new file(s) were downloaded:\n", scalar @added if @added;
+print  "      $_\n" foreach @added;
 
 printf "%4d files referenced during download\n", scalar @referenced;
 
