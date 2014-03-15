@@ -36,7 +36,7 @@ sort_tracks () {
 }
 
 strip_prefix () {
-    perl -pe 's/^[0-9A-Z]+[0-9](\.[0-9])?[a-z]?[-_]//'
+    perl -pe 's/^[0-9A-Z](\w*[0-9A-Z])?[0-9](\.[0-9])?[a-z]?[-_]//'
 }
 
 show_tracks () {
