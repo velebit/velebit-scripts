@@ -15,6 +15,12 @@ GetOptions('print-short-name|short-name|ps!' => \$PRINT_SHORT_NAME,
 # ----------------------------------------------------------------------
 
 my @EXTRA_STRIPPED_PREFIXES = qw( 14P10 );
+my @EXTRA_REPLACEMENTS = ( # Rain Dance 2014 orchestra track numbers
+                           [ qr/^RD08 (?=.*Mister.*Hare)/i, 'RD2.2_' ],
+                           [ qr/^RD09 (?=.*Old.*Age)/i, 'RD2.3_' ],
+                           [ qr/^RD10 (?=.*Will.*Survive)/i, 'RD2.4_' ],
+                           [ qr/^RD11 (?=.*Hail.*Tau)/i, 'RD3.1_' ],
+                         );
 
 my @wd_elements = split(m!/!, getcwd);
 pop @wd_elements if @wd_elements and $wd_elements[-1] =~ /^download/;
@@ -41,6 +47,7 @@ sub canonicalize_file ( $ ) {
     or $file =~ s/practice//i;
   $file =~ s/^(\Q${short_name}\E\d+)[-_](\d+)/$1.$2/;
   #$file =~ s/(\d+)/sprintf "%02d", $1/ge;
+  $file =~ s/$_->[0]/$_->[1]/ for @EXTRA_REPLACEMENTS;
   $file . '.mp3';
 }
 
