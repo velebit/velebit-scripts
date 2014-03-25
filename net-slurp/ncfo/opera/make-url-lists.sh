@@ -5,7 +5,8 @@ INDEX_VIDEO="${3-${INDEX}}"
 
 rm -f *.urllist
 
-### MP3s
+### Katarina (young meerkat soprano II)
+# MP3s
 ./extract-column-links.pl "$INDEX" \
     'Soprano Chorus MP3s' +0 'Meerkats' \
     | sed -e '/SopHi/d;/OldHi/d' > Katarina.mp3.urllist
@@ -21,13 +22,14 @@ rm -f *.urllist
           -e '/^Soprano/!d;s/^[^	]*	//' \
           -e '/^[^	]*Meerkat/I!d;s/^[^	]*	//' \
           -e '/[^	]*low/I!d;s/^[^	]*	//' >> Katarina.mp3.urllist
-### video
+# video
 ./plinks.pl -h -t "$INDEX_VIDEO" \
     | sed -e '/^[^	]*VIDEO/I!d;s/^[^	]*	//' \
           -e '/^[^	]*chorus/I!d;s/^[^	]*	//' \
     > Katarina.video.urllist
 
-### MP3s
+### bert (old water buffalo bass)
+# MP3s
 ./extract-column-links.pl "$INDEX" \
     'Bass Chorus MP3s' +0 'All' \
     | sed -e '/XXXnonesuchXXX/d' > bert.mp3.urllist
@@ -49,8 +51,14 @@ rm -f *.urllist
           -e '/^[^	]*chorus/I!d;s/^[^	]*	//' \
           -e '/rain.*dance[^\/]*$/I!d;s/^[^	]*	//' \
     > bert.video.urllist
+./plinks.pl -h -t "$INDEX_VIDEO" \
+    | sed -e '/^[^	]*VIDEO/I!d;s/^[^	]*	//' \
+          -e '/^[^	]*chorus/I!d;s/^[^	]*	//' \
+          -e '/scene.*7[^\/]*$/I!d;s/^[^	]*	//' \
+    >> bert.video.urllist
 
-### MP3s
+### Extra: old gazelle alto
+# MP3s
 ./extract-column-links.pl "$INDEX" \
     'Alto Chorus MP3s' +0 'All' \
     | sed -e '/XXXnonesuchXXX/d' > X-alto-gazelle.mp3.urllist
@@ -66,6 +74,24 @@ rm -f *.urllist
           -e '/^Alto/!d;s/^[^	]*	//' \
           -e '/^[^	]*Gazelle/I!d;s/^[^	]*	//' \
           -e 's/^[^	]*	//' >> X-alto-gazelle.mp3.urllist
+
+### Extra: old water buffalo tenor
+# MP3s
+./extract-column-links.pl "$INDEX" \
+    'Tenor Chorus MP3s' +0 'All' \
+    | sed -e '/XXXnonesuchXXX/d' > X-tenor-wbuff.mp3.urllist
+./extract-column-links.pl "$INDEX" \
+    'Tenor Chorus MP3s' +1 'All' \
+    | sed -e '/XXXnonesuchXXX/Id' >> X-tenor-wbuff.mp3.urllist
+./extract-column-links.pl "$INDEX" \
+    'Tenor Chorus MP3s' +2 'All' \
+    | sed -e '/XXXnonesuchXXX/Id' >> X-tenor-wbuff.mp3.urllist
+# unstructured MP3 links following the table...
+./plinks.pl -b -pt -t -tl 1 mp3/index.html \
+    | sed -e '/\.mp3$/I!d' \
+          -e '/^Tenor/!d;s/^[^	]*	//' \
+          -e '/^[^	]*Water Buffalo/I!d;s/^[^	]*	//' \
+          -e 's/^[^	]*	//' >> X-tenor-wbuff.mp3.urllist
 
 ### demo MP3s
 ./plinks.pl -h -t "$INDEX" \
