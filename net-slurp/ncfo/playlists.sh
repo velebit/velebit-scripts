@@ -34,22 +34,25 @@ sort_tracks () {
 }
 
 make_playlist () {
-    local dir="$1"
-    local suffix="$2"
-    local tracks="$3"
-    local ignore="$4"
+    local prefix="$1"; shift
+    local dir="$1"; shift
+    local suffix="$1"; shift
+    local tracks="$1"; shift
+    local ignore="$1"; shift
     if [ -z "$ignore" ]; then ignore='^$'; fi  # cop-out
     local sep="/"   #"_"
     ls "$dir"/*.[Mm][Pp]3 \
         | egrep "$tracks" | egrep -v "$ignore" | sort_tracks \
 	> tracks.tmp
     lines=`wc -l < tracks.tmp`
-    if [ "$lines" -lt 1 ]; then rm -f "$dir$suffix".{wpl,m3u}; return; fi
-    generate_wpl "$dir$suffix" tracks.tmp > "$dir$suffix.wpl"
-    unix2dos -q "$dir$suffix.wpl"
-    generate_m3u "$dir$suffix" tracks.tmp > "$dir$suffix.m3u"
+    if [ "$lines" -lt 1 ]; then
+	rm -f "$prefix$dir$suffix".{wpl,m3u}; return
+    fi
+    generate_wpl "$prefix$dir$suffix" tracks.tmp > "$prefix$dir$suffix.wpl"
+    unix2dos -q "$prefix$dir$suffix.wpl"
+    generate_m3u "$prefix$dir$suffix" tracks.tmp > "$prefix$dir$suffix.m3u"
     rm -f tracks.tmp
-    echo "Generated $dir$suffix.wpl and $dir$suffix.m3u"
+    echo "Generated $prefix$dir$suffix.wpl and $prefix$dir$suffix.m3u"
 }
 
 default_playlist_dirs () {
@@ -59,8 +62,8 @@ default_playlist_dirs () {
 if [ "$#" -eq 0 ]; then set -- `default_playlist_dirs`; fi
 for who in "$@"; do
     rm -f "$who".{wpl,m3u} "$who"_*.{wpl,m3u}
-    #make_playlist "$who" '_all' . ''
-    #make_playlist "$who" '' \
+    #make_playlist '' "$who" '_all' . ''
+    #make_playlist '' "$who" '' \
     #  'Birth|Eras|LivingLight|Mutate|Reptiles|Axolotl|Cetac.ans|4E9|Hedgehog'\
     #  'Piano|Orch'
     #if diff -q "${who}.wpl" "${who}_all.wpl" > /dev/null; then
@@ -69,10 +72,10 @@ for who in "$@"; do
     #if diff -q "${who}.m3u" "${who}_all.m3u" > /dev/null; then
     #    rm -f "${who}_all.m3u"
     #fi
-    make_playlist "$who" " $SHORT practice" . ''
+    make_playlist "$SHORT " "$who" " practice" . ''
     rm -f "${who}.wpl" "${who}.m3u"
     rm -f "${who}_all.wpl" "${who}_all.m3u"
-    #make_playlist "$who" _burn_tmp . 'Piano|Orch'
+    #make_playlist '' "$who" _burn_tmp . 'Piano|Orch'
 done
 
 #./download/merge-playlists.pl -k \

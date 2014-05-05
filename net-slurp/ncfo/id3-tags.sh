@@ -8,7 +8,7 @@ verbose=
 
 update_tags_from_playlist () {
     local playlist="$1"
-    local who="`echo "$playlist" | sed -e 's/\..*//;s/ .*//'`"
+    local who="`echo "$playlist" | sed -e 's/\..*//;s/[^ ]* //;s/ .*//'`"
     local title="`/bin/pwd | sed -e 's,.*[\\/],,'`"
     ##local year="`date +'%Y'`"
     # This extracts just the file names from either a M3U or WPL playlist.
@@ -32,7 +32,7 @@ update_tags_from_playlist () {
 }
 
 default_playlists () {
-    ls *.m3u | sort | uniq | sed -e '/^X-/d'
+    ls *.m3u | sort | uniq | sed -e '/^X-/d;/ X-/d'
 }
 
 process_playlist () {
