@@ -1,5 +1,7 @@
 #!/bin/sh
 
+PATH="/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:$PATH"
+
 COLOR_NONE=$'\033[0m'
 COLOR_FAIL=$'\033[31m'
 COLOR_STAT=$'\033[33m'
@@ -44,14 +46,12 @@ while [ "$#" -gt 0 ]; do
     case "$1" in
        -n)  dryrun=yes ;;
        -c)  partition_check=yes ;;
+       -d)  show_disk_setup=yes ;;
        -*)  fail "Unknown flag '$1'" ;;
         *)  fail "Unexpected argument '$1'" ;;
     esac
     shift
 done
-
-[ -n "`mount | awk '($3 == "'"$backup"'")'`" ] \
-    || fail "$backup isn't mounted!"
 
 Run () {
     if [ -n "$dryrun" ]; then
@@ -103,6 +103,7 @@ kb_to_units () {
 }
 
 max_backup_size=0
+# If /backup isn't mounted, this will be incorrect but we can live with that.
 min_disk_free="`disk_free_kb`"
 
 run_backup () {
@@ -260,10 +261,66 @@ check_partitions () {
     fi
 }
 
+dump_disk_setup () {
+    echo "--------------------- BASIC DISK INFORMATION ---------------------" \
+	| sed -ne 's/-/*/g;h;s/./*/g;p;x;p;x;p;s/.*//;p'
+    for d in /dev/[hs]d[a-z]; do
+	if [ -e "$d" ]; then
+	    echo "--------------------------- $d ---------------------------" \
+		| sed -ne 'h;s/./-/g;p;x;p'
+	    echo "# smartctl -i $d"
+	    smartctl -i "$d"
+	    echo "# parted $d unit s p"
+	    parted "$d" unit s p
+	    for p in "$d"[0-9]*; do
+		if [ -e "$p" ]; then
+		    echo "# mdadm -Q $p"
+		    mdadm -Q "$p"
+		fi
+	    done
+	fi
+    done
+
+    echo "-------------------------- RAID STATUS --------------------------" \
+	| sed -ne 'x;p;p;x;s/-/*/g;h;s/./*/g;p;x;p;x;p;s/.*//;p'
+    echo "# cat /proc/mdstat"
+    cat /proc/mdstat
+    for d in /dev/md[0-9]* /dev/md/*; do
+	if [ -e "$d" ]; then
+	    case "`readlink "$d"`" in
+		*/md[0-9]*|*/md/*) continue ;;
+            esac
+	    echo "--------------------------- $d ---------------------------" \
+		| sed -ne 'h;s/./-/g;p;x;p'
+	    echo "# mdadm --detail $d"
+	    mdadm --detail "$d"
+	fi
+    done
+
+    echo "---------------- DETAILED S.M.A.R.T. INFORMATION ----------------" \
+	| sed -ne 'x;p;p;x;s/-/*/g;h;s/./*/g;p;x;p;x;p;s/.*//;p'
+    for d in /dev/[hs]d[a-z]; do
+	if [ -e "$d" ]; then
+	    echo "--------------------------- $d ---------------------------" \
+		| sed -ne 'h;s/./-/g;p;x;p'
+	    echo "# smartctl -x $d"
+	    smartctl -x "$d"
+	fi
+    done
+}
+
 if [ -n "$partition_check" ]; then
     check_partitions
     exit 0
 fi
+
+if [ -n "$show_disk_setup" ]; then
+    dump_disk_setup
+    exit 0
+fi
+
+[ -n "`mount | awk '($3 == "'"$backup"'")'`" ] \
+    || fail "$backup isn't mounted!"
 
 if [ -t 1 ]; then
     # Only create a log file if the output is being sent to a terminal,
@@ -278,12 +335,16 @@ if [ -t 1 ]; then
 	    done
 	fi
     fi
+    setup="`echo "$log" | sed -e 's/^log\.//;s/^/setup./'`"
     if [ -z "$dryrun" ]; then
 	status "Will write log to $backup/$log"
 	run_all_backups 2>&1 | tee "$backup/$log"
+	dump_disk_setup > "$backup/$setup"
     else
 	status "Would write log to $backup/$log"
 	run_all_backups
+	status "Would write log to $backup/$log"
+	status "Would write setup to $backup/$setup"
     fi
     mark_last_backup "$backup/$log"
 else
