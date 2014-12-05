@@ -9,6 +9,11 @@ use HTML::TreeBuilder;
 sub Usage ( @ ) {
   die join "\n", @_, <<"EndOfMessage";
 Usage: $0 {HTML_FILE} {TABLE_LABEL} [+{TABLE_INDEX}] {COLUMN_LABEL}
+Arguments:
+  HTML_FILE:     The name of the input HTML file.
+  TABLE_LABEL:   The label in HTML before the desired table.
+  TABLE_INDEX:   The index offset to the desired table (e.g. to get act 2).
+  COLUMN_LABEL:  The label of the desired column in the HTML table.
 EndOfMessage
   exit 1;  # backstop
 }
