@@ -55,11 +55,25 @@ make_playlist () {
     echo "Generated $prefix$dir$suffix.wpl and $prefix$dir$suffix.m3u"
 }
 
-default_playlist_dirs () {
-    ls */*.mp3 | sed -e 's,/[^/]*$,,' | sort | uniq
+directory_contains_mp3_files () {
+    set -- "$1"/*.mp3
+    case "$#":"$1" in
+	0:*)     return 1 ;;
+	1:*\**)  return 1 ;;
+        *)       return 0 ;;
+    esac
 }
 
-if [ "$#" -eq 0 ]; then set -- `default_playlist_dirs`; fi
+# The default is to use all directories that contain MP3 files.
+if [ "$#" -eq 0 ]; then
+    set --
+    for i in *; do
+	if [ -d "$i" ] && directory_contains_mp3_files "$i"; then
+	    set -- "$@" "$i"
+	fi
+    done
+fi
+
 for who in "$@"; do
     rm -f "$who".{wpl,m3u} "$who"_*.{wpl,m3u}
     #make_playlist '' "$who" '_all' . ''
