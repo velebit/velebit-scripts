@@ -14,12 +14,17 @@ GetOptions('print-short-name|short-name|ps!' => \$PRINT_SHORT_NAME,
 
 # ----------------------------------------------------------------------
 
-my @EXTRA_STRIPPED_PREFIXES = qw( 14P10 );
+my @EXTRA_STRIPPED_PREFIXES = qw( 14P10 KC15 15KC KC07 );
 my @EXTRA_REPLACEMENTS = ( # Rain Dance 2014 orchestra track numbers
                            [ qr/^RD08 (?=.*Mister.*Hare)/i, 'RD2.2_' ],
                            [ qr/^RD09 (?=.*Old.*Age)/i, 'RD2.3_' ],
                            [ qr/^RD10 (?=.*Will.*Survive)/i, 'RD2.4_' ],
                            [ qr/^RD11 (?=.*Hail.*Tau)/i, 'RD3.1_' ],
+                           # Kids' Court 2015 sub-track ordering
+                           [ qr/^KC24_(?=.*Pulv.*Intro)/i, 'KC24.1_' ],
+                           [ qr/^KC24_(?=.*Pulv.*Coda)/i, 'KC24.2_' ],
+                           [ qr/^KC44_?(?=.*Story.*Dahs)/i, 'KC44.2_' ],
+                           [ qr/^KC44_?(?=.*Story.*End)/i, 'KC44.3_' ],
                          );
 
 my @wd_elements = split(m!/!, getcwd);
