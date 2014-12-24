@@ -12,11 +12,18 @@ while true; do
     esac
 done
 
+inspect() {
+    #tee "$1"
+    cat
+}
+
 ./make-url-lists.sh
-./urllist2process.pl *.mp3.urllist | ./extras2process.pl mp3-extras.* \
-    | ./gain-cache.pl | ./canonicalize-filenames.pl \
+./urllist2process.pl *.mp3.urllist | inspect M1 \
+    | ./extras2process.pl mp3-extras.* | inspect M2 \
+    | ./gain-cache.pl | inspect M3 \
+    | ./canonicalize-filenames.pl | inspect M4 \
     | ./process-files.pl $PF_ARGS
-./urllist2process.pl -s video/ -d ../video/ *.video.urllist \
+./urllist2process.pl -s video/ -d ../video/ *.video.urllist | inspect V1 \
     | ./process-files.pl $PF_ARGS
 ./playlists.sh
 ./id3-tags.sh
