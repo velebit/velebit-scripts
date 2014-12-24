@@ -40,8 +40,9 @@ sub get_text ( $ ) {
   $node = $node->clone;
   $node->deobjectify_text();
   my $text = $node->as_text;
-  # \xA0 is Latin-1 non-breaking space.
-  $text =~ s/[\s\xA0]+/ /sg;
+  # 0xA0 is a non-breaking space in Latin-1 and Unicode.
+  # 0xC2 0xA0 is the UTF-8 representation of U+00A0; this is a horrible hack.
+  $text =~ s/[\s\xA0\xC2]+/ /sg;
   $text =~ s/^ //;  $text =~ s/ $//;
   $text;
 }
