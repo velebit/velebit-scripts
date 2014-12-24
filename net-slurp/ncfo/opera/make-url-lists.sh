@@ -28,10 +28,10 @@ rm -f *.urllist
 ### Abbe (??? alto)
 # MP3s
 ./extract-column-links.pl "$INDEX" \
-    'Soprano Chorus MP3s' +0 'Jury Kids' \
-    | sed -e '/Sop2/d;/Story/!{;/Encore/!d;}' > Abbe.mp3.urllist
+    'Alto Chorus MP3s' +0 'Jury Kids' \
+    | sed -e '/XXXtextXXX/d;/Story/!{;/Encore/!d;}' > Abbe.mp3.urllist
 ./extract-column-links.pl "$INDEX" \
-    'Soprano Chorus MP3s' +1 'Jury Kids' \
+    'Alto Chorus MP3s' +1 'Jury Kids' \
     | sed -e '/XXXtextXXX/d;/Story/!{;/Encore/!d;}' >> Abbe.mp3.urllist
 
 ### demo MP3s
