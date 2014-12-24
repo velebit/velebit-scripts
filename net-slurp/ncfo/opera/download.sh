@@ -1,26 +1,33 @@
 #!/bin/sh
-#NODE=197
-PAGE=Kids_Court_2015_Practice_Materials
-FILE="`basename "$PAGE"`"
-if [ -f mp3/index.html ]; then rm -f mp3/$FILE; mv mp3/index.html mp3/$FILE; fi
-cp -p mp3/$FILE mp3/$FILE.orig
+#node=197
+page=Kids_Court_2015_Practice_Materials
+file="`basename "$page"`"
+type=mp3
+dir=mp3
+#log=download-"$type".log
+log=download.log
+if [ -f "$dir"/index.html ]; then
+    rm -f "$dir/$file"; mv "$dir"/index.html "$dir/$file"; fi
+cp -p "$dir/$file" "$dir/$file".orig
 if ! wget --load-cookies cookies.txt \
-    -nd -P mp3 -N --progress=bar:force \
-    http://www.familyopera.org/drupal/$PAGE \
+    -nd -P "$dir" -N --progress=bar:force \
+    http://www.familyopera.org/drupal/"$page" \
   > download-index.log 2>&1; then
     cat download-index.log
-    rm -f mp3/index.html; mv mp3/$FILE.orig mp3/index.html
+    rm -f "$dir"/index.html; mv "$dir/$file".orig "$dir"/index.html
     exit 1
 fi
 cat download-index.log
-rm -f mp3/$FILE.orig
+rm -f "$dir/$file".orig
 
-rm -f mp3/index.html; mv mp3/$FILE mp3/index.html
-./make-url-lists.sh mp3/index.html
-sort *.mp3.urllist | uniq | sed -e '/\.[Mm][Pp]3$/!d' > mp3-master.urllist
-wget --load-cookies cookies.txt -i mp3-master.urllist \
-    -nd -P mp3 -N --restrict-file-names=windows \
+rm -f "$dir"/index.html; mv "$dir/$file" "$dir"/index.html
+./make-url-lists.sh "$dir"/index.html
+sort *."$type".urllist | uniq \
+    | sed -e '/\.[Mm][Pp]3$/!d' \
+    > "$type"-master.urllist
+wget --load-cookies cookies.txt -i "$type"-master.urllist \
+    -nd -P "$dir" -N --restrict-file-names=windows \
     --progress=bar:force \
-  2>&1 | tee download.log
-rm -f mp3-master.urllist
-./clean-up.pl download.log
+  2>&1 | tee "$log"
+rm -f "$type"-master.urllist
+./clean-up.pl "$log"

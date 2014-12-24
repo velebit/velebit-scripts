@@ -1,25 +1,31 @@
 #!/bin/sh
-NODE=197
-if [ -f video/index.html ]; then
-    rm -f video/$NODE; mv video/index.html video/$NODE; fi
-cp -p video/$NODE video/$NODE.orig
+#node=197
+page=Kids_Court_2015_Practice_Materials
+file="`basename "$page"`"
+type=video
+dir=video
+log=download-"$type".log
+if [ -f "$dir"/index.html ]; then
+    rm -f "$dir/$file"; mv "$dir"/index.html "$dir/$file"; fi
+cp -p "$dir/$file" "$dir/$file".orig
 if ! wget --load-cookies cookies.txt \
-    -nd -P video -N --progress=bar:force \
-    http://www.familyopera.org/drupal/node/$NODE \
+    -nd -P "$dir" -N --progress=bar:force \
+    http://www.familyopera.org/drupal/"$page" \
   > download-index.log 2>&1; then
     cat download-index.log
-    rm -f video/index.html; mv video/$NODE.orig video/index.html
+    rm -f "$dir"/index.html; mv "$dir/$file".orig "$dir"/index.html
     exit 1
 fi
 cat download-index.log
-rm -f video/$NODE.orig
+rm -f "$dir/$file".orig
 
-rm -f video/index.html; mv video/$NODE video/index.html
-./make-url-lists.sh video/index.html
-sort *.video.urllist | uniq > video-master.urllist
-wget --load-cookies cookies.txt -i video-master.urllist \
-    -nd -P video -N --restrict-file-names=windows \
+rm -f "$dir"/index.html; mv "$dir/$file" "$dir"/index.html
+./make-url-lists.sh "$dir"/index.html
+sort *."$type".urllist | uniq \
+    > "$type"-master.urllist
+wget --load-cookies cookies.txt -i "$type"-master.urllist \
+    -nd -P "$dir" -N --restrict-file-names=windows \
     --progress=bar:force \
-  2>&1 | tee download-video.log
-rm -f video-master.urllist
-./clean-up.pl download-video.log
+  2>&1 | tee "$log"
+rm -f "$type"-master.urllist
+./clean-up.pl "$log"
