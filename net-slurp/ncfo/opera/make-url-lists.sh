@@ -5,7 +5,7 @@ INDEX_VIDEO="${3-${INDEX}}"
 
 rm -f *.urllist
 
-### Katarina (??? soprano I)
+### Katarina (Jury Kids soprano I)
 # MP3s
 ./extract-column-links.pl "$INDEX" \
     'Soprano Chorus MP3s' +0 'Jury Kids' \
@@ -25,14 +25,14 @@ rm -f *.urllist
           -e '/^[^	]*chorus/I!d;s/^[^	]*	//' \
     > Katarina.video.urllist
 
-### Abbe (??? alto)
+### Abbe (Jury Kids alto)
 # MP3s
 ./extract-column-links.pl "$INDEX" \
     'Alto Chorus MP3s' +0 'Jury Kids' \
-    | sed -e '/Barbara1.*ChorusHi/d' > Abbe.mp3.urllist
+    | sed -e '/XXXtextXXX/d' > Abbe.mp3.urllist
 ./extract-column-links.pl "$INDEX" \
     'Alto Chorus MP3s' +1 'Jury Kids' \
-    | sed -e '/Barbara1.*ChorusHi/d' >> Abbe.mp3.urllist
+    | sed -e '/XXXtextXXX/d' >> Abbe.mp3.urllist
 
 ### demo MP3s
 ./plinks.pl -h -t "$INDEX" \
@@ -51,10 +51,10 @@ rm -f *.urllist
 ### generic Jury Kids soprano I MP3s
 ./extract-column-links.pl "$INDEX" \
     'Soprano Chorus MP3s' +0 'Jury Kids' \
-    | sed -e '/Sop2/d' > 'Jury Kids soprano'.mp3.urllist
+    | sed -e '/Sop2/d' > 'Jury Kids soprano 1'.mp3.urllist
 ./extract-column-links.pl "$INDEX" \
     'Soprano Chorus MP3s' +1 'Jury Kids' \
-    | sed -e '/Sop2/d' >> 'Jury Kids soprano'.mp3.urllist
+    | sed -e '/Sop2/d' >> 'Jury Kids soprano 1'.mp3.urllist
 
 ### generic Jury Kids alto MP3s
 ./extract-column-links.pl "$INDEX" \
@@ -63,3 +63,23 @@ rm -f *.urllist
 ./extract-column-links.pl "$INDEX" \
     'Alto Chorus MP3s' +1 'Jury Kids' \
     | sed -e '/XXXtextXXX/d' >> 'Jury Kids alto'.mp3.urllist
+
+### generic Guards tenor MP3s
+./extract-column-links.pl "$INDEX" \
+    'Tenor and Bass Chorus MP3s' +0 'Security' | uniq \
+    | sed -e '/Bass/I{;/TenBass/!d;};/GuardsLo/d;/ChorusLo/d;/DahsLo/d' \
+    > 'Guards tenor all'.mp3.urllist
+./extract-column-links.pl "$INDEX" \
+    'Tenor and Bass Chorus MP3s' +1 'Security' | uniq \
+    | sed -e '/Bass/I{;/TenBass/!d;};/GuardsLo/d;/ChorusLo/d;/DahsLo/d' \
+    >> 'Guards tenor all'.mp3.urllist
+
+### generic Guards bass MP3s
+./extract-column-links.pl "$INDEX" \
+    'Tenor and Bass Chorus MP3s' +0 'Security' | uniq \
+    | sed -e '/Ten/I{;/TenBass/!d;};/GuardsHi/d;/ChorusHi/d;/DahsHi/d' \
+    > 'Guards bass all'.mp3.urllist
+./extract-column-links.pl "$INDEX" \
+    'Tenor and Bass Chorus MP3s' +1 'Security' | uniq \
+    | sed -e '/Ten/I{;/TenBass/!d;};/GuardsHi/d;/ChorusHi/d;/DahsHi/d' \
+    >> 'Guards bass all'.mp3.urllist
