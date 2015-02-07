@@ -1,26 +1,27 @@
 #!/bin/sh
-#PAGE_DIR=node/175
-PAGE_DIR=2014_Powers_of_Ten_Lyrics_and_Sheet_Music
-PAGE_FILE="`basename "$PAGE_DIR"`"
-DIR=pdf
-LOG=download-pdf.log
-if [ -f $DIR/index.html ]; then
-    rm -f $DIR/$PAGE_FILE.orig; mv $DIR/index.html $DIR/$PAGE_FILE.orig
-fi
-rm -f $DIR/index.html $DIR/$PAGE_FILE
+#page=node/175
+page=2015_Little_Light_Music_Lyrics_and_Sheet_Music
+file="`basename "$page"`"
+type=pdf
+dir=pdf
+log=download-"$type".log
+if [ -f "$dir"/index.html ]; then
+    rm -f "$dir/$file"; mv "$dir"/index.html "$dir/$file"; fi
+cp -p "$dir/$file" "$dir/$file".orig
 wget --load-cookies cookies.txt \
-    -A .pdf,.PDF,$PAGE_FILE -R Brochure-FINAL.pdf,Brochure-booklet.pdf \
-    -nd -P $DIR -N -r -l 1 --restrict-file-names=windows \
+    -nd -P "$dir" -N --restrict-file-names=windows \
+    -A .pdf,.PDF,"$file" -r -l 1 \
+    -R Brochure-2014-09-30.pdf,Booklet-2014-09-30.pdf \
     --progress=bar:force \
-    http://www.familyopera.org/drupal/"$PAGE_DIR" \
-  2>&1 | tee $LOG
-if [ -f $DIR/$PAGE_FILE ]; then
-    rm -f $DIR/index.html $DIR/$PAGE_FILE.orig
-    mv $DIR/$PAGE_FILE $DIR/index.html
-    ./clean-up.pl -i "$PAGE_DIR" $LOG
-elif [ -f $DIR/$PAGE_FILE.orig ]; then
-    rm -f $DIR/index.html $DIR/$PAGE_FILE
-    mv $DIR/$PAGE_FILE.orig $DIR/index.html
+    http://www.familyopera.org/drupal/"$page" \
+  2>&1 | tee "$log"
+if [ -f "$dir/$file" ]; then
+    rm -f "$dir"/index.html "$dir/$file".orig
+    mv "$dir/$file" "$dir"/index.html
+    ./clean-up.pl -i "$file" "$log"
+elif [ -f "$dir/$file".orig ]; then
+    rm -f "$dir"/index.html "$dir/$file"
+    mv "$dir/$file".orig "$dir"/index.html
     echo "(index not downloaded)"
 else
     echo "(index not downloaded, original missing)"
