@@ -1,8 +1,13 @@
 #!/bin/sh
 
+find_top_level_symlinks () {
+    if [ "$#" -eq 0 ]; then set -- -print; fi
+    find . -name . -o -type d -prune -o -type l "$@"
+}
+
 if [ $# -lt 1 ]; then
     # guess the subdirectory
-    set -- "`find * -type d -prune -o -type l -print0 \
+    set -- "`find_top_level_symlinks -print0 \
 	    | xargs -0 -r -n 1 readlink \
 	    | sed -e 's,/[^/]*$,/,;/ncfo/!d;s,.*/ncfo/,,;/^$/d;s,/$,,;/\//d' \
             | uniq`"
@@ -26,7 +31,7 @@ case "$1" in
 esac
 
 # Remove symlinks in the current directory, but not in subdirectories.
-find * -type d -prune -o -type l -print0 | xargs -0 -r rm -f
+find_top_level_symlinks -print0 | xargs -0 -r rm -f
 
 # Recreate symlinks.
 ln -s /home/bert/scripts/net-slurp/ncfo{,/$subdir}/*.*[^~] .
