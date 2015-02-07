@@ -9,7 +9,8 @@ if [ -f "$dir"/index.html ]; then
     rm -f "$dir/$file"; mv "$dir"/index.html "$dir/$file"; fi
 cp -p "$dir/$file" "$dir/$file".orig
 if ! wget --load-cookies cookies.txt \
-    -nd -P "$dir" -N --progress=bar:force \
+    -nd -P "$dir" -N --restrict-file-names=windows \
+    --progress=bar:force \
     http://www.familyopera.org/drupal/"$page" \
   > download-index.log 2>&1; then
     cat download-index.log
