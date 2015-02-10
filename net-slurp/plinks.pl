@@ -16,6 +16,7 @@ sub Usage () {
 our $SHOW_HEADING = 0;
 our $SHOW_TEXT = 0;
 our $SHOW_PARENT1_TEXT = 0;
+our $SHOW_SAME_LINE_TEXT = 0;
 our $STRONG_IS_HEADING_TOO = 0;
 our $TABLE_LEVEL;
 GetOptions('--show-heading|h!' => \$SHOW_HEADING,
@@ -23,6 +24,7 @@ GetOptions('--show-heading|h!' => \$SHOW_HEADING,
 	   sub { $STRONG_IS_HEADING_TOO = 1;  $SHOW_HEADING = 1 },
 	   '--show-text|t!' => \$SHOW_TEXT,
 	   '--show-parent-text|pt!' => \$SHOW_PARENT1_TEXT,
+	   '--show-line-text|lt!' => \$SHOW_SAME_LINE_TEXT,
 	   '--table-level|tl=i' => \$TABLE_LEVEL,
 	   '--not-in-table' => sub { $TABLE_LEVEL = 0 },
           ) or Usage;
@@ -34,17 +36,42 @@ $tree->parse_file($ARGV[0]);
 $tree->objectify_text();
 
 
-sub get_text ( $ ) {
-  my ($node) = @_;
-  return '' unless $node;
-  $node = $node->clone;
-  $node->deobjectify_text();
-  my $text = $node->as_text;
+sub get_text ( @ ) {
+  my (@nodes) = @_;
+  @nodes = grep defined, @nodes;
+  return '' unless @nodes;
+  @nodes = map $_->clone, @nodes;
+  my $text = join '', map(($_->deobjectify_text() || $_->as_text), @nodes);
   # 0xA0 is a non-breaking space in Latin-1 and Unicode.
   # 0xC2 0xA0 is the UTF-8 representation of U+00A0; this is a horrible hack.
   $text =~ s/[\s\xA0\xC2]+/ /sg;
   $text =~ s/^ //;  $text =~ s/ $//;
   $text;
+}
+
+
+sub get_same_line_siblings ( $ ) {
+  my ($node) = @_;
+  return '' unless $node;
+  my @list = ($node);
+  {
+    my $prev = $node;
+    while (1) {
+      $prev = $prev->left or last;
+      $prev->look_down(_tag => qr/^(?:br|hr)$/) and last;
+      unshift @list, $prev;
+    }
+  }
+  {
+    my $next = $node;
+    while (1) {
+      $next = $next->right or last;
+      $next->look_down(_tag => qr/^(?:br|hr)$/) and last;
+      push @list, $next;
+    }
+  }
+  # TODO: go to parent if list has only 1 node?
+  @list;
 }
 
 
@@ -93,16 +120,21 @@ for my $tag ($tree->look_down(_tag => 'a')) {
       and next;
   my $text = get_text($tag) if $SHOW_TEXT;
   my $parent1_text = get_text($tag->parent) if $SHOW_PARENT1_TEXT;
+  my $same_line_text = get_text(get_same_line_siblings($tag))
+    if $SHOW_SAME_LINE_TEXT;
   my $heading = find_heading($tag) if $SHOW_HEADING;
   $heading = $heading ? get_text($heading) : '' if $SHOW_HEADING;
   push @pages, { href => $href, heading => $heading,
-		 parent1_text => $parent1_text, text => $text };
+		 parent1_text => $parent1_text,
+		 same_line_text => $same_line_text,
+		 text => $text };
 }
 
 my @fields = ();
 # should be in order of appearance!
 push @fields, 'heading' if $SHOW_HEADING;
 push @fields, 'parent1_text' if $SHOW_PARENT1_TEXT;
+push @fields, 'same_line_text' if $SHOW_SAME_LINE_TEXT;
 push @fields, 'text' if $SHOW_TEXT;
 push @fields, 'href';
 
