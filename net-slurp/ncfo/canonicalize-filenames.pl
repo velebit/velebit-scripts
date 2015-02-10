@@ -9,23 +9,70 @@ use Getopt::Long;
 # ----------------------------------------------------------------------
 
 our $PRINT_SHORT_NAME;
+our $REPLACE_ANY_PREFIX = 1;
+my @EXTRA_STRIPPED_PREFIXES;
+my @EXTRA_STRIPPED_STRINGS;
+my @EXTRA_REPLACEMENTS;
+my $FALLBACK_PREFIX;
+
+sub add_replacement ( $ ) {
+  my ($string) = @_;
+  my ($regex, $replacement);
+  ($regex, $replacement) = ($string =~ /^(.*)=>\s*(.*?)$/)
+    or ($regex, $replacement) = ($string =~ /^(.*)=\s*(.*?)$/)
+      or die "Could not parse replacement string '$string'";
+  $regex =~ s/\s+$//s;
+  $regex = qr/$regex/i;
+  push @EXTRA_REPLACEMENTS, [ $regex, $replacement ];
+}
+
+sub from_file ( $$ ) {
+  my ($file, $action) = @_;
+  open my $IN, '<', $file or die "open($file): $!";
+  local $_;
+  while (<$IN>) {
+    /^\#/ and next;
+    s/^\s+//s;
+    s/\s+$//s;
+    length($_) or next;
+    $action->($_);
+  }
+}
+
 GetOptions('print-short-name|short-name|ps!' => \$PRINT_SHORT_NAME,
-          ) or die "Usage: $0 [--ps | files...]\n";
+	   'replace-any-prefix!' => \$REPLACE_ANY_PREFIX,
+	   'strip-prefix|sp=s' => \@EXTRA_STRIPPED_PREFIXES,
+	   'strip-prefix-from-file|spf=s' =>
+	     sub { from_file($_[1],
+			     sub { push @EXTRA_STRIPPED_PREFIXES, $_[0]; }); },
+	   'strip-string|ss=s' => \@EXTRA_STRIPPED_STRINGS,
+	   'strip-string-from-file|ssf=s' =>
+	     sub { from_file($_[1],
+			     sub { push @EXTRA_STRIPPED_STRINGS, $_[0]; }); },
+	   'replace|r=s' => sub { add_replacement($_[1]); },
+	   'replace-from-file|rf=s' =>
+	     sub { from_file($_[1], \&add_replacement); },
+	   'fallback-prefix=s' => \$FALLBACK_PREFIX,
+          ) or die "Usage: $0 [--ps | [other options] [list_files...]]\n";
 
 # ----------------------------------------------------------------------
 
-my @EXTRA_STRIPPED_PREFIXES = qw( 14P10 KC15 15KC KC07 );
-my @EXTRA_REPLACEMENTS = ( # Rain Dance 2014 orchestra track numbers
-                           [ qr/^RD08 (?=.*Mister.*Hare)/i, 'RD2.2_' ],
-                           [ qr/^RD09 (?=.*Old.*Age)/i, 'RD2.3_' ],
-                           [ qr/^RD10 (?=.*Will.*Survive)/i, 'RD2.4_' ],
-                           [ qr/^RD11 (?=.*Hail.*Tau)/i, 'RD3.1_' ],
-                           # Kids' Court 2015 sub-track ordering
-                           [ qr/^KC24_(?=.*Pulv.*Intro)/i, 'KC24.1_' ],
-                           [ qr/^KC24_(?=.*Pulv.*Coda)/i, 'KC24.2_' ],
-                           [ qr/^KC44_?(?=.*Story.*Dahs)/i, 'KC44.2_' ],
-                           [ qr/^KC44_?(?=.*Story.*End)/i, 'KC44.3_' ],
-                         );
+
+@EXTRA_STRIPPED_PREFIXES = qw( 14P10 KC15 15KC KC07 )
+  unless @EXTRA_STRIPPED_PREFIXES;
+
+@EXTRA_REPLACEMENTS = ( # Rain Dance 2014 orchestra track numbers
+		       [ qr/^RD08 (?=.*Mister.*Hare)/i, 'RD2.2_' ],
+		       [ qr/^RD09 (?=.*Old.*Age)/i, 'RD2.3_' ],
+		       [ qr/^RD10 (?=.*Will.*Survive)/i, 'RD2.4_' ],
+		       [ qr/^RD11 (?=.*Hail.*Tau)/i, 'RD3.1_' ],
+		       # Kids' Court 2015 sub-track ordering
+		       [ qr/^KC24_(?=.*Pulv.*Intro)/i, 'KC24.1_' ],
+		       [ qr/^KC24_(?=.*Pulv.*Coda)/i, 'KC24.2_' ],
+		       [ qr/^KC44_?(?=.*Story.*Dahs)/i, 'KC44.2_' ],
+		       [ qr/^KC44_?(?=.*Story.*End)/i, 'KC44.3_' ],
+		      ) unless @EXTRA_REPLACEMENTS;
+
 
 my @wd_elements = split(m!/!, getcwd);
 pop @wd_elements if @wd_elements and $wd_elements[-1] =~ /^download/;
@@ -48,11 +95,15 @@ sub canonicalize_file ( $ ) {
   my ($file) = @_;
   $file =~ s/\.mp3$//i;
   $file =~ s/^\Q$_\E[-_]// for @EXTRA_STRIPPED_PREFIXES;
-  $file =~ s/^[^\.]*?(?=\d)/${short_name}/
-    or $file =~ s/practice//i;
+  $file =~ s/\Q$_\E// for @EXTRA_STRIPPED_STRINGS;
+  $file =~ s/^[^\.]*?(?=\d)/${short_name}/ if $REPLACE_ANY_PREFIX;
   $file =~ s/^(\Q${short_name}\E\d+)[-_](\d+)/$1.$2/;
   #$file =~ s/(\d+)/sprintf "%02d", $1/ge;
-  $file =~ s/$_->[0]/$_->[1]/ for @EXTRA_REPLACEMENTS;
+  my $replaced;
+  ($file =~ s/$_->[0]/$_->[1]/ and $replaced = 1) for @EXTRA_REPLACEMENTS;
+  if (! $replaced and $FALLBACK_PREFIX) {
+    $file = $FALLBACK_PREFIX . $file;
+  }
   $file . '.mp3';
 }
 
