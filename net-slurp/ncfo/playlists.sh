@@ -27,11 +27,11 @@ generate_m3u () {
 
 ## should match the code in tracklist.sh
 sort_tracks () {
-#    LANG=C sort -f -t "$sep" -k 2
     # Sort by file name prefix first, full path in case of ties.
-    # Forcing LANG=C is a hack, but it allows us to sort things ahead of '0'.
+    # Using the separator in the sort is a hack, but it allows us to
+    # sort '+' ahead of '0'.
     perl -lne '$o=$_;s,.*/,,;s,[-_].*,,;print "$_\t$o"' \
-	| LANG=C sort -f -k 1,1 -k 2 \
+	| sort -f -s -t+ -k 1,1 -k 2 \
 	| sed -e 's/.*	//'
 }
 
