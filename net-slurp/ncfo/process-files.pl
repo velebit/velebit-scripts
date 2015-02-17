@@ -39,11 +39,15 @@ sub process_file ( $$ ) {
   -d $outdir or (system('mkdir', '-p', $outdir)
 		 and die "mkdir failed.\n");
 
-  print STDERR "--- $out\n";
   if (exists $already_processed{$in}) {
-    print STDERR "  Copying $out\n";
-    system('cp', $already_processed{$in}, $out) and die "cp failed.\n";
+    if ($already_processed{$in} eq $out) {
+      print STDERR "-!- $out\n";
+    } else {
+      print STDERR "-+- $out\n";
+      system('cp', $already_processed{$in}, $out) and die "cp failed.\n";
+    }
   } else {
+    print STDERR "--- $out\n";
     system('cp', $in, $out) and die "cp failed.\n";
     if (/\.mp3$/i) {
       $wipe_id3 and (system("$ENV{HOME}/scripts/music/id3wipe", '-f', $out)
