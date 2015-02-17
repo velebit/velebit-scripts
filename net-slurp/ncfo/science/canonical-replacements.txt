@@ -1,21 +1,19 @@
 ^(?=.*medley) => LLM+m_
-
 ^(?=.*Invisible.*Colors) => LLM01_
 ^(?=.*Michaelson.*and.*Morley) => LLM02_
-
-^(?=.*Biolum) => LLMub_
-^(?=.*Cosmic) => LLMuc_
-^(?=.*Doppler) => LLMud_
-^(?=.*Sweet.*Song) => LLMue_
-^(?=.*Evolutionary) => LLMuf_
-^(?=.*Green.*Magic) => LLMug_
-^(?=.*Laser) => LLMui_
-^(?=.*Looking.*Past) => LLMuj_
+^(?=.*Biolum) => LLM03_
+^(?=.*Cosmic) => LLM04_
+^(?=.*Doppler) => LLM05_
+^(?=.*Sweet.*Song) => LLM06_
+^(?=.*Green.*Magic) => LLM07_
+^(?=.*Laser) => LLM08_
+^(?=.*Looking.*Past) => LLM09_
+^(?=.*ROY.*G.*BIV) => LLM10_
+^(?=.*Sky.*Dance) => LLM11_
+^(?=.*Straight) => LLM12_
+^(?=.*Burned) => LLM13_
+^(?=.*Butterfly) => LLM14_
+^(?=.*Shadow) => LLM15_
+^(?=.*Refraction) => LLM16_
+^(?=.*Evolutionary) => LLM17_
 ^(?=.*Radio.*Telescope) => LLMuk_
-^(?=.*Refraction) => LLMul_
-^(?=.*ROY.*G.*BIV) => LLMum_
-^(?=.*Sky.*Dance) => LLMun_
-^(?=.*Straight) => LLMuo_
-^(?=.*Burned) => LLMup_
-^(?=.*Butterfly) => LLMuq_
-^(?=.*Shadow) => LLMur_
