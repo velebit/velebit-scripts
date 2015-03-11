@@ -21,19 +21,28 @@ for voice in soprano alto tenor bass; do
     sed -e 's/^[^	]*	//' "$LEVEL1" > "$LEVEL2"
 
     for age in adults kids; do
-	LEVEL3="$DIR/raw3-$voice.tmplist"
+	LEVEL3="$DIR/raw3-$voice-$age.tmplist"
 	case "$voice-$age" in
 	    tenor-kids|bass-kids)
-		      continue ;;
+		continue ;;
 	    *-adults) skip=kids ;;
 	    *-kids)   skip=adults ;;
 	esac
 	sed -e '/^'"$skip"'	/Id' \
 	    -e 's/^[^	]*	//' "$LEVEL2" > "$LEVEL3"
 
-	# OK, generate the URL list
-	URLLIST="$DIR/$voice-$age-all.mp3.urllist"
-	cp "$LEVEL3" "$URLLIST"
+	for speed in "" "-slow"; do
+	    # OK, generate the URL list
+	    URLLIST="$DIR/$voice-$age-all$speed.mp3.urllist"
+	    case "$speed" in
+		"")
+		    sed -e '/82/Id' "$LEVEL3" > "$URLLIST"
+		    ;;
+		-slow)
+		    sed -e '/82/I!d' "$LEVEL3" > "$URLLIST"
+		    ;;
+	    esac
+	done
     done
 done
 
@@ -51,90 +60,108 @@ rm -f *.tmplist "$DIR"/*.tmplist
 ### generate generic URL lists
 
 for age in adults kids; do
-    va="soprano-$age"
-    sed -e '/Medley\|Cosmic\|Laser\|Sky.*Dance/I{;/high/I!d;}' \
-	-e '/Straight/{;/mezzo/Id;}' \
-	-e '/Straight/{;/mezzo/Id;}' \
-	"$DIR"/"$va"-all.mp3.urllist > "$DIR"/"$va"-high.mp3.urllist
-    sed -e '/Medley\|Cosmic\|Laser\|Sky.*Dance/I{;/high/Id;}' \
-	-e '/Straight/{;/mezzo/I!d;}' \
-	"$DIR"/"$va"-all.mp3.urllist > "$DIR"/"$va"-low.mp3.urllist
+    for speed in "" "-slow"; do
+	va="soprano-$age"
+	sed -e '/Cosmic\|Laser\|Sky.*Dance/I{;/high/I!d;}' \
+	    -e '/Straight/{;/mezzo/Id;}' \
+	    -e '/Straight/{;/mezzo/Id;}' \
+	    "$DIR"/"$va"-all"$speed".mp3.urllist \
+	    > "$DIR"/"$va"-high"$speed".mp3.urllist
+	sed -e '/Cosmic\|Laser\|Sky.*Dance/I{;/high/Id;}' \
+	    -e '/Straight/{;/mezzo/I!d;}' \
+	    "$DIR"/"$va"-all"$speed".mp3.urllist \
+	    > "$DIR"/"$va"-low"$speed".mp3.urllist
+    done
 done
 
 for age in adults kids; do
-    va="alto-$age"
-    sed -e '/Medley\|Cosmic\|Laser\|Sky.*Dance/I{;/low/Id;}' \
-	"$DIR"/"$va"-all.mp3.urllist > "$DIR"/"$va"-high.mp3.urllist
-    sed -e '/Medley\|Cosmic\|Laser\|Sky.*Dance/I{;/low/I!d;}' \
-	"$DIR"/"$va"-all.mp3.urllist > "$DIR"/"$va"-low.mp3.urllist
+    for speed in "" "-slow"; do
+	va="alto-$age"
+	sed -e '/Cosmic\|Laser\|Sky.*Dance/I{;/low/Id;}' \
+	    "$DIR"/"$va"-all"$speed".mp3.urllist \
+	    > "$DIR"/"$va"-high"$speed".mp3.urllist
+	sed -e '/Cosmic\|Laser\|Sky.*Dance/I{;/low/I!d;}' \
+	    "$DIR"/"$va"-all"$speed".mp3.urllist \
+	    > "$DIR"/"$va"-low"$speed".mp3.urllist
+    done
 done
 
-sed -e '/Laser\|Sky.*Dance/I{;/high/I!d;}' \
-    "$DIR"/tenor-adults-all.mp3.urllist > "$DIR"/tenor-high.mp3.urllist
-sed -e '/Laser\|Sky.*Dance/I{;/high/Id;}' \
-    "$DIR"/tenor-adults-all.mp3.urllist > "$DIR"/tenor-low.mp3.urllist
+for speed in "" "-slow"; do
+    sed -e '/Laser\|Sky.*Dance/I{;/high/I!d;}' \
+	"$DIR"/tenor-adults-all"$speed".mp3.urllist \
+	> "$DIR"/tenor-high"$speed".mp3.urllist
+    sed -e '/Laser\|Sky.*Dance/I{;/high/Id;}' \
+	"$DIR"/tenor-adults-all"$speed".mp3.urllist \
+	> "$DIR"/tenor-low"$speed".mp3.urllist
+done
 
-sed -e '/Cosmic\|Sky.*Dance/I{;/low/Id;}' \
-    -e '/Laser/I{;/high/I!d;}' \
-    "$DIR"/bass-adults-all.mp3.urllist > "$DIR"/bass-high.mp3.urllist
-# "mid" can go with either low or high in two-split songs:
-sed -e '/Cosmic\|Sky.*Dance/I{;/low/Id;}' \
-    -e '/Laser/I{;/mid/I!d;}' \
-    "$DIR"/bass-adults-all.mp3.urllist > "$DIR"/bass-mid-hi.mp3.urllist
-sed -e '/Cosmic\|Sky.*Dance/I{;/low/I!d;}' \
-    -e '/Laser/I{;/mid/I!d;}' \
-    "$DIR"/bass-adults-all.mp3.urllist > "$DIR"/bass-mid-lo.mp3.urllist
-sed -e '/Cosmic\|Sky.*Dance/I{;/low/I!d;}' \
-    -e '/Laser/I{;/low/I!d;}' \
-    "$DIR"/bass-adults-all.mp3.urllist > "$DIR"/bass-low.mp3.urllist
+for speed in "" "-slow"; do
+    sed -e '/Cosmic\|Sky.*Dance/I{;/low/Id;}' \
+	-e '/Laser/I{;/high/I!d;}' \
+	"$DIR"/bass-adults-all"$speed".mp3.urllist \
+	> "$DIR"/bass-high"$speed".mp3.urllist
+    # "mid" can go with either low or high in two-split songs:
+    sed -e '/Cosmic\|Sky.*Dance/I{;/low/Id;}' \
+	-e '/Laser/I{;/mid/I!d;}' \
+	"$DIR"/bass-adults-all"$speed".mp3.urllist \
+	> "$DIR"/bass-mid-hi"$speed".mp3.urllist
+    sed -e '/Cosmic\|Sky.*Dance/I{;/low/I!d;}' \
+	-e '/Laser/I{;/mid/I!d;}' \
+	"$DIR"/bass-adults-all"$speed".mp3.urllist \
+	> "$DIR"/bass-mid-lo"$speed".mp3.urllist
+    sed -e '/Cosmic\|Sky.*Dance/I{;/low/I!d;}' \
+	-e '/Laser/I{;/low/I!d;}' \
+	"$DIR"/bass-adults-all"$speed".mp3.urllist \
+	> "$DIR"/bass-low"$speed".mp3.urllist
+done
 
 ### specific URL lists for our family
 
-cp "$DIR"/soprano-kids-low.mp3.urllist Katarina+Luka.mp3.urllist
+for speed in "" "-slow"; do
+    cp "$DIR"/soprano-kids-low"$speed".mp3.urllist \
+	Katarina+Luka"$speed".mp3.urllist
 
-sed -e '/NothingForNow/Id' \
-    "$DIR"/alto-adults-low.mp3.urllist > Abbe.mp3.urllist
+    sed -e '/NothingForNow/Id' \
+	"$DIR"/alto-adults-low"$speed".mp3.urllist > Abbe"$speed".mp3.urllist
 
-sed -e '/NothingForNow/Id' \
-    "$DIR"/tenor-low.mp3.urllist > bert.mp3.urllist
-sed -e '/NothingForNow/I!d' \
-    "$DIR"/bass-high.mp3.urllist >> bert.mp3.urllist
-
-#sed -e '/Fingers/Id' \
-#    "$DIR"/alto-adults-small.mp3.urllist > Abbe.mp3.urllist
-#sed -ne '/Fingers/Ip' \
-#    "$DIR"/tenor-adults-small.mp3.urllist >> Abbe.mp3.urllist
-#
-#sed -e '/Fingers/Id;/Bacteria/Id' \
-#    "$DIR"/bass-adults-mob.mp3.urllist > bert.mp3.urllist
-##sed -ne '/Fingers/Ip;/Bacteria/Ip' \
-#sed -e '/Tamar/Id;/Moon/Id' \
-#    "$DIR"/tenor-adults-mob.mp3.urllist >> bert.mp3.urllist
+    sed -e '/NothingForNow/Id' \
+	"$DIR"/tenor-low"$speed".mp3.urllist > bert"$speed".mp3.urllist
+    sed -e '/NothingForNow/I!d' \
+	"$DIR"/bass-high"$speed".mp3.urllist >> bert"$speed".mp3.urllist
+done
 
 ln -s "$DIR"/demo.mp3.urllist demo.mp3.urllist
 #ln -s "$DIR"/score.pdf.urllist score.pdf.urllist
 
 ## other people:
 
-for vap in soprano-adults-low alto-adults-high; do
+# X-... means don't bother updating the ID3 tags
+
+other=
+#other="$other soprano-adults-low"
+#other="$other soprano-adults-low-slow"
+#other="$other alto-adults-high"
+#other="$other alto-adults-high-slow"
+other="$other alto-adults-all"
+other="$other alto-adults-all-slow"
+
+for vap in $other; do
     file="$vap".mp3.urllist
     ln -s "$DIR"/"$file" X-"$file"
 done
 
-#for v in soprano alto; do
-#    file="$v"-kids-mob.mp3.urllist
-#    ln -s "$DIR"/"$file" X-"$file"
-#done
-#
-#for v in soprano alto tenor bass; do
-#    file="$v"-adults-mob.mp3.urllist
-#    ln -s "$DIR"/"$file" X-"$file"
-#done
-#
-#ln -s "$DIR"/alto-adults-small.mp3.urllist X-alto-adults-small.mp3.urllist
-#
-#cat "$DIR"/soprano-{kids,adults}-mob.mp3.urllist \
-#    | sort | uniq > X-soprano-a+k-mob.mp3.urllist
-#
-#cat "$DIR"/{tenor,bass}-adults-mob.mp3.urllist \
-#    | sort | uniq > X-tenor+bass-adults-mob.mp3.urllist
+other=
+#other="$other soprano-kids-high"
+#other="$other soprano-kids-high-slow"
+#other="$other bass-high"
+#other="$other bass-high-slow"
+
+for vap in $other; do
+    file="$vap".mp3.urllist
+    ln -s "$DIR"/"$file" "$file"
+done
+
+diff "$DIR"/soprano-kids-{low,high}.mp3.urllist | sed -e '/^> /!d;s/^. //' \
+    > soprano-kids-high-without-low.mp3.urllist
+diff "$DIR"/{tenor-low,bass-high}.mp3.urllist | sed -e '/^> /!d;s/^. //' \
+    > tenor-low-without-bass.mp3.urllist
