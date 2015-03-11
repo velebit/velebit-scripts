@@ -3,6 +3,7 @@
 SORT_BY_NUMBER=()
 SORT_BY_NAME=()
 STRIP_PREFIX=()
+REPLACE_SPACES=()
 while true; do
     case "$1" in
 	-s|--sort)
@@ -12,6 +13,8 @@ while true; do
 	    SORT_BY_NAME=(sort); shift ;;
 	-p|--no-strip-prefix)
 	    STRIP_PREFIX=(cat); shift ;;
+	-w|--keep-word-separators)
+	    REPLACE_SPACES=(cat); shift ;;
 	-*)
 	    echo "Unknown flag '$1'!" >&2 ; exit 1 ;;
 	*)
@@ -36,7 +39,7 @@ sort_tracks () {
 }
 
 strip_prefix () {
-    perl -pe 's/^[0-9A-Z](\w*[0-9A-Z])?[0-9](\.[0-9])?[a-z]?[-_]//'
+    perl -pe 's/^[0-9A-Z](\w*[0-9A-Z])?(?:[0-9](\.[0-9])?[a-z]?|\+[a-z])[-_]//'
 }
 
 show_tracks () {
@@ -65,4 +68,5 @@ show_tracks "$@" \
     | ${SORT_BY_NUMBER[@]:-cat} \
     | ${STRIP_PREFIX[@]:-strip_prefix} \
     | ${SORT_BY_NAME[@]:-cat} \
+    | ${REPLACE_SPACES[@]:-sed -e 's/[-_][-_]*/ /g'} \
     | cat -n
