@@ -1,6 +1,28 @@
 #!/bin/sh
 
-SHORT="`./canonicalize-filenames.pl --print-short`"
+auto_prefix=yes
+prefix=
+auto_suffix=yes
+suffix=
+while true; do
+    case "$1" in
+	-p|--prefix)
+	    prefix="$2"; auto_prefix=; shift; shift ;;
+	-s|--suffix)
+	    suffix="$2"; auto_suffix=; shift; shift ;;
+	-*)
+	    echo "Unknown flag '$1'!" >&2 ; exit 1 ;;
+	*)
+	    break ;;
+    esac
+done
+
+if [ -n "$auto_prefix" ]; then
+    prefix="`./canonicalize-filenames.pl --print-short` "
+fi
+if [ -n "$auto_suffix" ]; then
+    suffix=" practice"
+fi
 
 cd ..
 
@@ -88,7 +110,7 @@ for who in "$@"; do
     #if diff -q "${who}.m3u" "${who}_all.m3u" > /dev/null; then
     #    rm -f "${who}_all.m3u"
     #fi
-    make_playlist "$SHORT " "$who" " practice" . ''
+    make_playlist "$prefix" "$who" "$suffix" . ''
     rm -f "${who}.wpl" "${who}.m3u"
     rm -f "${who}_all.wpl" "${who}_all.m3u"
     #make_playlist '' "$who" _burn_tmp . 'Piano|Orch'
