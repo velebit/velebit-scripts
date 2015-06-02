@@ -36,9 +36,19 @@ sub write_m3u8 ( $$@ ) {
   print $FILE "$_\n" for @list;
 }
 
+sub encode_wpl_characters ( $ ) {
+  my ($text) = @_;
+  $text =~ s,&,&amp;,g;
+  $text =~ s,",&quot;,g;
+  $text =~ s,<,&lt;,g;
+  $text =~ s,>,&gt;,g;
+  $text;
+}
+
 sub write_wpl ( $$@ ) {
   my ($file, $title, @list) = @_;
   my $count = scalar @list;
+  $title = encode_wpl_characters $title;
   my $text = <<"EndOfHeader";
 <?wpl version="1.0"?>
 <smil>
@@ -51,7 +61,7 @@ sub write_wpl ( $$@ ) {
 EndOfHeader
   for my $item (@list) {
     $item =~ s,/,\\,g;
-    $item =~ s,&,&amp;,g;
+    $item = encode_wpl_characters $item;
     $text .= qq[    <media src="$item"/>\n];
   }
   $text .= <<"EndOfFooter";
