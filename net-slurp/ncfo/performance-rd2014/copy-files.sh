@@ -94,4 +94,4 @@ performance="`dirname "$performance"`"
 performance="`basename "$performance" | sed -e 's/ performance$//'`"
 
 ./playlists.sh -p "$performance (" -s ")"
-./id3-tags.sh -a NCFO -p "$performance (" -s ")" -xp
+./id3-tags.sh -a "North Cambridge Family Opera" -p "$performance (" -s ")" -xp
