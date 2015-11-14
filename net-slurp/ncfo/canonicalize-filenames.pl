@@ -73,9 +73,15 @@ GetOptions('print-short-name|short-name|ps!' => \$PRINT_SHORT_NAME,
 		       [ qr/^KC44_?(?=.*Story.*End)/i, 'KC44.3_' ],
 		      ) unless @EXTRA_REPLACEMENTS;
 
-
+my $short_name_suffix = '';
 my @wd_elements = split(m!/!, getcwd);
-pop @wd_elements if @wd_elements and $wd_elements[-1] =~ /^download/;
+while (@wd_elements) {
+  $wd_elements[-1] =~ /^download|^scripts/
+    and pop(@wd_elements), next;
+  $wd_elements[-1] =~ /^audition/
+    and pop(@wd_elements), $short_name_suffix = "_aud$short_name_suffix", next;
+  last;
+}
 my $short_name = $wd_elements[-1];
 $short_name =~ s/[\[\]]+//g;
 $short_name =~ s/(?<!\S)(\w[A-Z0-9]*)/[$1]/g;
@@ -83,6 +89,7 @@ $short_name =~ s/^/\]/;
 $short_name =~ s/$/\[/;
 $short_name =~ s/\].*?\[//g;
 $short_name =~ /[\[\]]/ and die "bad short name generated: '$short_name'\n ";
+$short_name .= $short_name_suffix;
 
 if ($PRINT_SHORT_NAME) {
   print "$short_name\n";
