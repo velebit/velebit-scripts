@@ -111,8 +111,12 @@ for who in "$@"; do
     #    rm -f "${who}_all.m3u"
     #fi
     make_playlist "$prefix" "$who" "$suffix" . ''
-    rm -f "${who}.wpl" "${who}.m3u"
-    rm -f "${who}_all.wpl" "${who}_all.m3u"
+    if [ "$prefix:$suffix" != ":" ]; then
+	rm -f "${who}.wpl" "${who}.m3u"
+    fi
+    if [ "$prefix:$suffix" != ":_all" ]; then
+	rm -f "${who}_all.wpl" "${who}_all.m3u"
+    fi
     #make_playlist '' "$who" _burn_tmp . 'Piano|Orch'
 done
 
