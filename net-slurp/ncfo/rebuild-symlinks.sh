@@ -8,7 +8,7 @@ find_top_level_symlinks () {
 }
 
 get_subdirs () {
-    echo `ls -l "$TOP" | sed -e '/^d/!d;s/.* //;s/$/ |/'` | sed -e 's/ |$//'
+    echo `ls -l "$TOP" | sed -e '/^d/!d;s/.* //;s/$/ |/'` -
 }
 
 if [ $# -lt 1 ]; then
@@ -29,7 +29,7 @@ case "$1" in
     *)      subdir="$1" ;;
 esac
 
-if [ -z "$subdir" -o ! -d "$TOP/$subdir" ]; then
+if [ -z "$subdir" -o ! \( "$subdir" = "-" -o -d "$TOP/$subdir" \) ]; then
     echo "If guessing is not possible, you must specify an argument!" >&2
     echo "" >&2
     echo "Usage: `basename "$0"` [`get_subdirs`]" >&2
@@ -40,5 +40,7 @@ fi
 find_top_level_symlinks -print0 | xargs -0 -r rm -f
 
 # Recreate symlinks.
-ln -s "$TOP"{,/"$subdir"}/*.*[^~] .
+ln -s "$TOP"/*.*[^~] .
+[ "$subdir" != "-" ] && \
+    ln -s "$TOP"/"$subdir"/*.*[^~] .
 ln -s /home/bert/scripts/net-slurp/plinks.pl .
