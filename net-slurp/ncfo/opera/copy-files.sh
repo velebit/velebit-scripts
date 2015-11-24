@@ -13,9 +13,9 @@ while true; do
 done
 
 CF_ARGS=(--no-replace-any-prefix --prefix ''
-    -r '^(.*?)[-_]WWscene(\d+(?:[-\.]\d+)?)[-_]?=WW$2_$1_'
-    -r '^WW(\d+)-(\d+)=WW$1.$2'
-    -r '[-_]Practice(?:$|(?=[-_]))=' --two-digit-numbers
+    -r '^(.*?)[-_]WWscene(\d+(?:[-\.](?!8va)\d+)?)[-_]?=scene-$2_$1_'
+    -r '^scene-(\d+)-(?!8va)(\d+)=scene-$1.$2'
+    -r '[-_]Practice(?:$|(?=[-_]))='
 )
 
 inspect() {
