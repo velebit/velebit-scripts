@@ -10,9 +10,11 @@ use Getopt::Long;
 
 our $PRINT_SHORT_NAME;
 our $REPLACE_ANY_PREFIX = 1;
+our $TWO_DIGIT_NUMBERS;
 my @EXTRA_STRIPPED_PREFIXES;
 my @EXTRA_STRIPPED_STRINGS;
 my @EXTRA_REPLACEMENTS;
+my $SHORT_PREFIX;
 my $FALLBACK_PREFIX;
 
 sub add_replacement ( $ ) {
@@ -52,7 +54,10 @@ GetOptions('print-short-name|short-name|ps!' => \$PRINT_SHORT_NAME,
 	   'replace|r=s' => sub { add_replacement($_[1]); },
 	   'replace-from-file|rf=s' =>
 	     sub { from_file($_[1], \&add_replacement); },
+	   'auto-prefix=s' => \$SHORT_PREFIX,
 	   'fallback-prefix=s' => \$FALLBACK_PREFIX,
+	   'prefix=s' => sub { $SHORT_PREFIX = $FALLBACK_PREFIX = $_[1] },
+	   'two-digit-numbers:i' => \$TWO_DIGIT_NUMBERS,
           ) or die "Usage: $0 [--ps | [other options] [list_files...]]\n";
 
 # ----------------------------------------------------------------------
@@ -96,19 +101,24 @@ if ($PRINT_SHORT_NAME) {
   exit 0;
 }
 
+$SHORT_PREFIX = $short_name unless defined $SHORT_PREFIX;
+
 # ----------------------------------------------------------------------
 
 sub canonicalize_file ( $ ) {
   my ($file) = @_;
+  my $stage = -1;
   $file =~ s/\.mp3$//i;
   $file =~ s/^\Q$_\E[-_]// for @EXTRA_STRIPPED_PREFIXES;
   $file =~ s/\Q$_\E// for @EXTRA_STRIPPED_STRINGS;
-  $file =~ s/^[^\.]*?(?=\d)/${short_name}/ if $REPLACE_ANY_PREFIX;
-  $file =~ s/^(\Q${short_name}\E\d+)[-_](\d+)/$1.$2/;
-  #$file =~ s/(\d+)/sprintf "%02d", $1/ge;
+  $file =~ s/^[^\.]*?(?=\d)/${SHORT_PREFIX}/ if $REPLACE_ANY_PREFIX;
+  $file =~ s/^(\Q${SHORT_PREFIX}\E\d+)[-_](\d+)/$1.$2/;
+  $file =~ s/(\d+)/sprintf "%02d", $1/ge
+    if defined $TWO_DIGIT_NUMBERS;
   my $replaced;
-  ($file =~ s/$_->[0]/$_->[1]/ and $replaced = 1) for @EXTRA_REPLACEMENTS;
-  if (! $replaced and $FALLBACK_PREFIX) {
+  ($file =~ s/$_->[0]/qq(qq($_->[1]))/ee and $replaced = 1)
+    for @EXTRA_REPLACEMENTS;
+  if (! $replaced and defined $FALLBACK_PREFIX and length $FALLBACK_PREFIX) {
     $file = $FALLBACK_PREFIX . $file;
   }
   $file . '.mp3';
