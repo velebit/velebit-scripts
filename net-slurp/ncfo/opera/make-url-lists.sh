@@ -14,6 +14,7 @@ satb_section () {
     local base="$1"; shift
 
     echo "... $base ($section)" >&2
+    section="`echo "$section" | sed -e 's,/, */ *,'`"
 
     for voice in 'Soprano' 'Alto' 'Tenor' 'Bass'; do
 	short="`echo "$voice" | sed -e 's/^\(.\).*/\1/;y/SATB/satb/'`"
@@ -31,7 +32,7 @@ satb_section 'Weavers/Jackals' 'jackals'
 satb_section 'Village Elders/Doves/Wise Teachers' 'elders'
 satb_section 'Milkmaids/Washerwomen/Koel-birds' 'koels'
 satb_section 'Village Children/Mosquitoes' 'mosquitoes'
-satb_section 'Prime Ministers / Brain-fever Birds' 'ministers'
+satb_section 'Prime Ministers/Brain-fever Birds' 'ministers'
 # 'Five Kids'
 
 ##### individual parts
@@ -58,6 +59,11 @@ sed -e '/^soprano p\(61\|71\|105\) lo	/d;s/^[^	]*	//' \
 # MP3s
 sed -e 's/^[^	]*	//' \
     "$DIR"/mynas-t.mp3.tmplist > Abbert.mp3.urllist
+
+### Laura and Avery (???s soprano low)
+# MP3s
+sed -e '/^soprano p\(61\|71\|105\) hi	/d;s/^[^	]*	//' \
+    "$DIR"/mynas-s.mp3.tmplist > Lauravery.mp3.urllist
 
 ### demo MP3s
 if [ -e .generate-demo ]; then
