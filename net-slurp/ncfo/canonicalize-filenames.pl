@@ -16,6 +16,7 @@ my @EXTRA_STRIPPED_STRINGS;
 my @EXTRA_REPLACEMENTS;
 my $SHORT_PREFIX;
 my $FALLBACK_PREFIX;
+my $DEBUGGING = 0;
 
 sub add_replacement ( $ ) {
   my ($string) = @_;
@@ -58,6 +59,7 @@ GetOptions('print-short-name|short-name|ps!' => \$PRINT_SHORT_NAME,
 	   'fallback-prefix=s' => \$FALLBACK_PREFIX,
 	   'prefix=s' => sub { $SHORT_PREFIX = $FALLBACK_PREFIX = $_[1] },
 	   'two-digit-numbers:i' => \$TWO_DIGIT_NUMBERS,
+	   'debug|d+' => \$DEBUGGING,
           ) or die "Usage: $0 [--ps | [other options] [list_files...]]\n";
 
 # ----------------------------------------------------------------------
@@ -109,18 +111,26 @@ sub canonicalize_file ( $ ) {
   my ($file) = @_;
   my $stage = -1;
   $file =~ s/\.mp3$//i;
+  printf STDERR "cf%02d> %s [in]\n", ++$stage, $file if $DEBUGGING > 0;
   $file =~ s/^\Q$_\E[-_]// for @EXTRA_STRIPPED_PREFIXES;
+  printf STDERR "cf%02d> %s [xsp]\n", ++$stage, $file if $DEBUGGING > 0;
   $file =~ s/\Q$_\E// for @EXTRA_STRIPPED_STRINGS;
+  printf STDERR "cf%02d> %s [xss]\n", ++$stage, $file if $DEBUGGING > 0;
   $file =~ s/^[^\.]*?(?=\d)/${SHORT_PREFIX}/ if $REPLACE_ANY_PREFIX;
+  printf STDERR "cf%02d> %s [rap]\n", ++$stage, $file if $DEBUGGING > 0;
   $file =~ s/^(\Q${SHORT_PREFIX}\E\d+)[-_](\d+)/$1.$2/;
+  printf STDERR "cf%02d> %s [sp\\d]\n", ++$stage, $file if $DEBUGGING > 0;
   $file =~ s/(\d+)/sprintf "%02d", $1/ge
     if defined $TWO_DIGIT_NUMBERS;
+  printf STDERR "cf%02d> %s [2dn]\n", ++$stage, $file if $DEBUGGING > 0;
   my $replaced;
   ($file =~ s/$_->[0]/qq(qq($_->[1]))/ee and $replaced = 1)
     for @EXTRA_REPLACEMENTS;
+  printf STDERR "cf%02d> %s [xr]\n", ++$stage, $file if $DEBUGGING > 0;
   if (! $replaced and defined $FALLBACK_PREFIX and length $FALLBACK_PREFIX) {
     $file = $FALLBACK_PREFIX . $file;
   }
+  printf STDERR "cf%02d> %s [fbp]\n", ++$stage, $file if $DEBUGGING > 0;
   $file . '.mp3';
 }
 
