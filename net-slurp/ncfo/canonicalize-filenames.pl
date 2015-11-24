@@ -124,9 +124,15 @@ sub canonicalize_file ( $ ) {
     if defined $TWO_DIGIT_NUMBERS;
   printf STDERR "cf%02d> %s [2dn]\n", ++$stage, $file if $DEBUGGING > 0;
   my $replaced;
-  ($file =~ s/$_->[0]/qq(qq($_->[1]))/ee and $replaced = 1)
-    for @EXTRA_REPLACEMENTS;
-  printf STDERR "cf%02d> %s [xr]\n", ++$stage, $file if $DEBUGGING > 0;
+  ++$stage;
+  {
+    my $r;
+    $r = $EXTRA_REPLACEMENTS[$_],
+      ($file =~ s/$r->[0]/qq(qq($r->[1]))/ee and $replaced = 1),
+	($DEBUGGING > 1 and printf STDERR "cf%02d> %s [xr$_]\n", $stage, $file)
+	  for 0..$#EXTRA_REPLACEMENTS;
+  }
+  printf STDERR "cf%02d> %s [xr]\n", $stage, $file if $DEBUGGING == 1;
   if (! $replaced and defined $FALLBACK_PREFIX and length $FALLBACK_PREFIX) {
     $file = $FALLBACK_PREFIX . $file;
   }
