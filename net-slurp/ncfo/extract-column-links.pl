@@ -20,16 +20,20 @@ EndOfMessage
 
 
 our $VERBOSITY = 0;
+our $PRINT_LINK_TEXT;
 
 while (@ARGV and $ARGV[0] =~ /^-/) {
-  $ARGV[0] eq '-v' and ++$VERBOSITY, shift(@ARGV), next;
+  ($ARGV[0] eq '--verbose' or $ARGV[0] eq '-v')
+    and ++$VERBOSITY, shift(@ARGV), next;
+  ($ARGV[0] eq '--print-links' or $ARGV[0] eq '--links' or $ARGV[0] eq '-l')
+    and $PRINT_LINK_TEXT=1, shift(@ARGV), next;
   die "Unknown argument '$ARGV[0]'";
 }
 my $file      = shift @ARGV or die "too few args";
 my $tbl_label = shift @ARGV or die "too few args";
 my $tbl_idx   = 0;
 $tbl_idx      = 0 + shift @ARGV if @ARGV and $ARGV[0] =~ /^\+\d+$/;
-my $col_label = shift @ARGV or die "too few args";
+my $col_label = shift @ARGV; defined $col_label or die "too few args";
 @ARGV and die "too many args";
 
 # ----------------------------------------------------------------------
@@ -40,6 +44,21 @@ sub slurp ( $ ) {
   local ($/) = undef;
   my $d = scalar <$FH>;
   $d;
+}
+
+sub clean ( $ ) {
+  my ($text) = @_;
+  $text =~ s/[\xA0\xC2]/ /sg;
+  $text =~ s/^\s+//s;
+  $text =~ s/\s+$//s;
+  $text =~ s/\s+/ /sg;
+  $text;
+}
+
+sub clean_text ( $ ) {
+  my ($element) = @_;
+  my $text = ref($element) ? $element->as_text : $element;
+  clean($text);
 }
 
 # ----------------------------------------------------------------------
@@ -56,7 +75,7 @@ sub slurp ( $ ) {
 
   printf STDERR "%-72s", "  Finding table... " if $VERBOSITY;
   my @matches = $tree->look_down(_tag => 'p',
-				  sub { $_[0]->as_text =~ /$tbl_label/ });
+				  sub { clean_text($_[0]) =~ /$tbl_label/ });
   @matches      or die "No results found";
   @matches == 1 or die "Multiple results found";
 
@@ -119,15 +138,18 @@ sub slurp ( $ ) {
   print STDERR "done.\n" if $VERBOSITY;
 
   printf STDERR "%-72s", "  Finding column... " if $VERBOSITY;
-  @matches = grep $cells[0][$_] && $cells[0][$_]->as_text =~ /$col_label/,
+  @matches = grep $cells[0][$_] && clean_text($cells[0][$_]) =~ /$col_label/,
     0..$#{$cells[0]};
   @matches      or die "No results found";
   @matches == 1 or die "Multiple results found";
 
   my $col_idx = $matches[0];
-  my @urls = map $_->attr('href'),
+  my @links =
     map $_->look_down(_tag => 'a', href => qr/./),
       grep defined, map $cells[$_][$col_idx], 0..$#cells;
-  print "$_\n" for @urls;
+  for my $link (@links) {
+    print clean_text($link) . "\t" if $PRINT_LINK_TEXT;
+    print $link->attr('href') . "\n";
+  }
   print STDERR "done.\n" if $VERBOSITY;
 }

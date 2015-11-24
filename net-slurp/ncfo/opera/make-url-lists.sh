@@ -3,16 +3,45 @@ INDEX="${1-mp3/index.html}"
 INDEX_PDF="${2-${INDEX}}"
 INDEX_VIDEO="${3-${INDEX}}"
 
-rm -f *.urllist
+DIR=tmplists
+rm -f *.urllist "$DIR"/*.urllist *.tmplist "$DIR"/*.tmplist
+if [ ! -d "$DIR" ]; then mkdir "$DIR"; fi
 
-### Katarina (Jury Kids soprano I)
+##### generic prep
+
+satb_section () {
+    local section="$1"; shift
+    local base="$1"; shift
+
+    echo "... $base ($section)" >&2
+
+    for voice in 'Soprano' 'Alto' 'Tenor' 'Bass'; do
+	short="`echo "$voice" | sed -e 's/^\(.\).*/\1/;y/SATB/satb/'`"
+	./extract-column-links.pl -l "$INDEX" "$section" "$voice" \
+	    > "$DIR"/"$base-$short.mp3.tmplist"
+    done
+    ./extract-column-links.pl -l "$INDEX" "$section" '^$' \
+	> "$DIR"/"$base-solos.mp3.tmplist"
+}
+
+satb_section 'Courtiers/Peacocks' 'peacocks'
+satb_section 'Courtiers/Frogs' 'frogs'
+satb_section 'Courtiers/Myna Birds' 'mynas'
+satb_section 'Weavers/Jackals' 'jackals'
+satb_section 'Village Elders/Doves/Wise Teachers' 'elders'
+satb_section 'Milkmaids/Washerwomen/Koel-birds' 'koels'
+satb_section 'Village Children/Mosquitoes' 'mosquitoes'
+satb_section 'Prime Ministers / Brain-fever Birds' 'ministers'
+# 'Five Kids'
+
+##### individual parts
+echo "... individual parts" >&2
+
+### Katarina (???s soprano high)
 # MP3s
-./extract-column-links.pl "$INDEX" \
-    'Soprano Chorus MP3s' +0 'Jury Kids' \
-    | sed -e '/Sop2/d' > Katarina.mp3.urllist
-./extract-column-links.pl "$INDEX" \
-    'Soprano Chorus MP3s' +1 'Jury Kids' \
-    | sed -e '/Sop2/d' >> Katarina.mp3.urllist
+sed -e '/^soprano p\(61\|71\|105\) lo	/d;s/^[^	]*	//' \
+    "$DIR"/mynas-s.mp3.tmplist > Katarina.mp3.urllist
+
 ## unstructured MP3 links following the table...
 #./plinks.pl -b -pt -t -tl 1 "$INDEX" \
 #    | sed -e '/\.mp3$/I!d' \
@@ -25,61 +54,36 @@ rm -f *.urllist
           -e '/^[^	]*chorus/I!d;s/^[^	]*	//' \
     > Katarina.video.urllist
 
-### Abbe (Jury Kids alto)
+### Abbe and bert (???s tenor)
 # MP3s
-./extract-column-links.pl "$INDEX" \
-    'Alto Chorus MP3s' +0 'Jury Kids' \
-    | sed -e '/XXXtextXXX/d' > Abbe.mp3.urllist
-./extract-column-links.pl "$INDEX" \
-    'Alto Chorus MP3s' +1 'Jury Kids' \
-    | sed -e '/XXXtextXXX/d' >> Abbe.mp3.urllist
+sed -e 's/^[^	]*	//' \
+    "$DIR"/mynas-t.mp3.tmplist > Abbert.mp3.urllist
 
 ### demo MP3s
-./plinks.pl -h -t "$INDEX" \
-    | sed -e '/\.mp3$/I!d;/^[^	]*demo/I!d;/complete	/Id;s/.*	//' \
-    > demo.mp3.urllist
+if [ -e .generate-demo ]; then
+    echo "... demo" >&2
+    if [ ! -e big.mp3.tmplist ]; then
+	./plinks.pl -h -t "$INDEX" > big.mp3.tmplist
+    fi
+    cat big.mp3.tmplist \
+	| sed -e '/\.mp3$/I!d;/^[^	]*demo/I!d;/complete	/Id;s/.*	//' \
+	> demo.mp3.urllist
+fi
 
 ### orchestra-only MP3s
-./plinks.pl -h -t "$INDEX" \
-    | sed -e '/\.mp3$/I!d;/^[^	]*orchestra/I!d;/complete	/Id;s/.*	//' \
-    > orchestra.mp3.urllist
+if [ -e .generate-orchestra ]; then
+    echo "... orchestra" >&2
+    if [ ! -e big.mp3.tmplist ]; then
+	./plinks.pl -h -t "$INDEX" > big.mp3.tmplist
+    fi
+    cat big.mp3.tmplist \
+	| sed -e '/\.mp3$/I!d;/^[^	]*orchestra/I!d;/complete	/Id;s/.*	//' \
+	> orchestra.mp3.urllist
+fi
 
 ### score PDFs
-./plinks.pl "$INDEX_PDF" \
-     | sed -e '/\.pdf$/I!d;/Score/!d' > score.pdf.urllist
-
-### generic Jury Kids soprano I MP3s
-./extract-column-links.pl "$INDEX" \
-    'Soprano Chorus MP3s' +0 'Jury Kids' \
-    | sed -e '/Sop2/d' > 'Jury Kids soprano 1'.mp3.urllist
-./extract-column-links.pl "$INDEX" \
-    'Soprano Chorus MP3s' +1 'Jury Kids' \
-    | sed -e '/Sop2/d' >> 'Jury Kids soprano 1'.mp3.urllist
-
-### generic Jury Kids alto MP3s
-./extract-column-links.pl "$INDEX" \
-    'Alto Chorus MP3s' +0 'Jury Kids' \
-    | sed -e '/XXXtextXXX/d' > 'Jury Kids alto'.mp3.urllist
-./extract-column-links.pl "$INDEX" \
-    'Alto Chorus MP3s' +1 'Jury Kids' \
-    | sed -e '/XXXtextXXX/d' >> 'Jury Kids alto'.mp3.urllist
-
-### generic Guards tenor MP3s
-./extract-column-links.pl "$INDEX" \
-    'Tenor and Bass Chorus MP3s' +0 'Security' | uniq \
-    | sed -e '/Bass/I{;/TenBass/!d;};/GuardsLo/d;/ChorusLo/d;/DahsLo/d' \
-    > 'Guards tenor all'.mp3.urllist
-./extract-column-links.pl "$INDEX" \
-    'Tenor and Bass Chorus MP3s' +1 'Security' | uniq \
-    | sed -e '/Bass/I{;/TenBass/!d;};/GuardsLo/d;/ChorusLo/d;/DahsLo/d' \
-    >> 'Guards tenor all'.mp3.urllist
-
-### generic Guards bass MP3s
-./extract-column-links.pl "$INDEX" \
-    'Tenor and Bass Chorus MP3s' +0 'Security' | uniq \
-    | sed -e '/Ten/I{;/TenBass/!d;};/GuardsHi/d;/ChorusHi/d;/DahsHi/d' \
-    > 'Guards bass all'.mp3.urllist
-./extract-column-links.pl "$INDEX" \
-    'Tenor and Bass Chorus MP3s' +1 'Security' | uniq \
-    | sed -e '/Ten/I{;/TenBass/!d;};/GuardsHi/d;/ChorusHi/d;/DahsHi/d' \
-    >> 'Guards bass all'.mp3.urllist
+if [ -e .generate-score ]; then
+    echo "... score" >&2
+    ./plinks.pl "$INDEX_PDF" \
+	| sed -e '/\.pdf$/I!d;/Score/!d' > score.pdf.urllist
+fi
