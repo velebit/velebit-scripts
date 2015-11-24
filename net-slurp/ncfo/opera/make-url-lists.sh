@@ -40,7 +40,8 @@ echo "... individual parts" >&2
 
 ### Katarina (???s soprano high)
 # MP3s
-sed -e '/^soprano p\(61\|71\|105\) lo	/d;s/^[^	]*	//' \
+sed -e '/^soprano p\(61\|71\|105\) lo	/d' \
+    -e 's/^\([^	]*\)	\(.*\)$/\2	out_file_suffix:---\1/' \
     "$DIR"/mynas-s.mp3.tmplist > Katarina.mp3.urllist
 
 ## unstructured MP3 links following the table...
@@ -49,41 +50,58 @@ sed -e '/^soprano p\(61\|71\|105\) lo	/d;s/^[^	]*	//' \
 #          -e '/^Soprano/!d;s/^[^	]*	//' \
 #          -e '/^[^	]*Meerkat/I!d;s/^[^	]*	//' \
 #          -e '/[^	]*low/I!d;s/^[^	]*	//' >> Katarina.mp3.urllist
-# video
-./plinks.pl -h -t "$INDEX_VIDEO" \
-    | sed -e '/^[^	]*VIDEO/I!d;s/^[^	]*	//' \
-          -e '/^[^	]*chorus/I!d;s/^[^	]*	//' \
-    > Katarina.video.urllist
 
 ### Abbe and bert (???s tenor)
 # MP3s
-sed -e 's/^[^	]*	//' \
+sed -e 's/^\([^	]*\)	\(.*\)$/\2	out_file_suffix:---\1/' \
     "$DIR"/mynas-t.mp3.tmplist > Abbert.mp3.urllist
 
 ### Laura and Avery (???s soprano low)
 # MP3s
-sed -e '/^soprano p\(61\|71\|105\) hi	/d;s/^[^	]*	//' \
-    "$DIR"/mynas-s.mp3.tmplist > Lauravery.mp3.urllist
+sed -e '/^soprano p\(61\|71\|105\) hi	/d' \
+    -e 's/^\([^	]*\)	\(.*\)$/\2	out_file_suffix:---\1/' \
+    "$DIR"/mynas-s.mp3.tmplist > Laura+Avery.mp3.urllist
+
+#####  video
+echo "... video" >&2
+if [ "$INDEX_VIDEO" = "$INDEX" ]; then
+    tmplist=big.mp3.tmplist
+else
+    tmplist=big.video.tmplist
+fi
+if [ ! -e "$tmplist" ]; then
+    ./plinks.pl -h -t "$INDEX_VIDEO" > "$tmplist"
+fi
+cat "$tmplist" \
+    | sed -e '/^[^	]*VIDEO/I!d;s/^[^	]*	//' \
+          -e '/^[^	]*chorus/I!d;s/^[^	]*	//' \
+    > Katarina.video.urllist
 
 ### demo MP3s
 if [ -e .generate-demo ]; then
     echo "... demo" >&2
-    if [ ! -e big.mp3.tmplist ]; then
-	./plinks.pl -h -t "$INDEX" > big.mp3.tmplist
+    tmplist=big.mp3.tmplist
+    if [ ! -e "$tmplist" ]; then
+	./plinks.pl -h -t "$INDEX" > "$tmplist"
     fi
-    cat big.mp3.tmplist \
-	| sed -e '/\.mp3$/I!d;/^[^	]*demo/I!d;/complete	/Id;s/.*	//' \
+    cat "$tmplist" \
+	| sed -e '/\.mp3$/I!d;/^[^	]*demo/I!d;/complete	/Id' \
+	      -e 's/^[^	]*	//' \
+	      -e 's/^\([^	]*\)	\(.*\)$/\2	out_file:\1/' \
 	> demo.mp3.urllist
 fi
 
 ### orchestra-only MP3s
 if [ -e .generate-orchestra ]; then
     echo "... orchestra" >&2
-    if [ ! -e big.mp3.tmplist ]; then
-	./plinks.pl -h -t "$INDEX" > big.mp3.tmplist
+    tmplist=big.mp3.tmplist
+    if [ ! -e "$tmplist" ]; then
+	./plinks.pl -h -t "$INDEX" > "$tmplist"
     fi
-    cat big.mp3.tmplist \
-	| sed -e '/\.mp3$/I!d;/^[^	]*orchestra/I!d;/complete	/Id;s/.*	//' \
+    cat "$tmplist" \
+	| sed -e '/\.mp3$/I!d;/^[^	]*orchestra/I!d;/complete	/Id' \
+	      -e 's/^[^	]*	//' \
+	      -e 's/^\([^	]*\)	\(.*\)$/\2	out_file:\1/' \
 	> orchestra.mp3.urllist
 fi
 

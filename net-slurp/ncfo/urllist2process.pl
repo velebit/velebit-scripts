@@ -14,8 +14,19 @@ GetOptions('source-prefix|s=s' => \$SRC_PREFIX,
 
 while (<>) {
   chomp;
-  s,.*/,,;
-  s,\%(2[0-9A-E]),chr(hex($1)),eig;
-  my $dir = $ARGV;  $dir =~ s,.*/,,;  $dir =~ s,\..*,,;
-  print "$SRC_PREFIX$_=$DST_PREFIX$dir/$_\n";
+  my ($url, @tags) = split /\t/, $_;
+  my %tags = map +($_->[0] => (defined $_->[1] ? $_->[1] : 1)),
+    map [split /:/, $_, 2], @tags;
+  my $file = $url;
+  $file =~ s,.*/,,;
+  $file =~ s,\%(2[0-9A-E]),chr(hex($1)),eig;
+  my $dir = $ARGV;
+  $dir =~ s,.*/,,;
+  $dir =~ s,\..*,,;
+  my ($dst_base, $ext) = ($file =~ /^(.*?)((?:\.[^.]*)?)$/);
+  exists $tags{out_file} and $dst_base = $tags{out_file};
+  exists $tags{out_file_prefix} and $dst_base .= $tags{out_file_prefix};
+  exists $tags{out_file_suffix} and $dst_base .= $tags{out_file_suffix};
+  $dst_base =~ s,[_/]+,_,g;
+  print "$SRC_PREFIX$file=$DST_PREFIX$dir/$dst_base$ext\n";
 }

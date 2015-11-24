@@ -22,7 +22,7 @@ rm -f "$dir/$file".orig
 
 rm -f "$dir"/index.html; mv "$dir/$file" "$dir"/index.html
 ./make-url-lists.sh "$dir"/index.html
-sort *."$type".urllist | uniq \
+sed -e 's/	.*//' *."$type".urllist | sort | uniq \
     | sed -e '/\.[Pp][Dd][Ff]$/!d' \
     > "$type"-master.urllist
 wget --load-cookies cookies.txt -i "$type"-master.urllist \
