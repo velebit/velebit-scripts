@@ -14,14 +14,22 @@
 use warnings;
 use strict;
 
-my %entries;
+my $SORTED = 0;
+my @dir_entries;
 while (@ARGV) {
   my $dir = shift @ARGV;
+  ($dir eq '--sort' or $dir eq '-s') and $SORTED = 1, next;
   $dir eq '--' and last;
   my @files = glob "$dir/*";
   s,.*/,, for @files;
   my $name = $dir;  $name =~ s,.*/,,;  $name =~ s,.*\.,,;
-  push @{$entries{$name}}, map "$dir/$_=../$name/$_", @files;
+  my ($entry) = grep $_->[0] eq $name, @dir_entries;
+  if (! defined $entry) {
+    push @dir_entries, [$name, []];
+    ($entry) = grep $_->[0] eq $name, @dir_entries
+      or die "internal error";
+  }
+  push @{$entry->[1]}, map "$dir/$_=../$name/$_", @files;
 }
 
 my @entries = <>;
@@ -32,14 +40,16 @@ sub out_path ( $ ) { (split /=/, $_[0], 2)[1]; }
 my @out_paths = map out_path($_), @entries;
 
 my @extra_entries;
-for my $name (sort keys %entries) {
+for my $entry (@dir_entries) {
+  my $name = $entry->[0];
   if (scalar grep $_ =~ m!/\Q$name\E/!, @out_paths) {
-    push @extra_entries, @{$entries{$name}};
+    push @extra_entries, @{$entry->[1]};
   } else {
     print STDERR "Skipped extra: $_\n"
-      for map out_path($_), @{$entries{$name}};
+      for map out_path($_), @{$entry->[1]};
   }
 }
 
 push @entries, @extra_entries;
-print "$_\n" for sort { out_path($a) cmp out_path($b) } @entries;
+@entries = sort { out_path($a) cmp out_path($b) } @entries if $SORTED;
+print "$_\n" for @entries;
