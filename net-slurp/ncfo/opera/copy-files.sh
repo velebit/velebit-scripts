@@ -12,7 +12,11 @@ while true; do
     esac
 done
 
-CF_ARGS=()
+CF_ARGS=(--no-replace-any-prefix --prefix ''
+    -r '^(.*?)[-_]WWscene(\d+(?:[-\.]\d+)?)[-_]?=WW$2_$1_'
+    -r '^WW(\d+)-(\d+)=WW$1.$2'
+    -r '[-_]Practice(?:$|(?=[-_]))=' --two-digit-numbers
+)
 
 inspect() {
     #tee "log-$1.tmp"
