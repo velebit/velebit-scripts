@@ -30,7 +30,6 @@ if [ -n "${SORT_BY_NAME[*]}" -a -n "${STRIP_PREFIX[*]}" ]; then
     exit 1
 fi
 
-## should match the code in playlists.sh
 sort_tracks () {
 #    sort -t "$sep" -k 2
     perl -lne '$o=$_;s,.*/,,;s,[-_].*,,;print "$_\t$o"' \
