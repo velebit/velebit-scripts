@@ -13,13 +13,15 @@ sub Usage () {
   exit 1;
 }
 
+our $VERBOSITY = 0;
 our $SHOW_HEADING = 0;
 our $SHOW_TEXT = 0;
 our $SHOW_PARENT1_TEXT = 0;
 our $SHOW_SAME_LINE_TEXT = 0;
 our $STRONG_IS_HEADING_TOO = 0;
 our $TABLE_LEVEL;
-GetOptions('--show-heading|h!' => \$SHOW_HEADING,
+GetOptions('--verbose|v+' => \$VERBOSITY,
+	   '--show-heading|h!' => \$SHOW_HEADING,
 	   '--bold-is-heading|b' =>
 	   sub { $STRONG_IS_HEADING_TOO = 1;  $SHOW_HEADING = 1 },
 	   '--show-text|t!' => \$SHOW_TEXT,
@@ -31,9 +33,11 @@ GetOptions('--show-heading|h!' => \$SHOW_HEADING,
 @ARGV == 1 or Usage;
 
 
+printf STDERR "    %-67s ", "Reading page..." if $VERBOSITY;
 my $tree = HTML::TreeBuilder->new;
 $tree->parse_file($ARGV[0]);
 $tree->objectify_text();
+print STDERR "done.\n" if $VERBOSITY;
 
 
 sub get_text ( @ ) {
@@ -91,45 +95,79 @@ sub get_headings ( $ ) {
        $node->look_down(_tag => qr/^(?:h\d|title|strong)$/));
 }
 
+my %headings_cache;
+sub traverse_to_heading ( $ );
+
+sub traverse_to_heading ( $ ) {
+  my ($node) = @_;
+  return unless $node;
+  return $headings_cache{$node}
+    if exists $headings_cache{$node};
+
+  for my $left (reverse $node->left) {
+    return $headings_cache{$left}
+      if exists $headings_cache{$left};
+    my @headings = get_headings($left);
+    @headings and return $headings_cache{$node} = $headings[-1];
+  }
+
+  $headings_cache{$node} = traverse_to_heading $node->parent;
+}
+
 sub find_heading ( $ ) {
   my ($node) = @_;
   my (@headings) = get_headings($node);
+  # For our own headings, we pick the first, but don't cache it.
   @headings and return $headings[0];
- SEARCH_LEFT:
-  while ($node) {
-    if (scalar $node->left) {
-      $node = $node->left;
-    } else {
-      $node = $node->parent;
-      redo SEARCH_LEFT;
-    }
-    @headings = get_headings($node);
-    @headings and return $headings[-1];
-  }
-  return;
+
+  traverse_to_heading $node;
+}
+
+sub find_heading_text ( $ ) {
+  my ($node) = @_;
+  my ($heading) = find_heading($node);
+  $heading ? get_text($heading) : '';
 }
 
 
-my @pages;
 # only look at <a ...> tags
-for my $tag ($tree->look_down(_tag => 'a')) {
-  my $href = $tag->attr('href')
-    or next;
-  defined $TABLE_LEVEL
-    and scalar(@{[$tag->look_up(_tag => 'table')]}) != $TABLE_LEVEL
-      and next;
-  my $text = get_text($tag) if $SHOW_TEXT;
-  my $parent1_text = get_text($tag->parent) if $SHOW_PARENT1_TEXT;
-  my $same_line_text = get_text(get_same_line_siblings($tag))
-    if $SHOW_SAME_LINE_TEXT;
-  my $heading = find_heading($tag) if $SHOW_HEADING;
-  $heading = $heading ? get_text($heading) : '' if $SHOW_HEADING;
-  push @pages, { href => $href, heading => $heading,
-		 parent1_text => $parent1_text,
-		 same_line_text => $same_line_text,
-		 text => $text };
+printf STDERR "    %-67s ", "Traversing <a> tags..." if $VERBOSITY;
+my @pages = grep defined $_->{href},
+  map +{ tag => $_, href => $_->attr('href') }, $tree->look_down(_tag => 'a');
+print STDERR "done.\n" if $VERBOSITY;
+
+if (defined $TABLE_LEVEL) {
+  printf STDERR "    %-67s ", "Limiting by table level..." if $VERBOSITY;
+  @pages = grep scalar(@{[$_->{tag}->look_up(_tag => 'table')]}) == $TABLE_LEVEL, @pages;
+  print STDERR "done.\n" if $VERBOSITY;
 }
 
+if ($SHOW_TEXT) {
+  printf STDERR "    %-67s ", "Extracting tag text..." if $VERBOSITY;
+  $_->{text} = get_text($_->{tag}) for @pages;
+  print STDERR "done.\n" if $VERBOSITY;
+}
+
+if ($SHOW_PARENT1_TEXT) {
+  printf STDERR "    %-67s ", "Extracting parent text..." if $VERBOSITY;
+  $_->{parent1_text} = get_text($_->{tag}->parent) for @pages;
+  print STDERR "done.\n" if $VERBOSITY;
+}
+
+if ($SHOW_SAME_LINE_TEXT) {
+  printf STDERR "    %-67s ", "Extracting text on the same line..." if $VERBOSITY;
+  $_->{same_line_text} = get_text(get_same_line_siblings($_->{tag})) for @pages;
+  print STDERR "done.\n" if $VERBOSITY;
+}
+
+if ($SHOW_HEADING) {
+  printf STDERR "    %-67s ", "Extracting headings..." if $VERBOSITY;
+  $_->{heading} = find_heading_text($_->{tag}) for @pages;
+  print STDERR "done.\n" if $VERBOSITY;
+}
+
+
+printf STDERR "    %-67s ", "Producing output..." if $VERBOSITY;
 my @fields = ();
 # should be in order of appearance!
 push @fields, 'heading' if $SHOW_HEADING;
@@ -139,3 +177,4 @@ push @fields, 'text' if $SHOW_TEXT;
 push @fields, 'href';
 
 print join("\t", @$_{@fields}) . "\n" for @pages;
+print STDERR "done.\n" if $VERBOSITY;
