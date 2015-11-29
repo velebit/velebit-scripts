@@ -9,8 +9,8 @@ if [ ! -d "$DIR" ]; then mkdir "$DIR"; fi
 ### generate simple URL lists
 
 FULL="$DIR/raw0.tmplist"
-#./plinks.pl -b -pt -t "$INDEX" > "$FULL"
-./plinks.pl -b -lt -t "$INDEX" > "$FULL"
+#./plinks.pl -hb -pt -t "$INDEX" > "$FULL"
+./plinks.pl -hb -lt -t "$INDEX" > "$FULL"
 for voice in soprano alto tenor bass; do
     LEVEL1="$DIR/raw1-$voice.tmplist"
     sed -e '/^'"$voice"'.*\.mp3$/I!d' \
