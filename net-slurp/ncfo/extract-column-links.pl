@@ -3,13 +3,30 @@ use warnings;
 use strict;
 
 use HTML::TreeBuilder;
+use Getopt::Long;
+use Carp qw( carp croak );
 
 # ----------------------------------------------------------------------
 
 sub Usage ( @ ) {
-  die join "\n", @_, <<"EndOfMessage";
-Usage: $0 {HTML_FILE} {TABLE_LABEL} [+{TABLE_INDEX}] {COLUMN_LABEL}
-Arguments:
+  die join "\n\n", @_, <<"EndOfMessage";
+Usage: $0 [options | {HTML_FILE} {TABLE_LABEL} [+{TABLE_INDEX}] {COLUMN_LABEL}]
+Global options:
+  --file HTML_FILE       (-f)  The name of the input HTML file.
+  --verbose              (-v)  Display additional output messages.
+  --print-links          (-l)  Prefix URLs with their link text and a tab.
+Repeatable options:
+  --message TEXT         (-m)  Print a message before processing the table.
+  --table TABLE_LABEL    (-t)  The label in HTML before the desired table.
+  --index TABLE_INDEX    (-i)  The index offset to the desired table (e.g. to
+                               get act 2).  [default: 0]
+  --column COLUMN_LABEL  (-c)  The label of the desired column in the HTML
+                               table.
+  --output OUTPUT_FILE   (-o)  Write output to the specified file.
+  --go                   (-G)  Commit the preceding options so they can be
+                               specified several times.
+
+Arguments (the old way of specifying what to do):
   HTML_FILE:     The name of the input HTML file.
   TABLE_LABEL:   The label in HTML before the desired table.
   TABLE_INDEX:   The index offset to the desired table (e.g. to get act 2).
@@ -19,30 +36,122 @@ EndOfMessage
 }
 
 
+our $INPUT_FILE;
+sub set_input_file ( $ ) {
+  defined $INPUT_FILE and warn("More than one input file specified." .
+			       "  Ignoring '$INPUT_FILE'.\n");
+  ($INPUT_FILE) = @_;
+}
+
+my @item_list;
+my $item = {};
+
+sub commit () {
+  if (defined $item->{tbl_label} and defined $item->{col_label}) {
+    push @item_list, $item;
+  } else {
+    print STDERR "Warning: item incomplete; skipped!\n";
+  }
+  $item = {};
+}
+
+sub set_output_file ( $ ) {
+  my $auto_commit = !! %$item;
+  defined $item->{output} and warn("More than one output file specified." .
+				   "  Ignoring '$item->{output}'.\n");
+  ($item->{output}) = @_;
+
+  commit if $auto_commit;
+}
+
+sub set_msg ( $ ) {
+  defined $item->{msg} and warn("Multiple messages specified." .
+				"  Ignoring '$item->{msg}'.\n");
+  ($item->{msg}) = @_;
+}
+sub set_tbl_label ( $ ) {
+  defined $item->{tbl_label} and warn("Multiple table labels specified." .
+				      "  Ignoring '$item->{tbl_label}'.\n");
+  ($item->{tbl_label}) = @_;
+}
+sub set_tbl_idx ( $ ) {
+  defined $item->{tbl_idx} and warn
+("Multiple table indices specified." .
+				    "  Ignoring '$item->{tbl_idx}'.\n");
+  ($item->{tbl_idx}) = @_;
+}
+sub set_col_label ( $ ) {
+  defined $item->{col_label} and warn("Multiple table labels specified." .
+				      "  Ignoring '$item->{col_label}'.\n");
+  ($item->{col_label}) = @_;
+}
+
 our $VERBOSITY = 0;
 our $PRINT_LINK_TEXT;
 
-while (@ARGV and $ARGV[0] =~ /^-/) {
-  ($ARGV[0] eq '--verbose' or $ARGV[0] eq '-v')
-    and ++$VERBOSITY, shift(@ARGV), next;
-  ($ARGV[0] eq '--print-links' or $ARGV[0] eq '--links' or $ARGV[0] eq '-l')
-    and $PRINT_LINK_TEXT=1, shift(@ARGV), next;
-  die "Unknown argument '$ARGV[0]'";
+GetOptions('file|f=s' => sub { set_input_file $_[1] },
+	   'verbose|v+' => \$VERBOSITY,
+	   'print-links|links|l!' => \$PRINT_LINK_TEXT,
+	   'message|m=s' => sub { set_msg $_[1] },
+	   'table|t=s' => sub { set_tbl_label $_[1] },
+	   'index|i=i' => sub { set_tbl_label $_[1] },
+	   'column|c=s' => sub { set_col_label $_[1] },
+	   'output|o=s' => sub { set_output_file $_[1] },
+	   'go|G' => sub { commit },
+          ) or Usage;
+
+
+sub must_be_defined ( $ ) {
+  my ($value) = @_;
+  defined $value or Usage "too few args";
+  $value;
 }
-my $file      = shift @ARGV or die "too few args";
-my $tbl_label = shift @ARGV or die "too few args";
-my $tbl_idx   = 0;
-$tbl_idx      = 0 + shift @ARGV if @ARGV and $ARGV[0] =~ /^\+\d+$/;
-my $col_label = shift @ARGV; defined $col_label or die "too few args";
-@ARGV and die "too many args";
+
+
+if (@ARGV and ! defined $INPUT_FILE) {
+  set_input_file(shift @ARGV or Usage "too few args");
+}
+if (@ARGV) {
+  set_tbl_label(shift @ARGV or Usage "too few args");
+  set_tbl_idx(0 + shift @ARGV) if @ARGV and $ARGV[0] =~ /^\+\d+$/;
+  set_col_label(must_be_defined shift @ARGV);
+  commit;
+}
+@ARGV and Usage "too many args";
+defined $INPUT_FILE or Usage "input file not specified";
 
 # ----------------------------------------------------------------------
 
-sub slurp ( $ ) {
+sub input_file_handle ( $ ) {
   my ($file) = @_;
-  open my $FH, '<', $file or die "open($file): $!";
+  open my $fh, '<', $file or die "open(<$file): $!";
+  $fh;
+}
+
+sub output_file_handle ( $ ) {
+  my ($file) = @_;
+  open my $fh, '>', $file or die "open(>$file): $!";
+  $fh;
+}
+
+sub stdout_handle () {
+  open my $fh, '>&', \*STDOUT or die "open(>&STDOUT): $!";
+  $fh;
+}
+
+sub output_handle ( $ ) {
+  my ($file) = @_;
+  if (! defined $file or $file eq '' or $file eq '-') {
+    return stdout_handle;
+  } else {
+    return output_file_handle $file;
+  }
+}
+
+sub slurp_from_handle ( $ ) {
+  my ($fh) = @_;
   local ($/) = undef;
-  my $d = scalar <$FH>;
+  my $d = scalar <$fh>;
   $d;
 }
 
@@ -63,17 +172,26 @@ sub clean_text ( $ ) {
 
 # ----------------------------------------------------------------------
 
-{
-  printf STDERR "%-72s", "  Reading page data... " if $VERBOSITY;
-  my $content = slurp $file;
+sub read_page ( $ ) {
+  my ($handle) = @_;
+  printf STDERR "    %-67s ", "Reading page data..." if $VERBOSITY;
+  my $content = slurp_from_handle $handle;
   print STDERR "done.\n" if $VERBOSITY;
 
-  printf STDERR "%-72s", "  Parsing data into a tree... " if $VERBOSITY;
+  printf STDERR "    %-67s ", "Parsing data into a tree..." if $VERBOSITY;
   my $tree = HTML::TreeBuilder->new;
   $tree->parse_content($content);
   print STDERR "done.\n" if $VERBOSITY;
 
-  printf STDERR "%-72s", "  Finding table... " if $VERBOSITY;
+  $tree;
+}
+
+sub extract ( $$$$$$ ) {
+  my ($tree, $handle, $msg, $tbl_label, $tbl_idx, $col_label) = @_;
+
+  print STDERR "--- $msg\n" if defined $msg and length $msg;
+
+  printf STDERR "    %-67s ", "Finding table..." if $VERBOSITY;
   my @matches = $tree->look_down(_tag => 'p',
 				  sub { clean_text($_[0]) =~ /$tbl_label/ });
   @matches      or die "No results found";
@@ -100,7 +218,7 @@ sub clean_text ( $ ) {
   }
   print STDERR "done.\n" if $VERBOSITY;
 
-  printf STDERR "%-72s", "  Processing table... " if $VERBOSITY;
+  printf STDERR "    %-67s ", "Processing table..." if $VERBOSITY;
   my @rows = $table->content_list;
   @rows == 1 and $rows[0]->tag eq 'tbody' and @rows = $rows[0]->content_list;
   @rows = grep $_->tag eq 'tr', @rows;
@@ -137,7 +255,7 @@ sub clean_text ( $ ) {
   }
   print STDERR "done.\n" if $VERBOSITY;
 
-  printf STDERR "%-72s", "  Finding column... " if $VERBOSITY;
+  printf STDERR "    %-67s ", "Finding column..." if $VERBOSITY;
   @matches = grep $cells[0][$_] && clean_text($cells[0][$_]) =~ /$col_label/,
     0..$#{$cells[0]};
   @matches      or die "No results found";
@@ -148,8 +266,17 @@ sub clean_text ( $ ) {
     map $_->look_down(_tag => 'a', href => qr/./),
       grep defined, map $cells[$_][$col_idx], 0..$#cells;
   for my $link (@links) {
-    print clean_text($link) . "\t" if $PRINT_LINK_TEXT;
-    print $link->attr('href') . "\n";
+    print $handle clean_text($link) . "\t" if $PRINT_LINK_TEXT;
+    print $handle $link->attr('href') . "\n";
   }
   print STDERR "done.\n" if $VERBOSITY;
+}
+
+
+{
+  my $tree = read_page input_file_handle $INPUT_FILE;
+  for my $item (@item_list) {
+    extract $tree, output_handle($item->{output}), $item->{msg},
+      $item->{tbl_label}, ($item->{tbl_idx} || 0), $item->{col_label};
+  }
 }

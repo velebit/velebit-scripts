@@ -9,31 +9,42 @@ if [ ! -d "$DIR" ]; then mkdir "$DIR"; fi
 
 ##### generic prep
 
-satb_section () {
+reset_sections () {
+    ecl_args=(-f "$INDEX")
+}
+reset_sections
+
+add_satb_section () {
     local section="$1"; shift
     local base="$1"; shift
 
-    echo "... $base ($section)" >&2
+    ecl_args+=(-m "$base ($section)")
+    # update section search expression; should happen AFTER defining message!
     section="`echo "$section" | sed -e 's,/, */ *,'`"
 
     for voice in 'Soprano' 'Alto' 'Tenor' 'Bass'; do
 	short="`echo "$voice" | sed -e 's/^\(.\).*/\1/;y/SATB/satb/'`"
-	./extract-column-links.pl -l "$INDEX" "$section" "$voice" \
-	    > "$DIR"/"$base-$short.mp3.tmplist"
+	ecl_args+=(-t "$section" -c "$voice" -o "$DIR"/"$base-$short.mp3.tmplist")
     done
-    ./extract-column-links.pl -l "$INDEX" "$section" '^$' \
-	> "$DIR"/"$base-solos.mp3.tmplist"
+    ecl_args+=(-t "$section" -c '^$' -o "$DIR"/"$base-solos.mp3.tmplist")
 }
 
-satb_section 'Courtiers/Peacocks' 'peacocks'
-satb_section 'Courtiers/Frogs' 'frogs'
-satb_section 'Courtiers/Myna Birds' 'mynas'
-satb_section 'Weavers/Jackals' 'jackals'
-satb_section 'Village Elders/Doves/Wise Teachers' 'elders'
-satb_section 'Milkmaids/Washerwomen/Koel-birds' 'koels'
-satb_section 'Village Children/Mosquitoes' 'mosquitoes'
-satb_section 'Prime Ministers/Brain-fever Birds' 'ministers'
+extract_sections () {
+    echo "... sections" >&2
+    ./extract-column-links.pl -l "${ecl_args[@]}"
+    reset_sections
+}
+
+add_satb_section 'Courtiers/Peacocks' 'peacocks'
+add_satb_section 'Courtiers/Frogs' 'frogs'
+add_satb_section 'Courtiers/Myna Birds' 'mynas'
+add_satb_section 'Weavers/Jackals' 'jackals'
+add_satb_section 'Village Elders/Doves/Wise Teachers' 'elders'
+add_satb_section 'Milkmaids/Washerwomen/Koel-birds' 'koels'
+add_satb_section 'Village Children/Mosquitoes' 'mosquitoes'
+add_satb_section 'Prime Ministers/Brain-fever Birds' 'ministers'
 # 'Five Kids'
+extract_sections
 
 ##### individual parts
 echo "... individual parts" >&2
@@ -63,15 +74,16 @@ sed -e '/^soprano p\(61\|71\|105\) hi	/d' \
     "$DIR"/mynas-s.mp3.tmplist > Laura+Avery.mp3.urllist
 
 #####  video
-echo "... video" >&2
 if [ "$INDEX_VIDEO" = "$INDEX" ]; then
     tmplist=big.mp3.tmplist
 else
     tmplist=big.video.tmplist
 fi
 if [ ! -e "$tmplist" ]; then
+    echo "... big list" >&2
     ./plinks.pl -h -t "$INDEX_VIDEO" > "$tmplist"
 fi
+echo "... video" >&2
 cat "$tmplist" \
     | sed -e '/^[^	]*VIDEO/I!d;s/^[^	]*	//' \
           -e '/^[^	]*chorus/I!d;s/^[^	]*	//' \
@@ -79,11 +91,12 @@ cat "$tmplist" \
 
 ### demo MP3s
 if [ -e .generate-demo ]; then
-    echo "... demo" >&2
     tmplist=big.mp3.tmplist
     if [ ! -e "$tmplist" ]; then
+	echo "... big list" >&2
 	./plinks.pl -h -t "$INDEX" > "$tmplist"
     fi
+    echo "... demo" >&2
     cat "$tmplist" \
 	| sed -e '/\.mp3$/I!d;/^[^	]*demo/I!d;/complete	/Id' \
 	      -e 's/^[^	]*	//' \
@@ -93,11 +106,12 @@ fi
 
 ### orchestra-only MP3s
 if [ -e .generate-orchestra ]; then
-    echo "... orchestra" >&2
     tmplist=big.mp3.tmplist
     if [ ! -e "$tmplist" ]; then
+	echo "... big list" >&2
 	./plinks.pl -h -t "$INDEX" > "$tmplist"
     fi
+    echo "... orchestra" >&2
     cat "$tmplist" \
 	| sed -e '/\.mp3$/I!d;/^[^	]*orchestra/I!d;/complete	/Id' \
 	      -e 's/^[^	]*	//' \
