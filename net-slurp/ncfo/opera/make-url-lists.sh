@@ -86,7 +86,7 @@ fi
 echo "... video" >&2
 cat "$tmplist" \
     | sed -e '/^[^	]*VIDEO/I!d;s/^[^	]*	//' \
-          -e '/^[^	]*chorus/I!d;s/^[^	]*	//' \
+          -e 's/^[^	]*	//' \
     > Katarina.video.urllist
 
 ### demo MP3s
@@ -120,8 +120,16 @@ if [ -e .generate-orchestra ]; then
 fi
 
 ### score PDFs
-if [ -e .generate-score ]; then
-    echo "... score" >&2
-    ./plinks.pl "$INDEX_PDF" \
-	| sed -e '/\.pdf$/I!d;/Score/!d' > score.pdf.urllist
+if [ "$INDEX_PDF" = "$INDEX" ]; then
+    tmplist=big.mp3.tmplist
+else
+    tmplist=big.pdf.tmplist
 fi
+if [ ! -e "$tmplist" ]; then
+    echo "... big list" >&2
+    ./plinks.pl -h -t "$INDEX_PDF" > "$tmplist"
+fi
+echo "... score" >&2
+./plinks.pl "$INDEX_PDF" \
+    | sed  -e 's/^[^	]*	//;s/^[^	]*	//' \
+    -e '/\.pdf$/I!d;/LibrettoBook/d' > score.pdf.urllist
