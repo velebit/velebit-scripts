@@ -18,7 +18,7 @@ add_satb_section () {
     local section="$1"; shift
     local base="$1"; shift
 
-    ecl_args+=(-m "$base ($section)")
+    ecl_args+=(-m "  .   $base ($section)")
     # update section search expression; should happen AFTER defining message!
     section="`echo "$section" | sed -e 's,/, */ *,'`"
 

@@ -189,7 +189,7 @@ sub read_page ( $ ) {
 sub extract ( $$$$$$ ) {
   my ($tree, $handle, $msg, $tbl_label, $tbl_idx, $col_label) = @_;
 
-  print STDERR "--- $msg\n" if defined $msg and length $msg;
+  print STDERR "$msg\n" if defined $msg and length $msg;
 
   printf STDERR "    %-67s ", "Finding table..." if $VERBOSITY;
   my @matches = $tree->look_down(_tag => 'p',
