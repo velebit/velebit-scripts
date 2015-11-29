@@ -81,20 +81,24 @@ else
 fi
 if [ ! -e "$tmplist" ]; then
     echo "... big list" >&2
-    ./plinks.pl -h -t "$INDEX_VIDEO" > "$tmplist"
+    ./plinks.pl -h -b -t "$INDEX_VIDEO" > "$tmplist"
 fi
 echo "... video" >&2
 cat "$tmplist" \
-    | sed -e '/^[^	]*VIDEO/I!d;s/^[^	]*	//' \
-          -e 's/^[^	]*	//' \
-    > Katarina.video.urllist
+    | sed -e '/^[^	]*VIDEO/I!d;/^[^	]*MIRROR/I!d' \
+          -e 's/^[^	]*	//;s/^[^	]*	//' \
+    > mirror.video.urllist
+cat "$tmplist" \
+    | sed -e '/^[^	]*VIDEO/I!d;/^[^	]*MIRROR/Id' \
+          -e 's/^[^	]*	//;s/^[^	]*	//' \
+    > regular.video.urllist
 
 ### demo MP3s
 if [ -e .generate-demo ]; then
     tmplist=big.mp3.tmplist
     if [ ! -e "$tmplist" ]; then
 	echo "... big list" >&2
-	./plinks.pl -h -t "$INDEX" > "$tmplist"
+	./plinks.pl -h -b -t "$INDEX" > "$tmplist"
     fi
     echo "... demo" >&2
     cat "$tmplist" \
@@ -109,7 +113,7 @@ if [ -e .generate-orchestra ]; then
     tmplist=big.mp3.tmplist
     if [ ! -e "$tmplist" ]; then
 	echo "... big list" >&2
-	./plinks.pl -h -t "$INDEX" > "$tmplist"
+	./plinks.pl -h -b -t "$INDEX" > "$tmplist"
     fi
     echo "... orchestra" >&2
     cat "$tmplist" \
@@ -127,7 +131,7 @@ else
 fi
 if [ ! -e "$tmplist" ]; then
     echo "... big list" >&2
-    ./plinks.pl -h -t "$INDEX_PDF" > "$tmplist"
+    ./plinks.pl -h -b -t "$INDEX_PDF" > "$tmplist"
 fi
 echo "... score" >&2
 ./plinks.pl "$INDEX_PDF" \
