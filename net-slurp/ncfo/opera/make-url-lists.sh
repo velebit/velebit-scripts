@@ -49,11 +49,15 @@ extract_sections
 ##### individual parts
 echo "... individual parts" >&2
 
-### Katarina (???s soprano high)
+### Katarina (PMs soprano high)
 # MP3s
-sed -e '/^soprano p\(61\|71\|105\) lo	/d' \
+sed -e '/^soprano p\(61\|71\|82\) lo	/d' \
+    -e '/^PM	/d;/^DPM	/d;/^D\^[^6]PM	/d' \
+    -e '/^\(\(middle\|low\) split\|bass\)	.*PM.*scene8-/d' \
+    -e '/^\(\(middle\|low\) split\|tenor\)	.*PM.*scene11-/d' \
+    -e '/^\(middle\|low\) split	.*PM.*scene15-/d' \
     -e 's/^\([^	]*\)	\(.*\)$/\2	out_file_suffix:---\1/' \
-    "$DIR"/mynas-s.mp3.tmplist > Katarina.mp3.urllist
+    "$DIR"/ministers-s.mp3.tmplist > Katarina.mp3.urllist
 
 ## unstructured MP3 links following the table...
 #./plinks.pl -b -pt -t -tl 1 "$INDEX" \
@@ -62,16 +66,26 @@ sed -e '/^soprano p\(61\|71\|105\) lo	/d' \
 #          -e '/^[^	]*Meerkat/I!d;s/^[^	]*	//' \
 #          -e '/[^	]*low/I!d;s/^[^	]*	//' >> Katarina.mp3.urllist
 
-### Abbe and bert (???s tenor)
+### Abbe and bert (PMs tenor)
 # MP3s
-sed -e 's/^\([^	]*\)	\(.*\)$/\2	out_file_suffix:---\1/' \
-    "$DIR"/mynas-t.mp3.tmplist > Abbert.mp3.urllist
+sed -e '/^PM	/d;/^DPM	/d;/^D\^[x]PM	/d' \
+    -e '/^\(\(high\|middle\) split\|bass\)	.*PM.*scene8-/d' \
+    -e '/^\(high\|middle\|low\) split	.*PM.*scene11-/d' \
+    -e '/^\(high\|middle\) split	.*PM.*scene15-/d' \
+    -e 's/^\([^	]*\)	\(.*\)$/\2	out_file_suffix:---\1/' \
+    "$DIR"/ministers-t.mp3.tmplist > Abbert.mp3.urllist
 
 ### Laura and Avery (???s soprano low)
 # MP3s
+sed -e '/^soprano p\(61\|71\|82\|105\|120\) hi	/d' \
+    -e 's/^\([^	]*\)	\(.*\)$/\2	out_file_suffix:---\1/' \
+    "$DIR"/peacocks-s.mp3.tmplist > Laura+Avery.mp3.urllist
+
+### Mynas soprano low (keep for now)
+# MP3s
 sed -e '/^soprano p\(61\|71\|105\) hi	/d' \
     -e 's/^\([^	]*\)	\(.*\)$/\2	out_file_suffix:---\1/' \
-    "$DIR"/mynas-s.mp3.tmplist > Laura+Avery.mp3.urllist
+    "$DIR"/mynas-s.mp3.tmplist > mynas-soprano-low.mp3.urllist
 
 #####  video
 if [ "$INDEX_VIDEO" = "$INDEX" ]; then
