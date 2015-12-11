@@ -135,5 +135,6 @@ if [ ! -e "$tmplist" ]; then
 fi
 echo "... score" >&2
 ./plinks.pl "$INDEX_PDF" \
-    | sed  -e 's/^[^	]*	//;s/^[^	]*	//' \
-    -e '/\.pdf$/I!d;/LibrettoBook/d' > score.pdf.urllist
+    | sed  -e '/\.pdf$/I!d;/^[^	]*score/I!d;/LibrettoBook/d' \
+           -e 's/^[^	]*	//' \
+           -e 's/^[^	]*	//' > score.pdf.urllist
