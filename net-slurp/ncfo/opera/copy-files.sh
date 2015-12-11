@@ -25,8 +25,12 @@ while true; do
 done
 
 inspect() {
-    #tee "log-$1.tmp"
-    cat
+    rm -f "log-$1.tmp"
+    if [ -e .inspect ]; then
+	tee "log-$1.tmp"
+    else
+	cat
+    fi
 }
 
 ./make-url-lists.sh
@@ -34,7 +38,8 @@ inspect() {
     | ./extras2process.pl mp3-extras.* | inspect M2 \
     | ./gain-cache.pl | inspect M3 \
     | ./canonicalize-filenames.pl "${CF_ARGS[@]}" | inspect M4 \
-    | ./playlists-from-process.pl | inspect M5 \
+    | ./globally-uniq.pl --sfdd | inspect M5 \
+    | ./playlists-from-process.pl | inspect M6 \
     | ./process-files.pl "${PF_ARGS[@]}"
 ./urllist2process.pl "${U2P_VIDEO_ARGS[@]}" *.video.urllist | inspect V1 \
     | ./process-files.pl "${PF_ARGS[@]}"
