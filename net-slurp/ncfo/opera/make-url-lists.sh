@@ -17,8 +17,10 @@ reset_sections
 add_satb_section () {
     local section="$1"; shift
     local base="$1"; shift
+    local flags_on="$1"; shift
+    local flags_off="$1"; shift
 
-    ecl_args+=(-m "  .   $base ($section)")
+    ecl_args+=(-m "  .   $base ($section)" $flags_on)
     # update section search expression; should happen AFTER defining message!
     section="`echo "$section" | sed -e 's,/, */ *,'`"
 
@@ -26,7 +28,8 @@ add_satb_section () {
 	short="`echo "$voice" | sed -e 's/^\(.\).*/\1/;y/SATB/satb/'`"
 	ecl_args+=(-t "$section" -c "$voice" -o "$DIR"/"$base-$short.mp3.tmplist")
     done
-    ecl_args+=(-t "$section" -c '^$' -o "$DIR"/"$base-solos.mp3.tmplist")
+    ecl_args+=(-t "$section" -c '^$' -o "$DIR"/"$base-solos.mp3.tmplist" \
+	$flags_off)
 }
 
 extract_sections () {
@@ -42,7 +45,9 @@ add_satb_section 'Weavers/Jackals' 'jackals'
 add_satb_section 'Village Elders/Doves/Wise Teachers' 'elders'
 add_satb_section 'Milkmaids/Washerwomen/Koel-birds' 'koels'
 add_satb_section 'Village Children/Mosquitoes' 'mosquitoes'
-add_satb_section 'Prime Ministers/Brain-fever Birds' 'ministers'
+add_satb_section 'Prime Ministers/Brain-fever Birds' 'ministers' \
+    '--line-text' '--no-line-text'
+#    '--rows --line-text' '--no-rows --no-line-text'
 # 'Five Kids'
 extract_sections
 
@@ -51,13 +56,19 @@ echo "... individual parts" >&2
 
 ### Katarina (PMs soprano high)
 # MP3s
-sed -e '/^soprano p\(61\|71\|82\) lo	/d' \
+cat "$DIR"/ministers-s.mp3.tmplist | sed \
+    -e 's/$/	out_file_suffix:---/' \
+    -e 's/^\(page \([1-9][0-9]*\).*	out_file_suffix:---\)$/\1PMs p\2/' \
+    -e 's/^\([^	]*\)	//' \
+    -e '/^soprano p\(61\|71\|82\) lo	/d' \
     -e '/^PM	/d;/^DPM	/d;/^D\^[^6]PM	/d' \
     -e '/^\(\(middle\|low\) split\|bass\)	.*PM.*scene8-/d' \
     -e '/^\(\(middle\|low\) split\|tenor\)	.*PM.*scene11-/d' \
     -e '/^\(middle\|low\) split	.*PM.*scene15-/d' \
-    -e 's/^\([^	]*\)	\(.*\)$/\2	out_file_suffix:---\1/' \
-    "$DIR"/ministers-s.mp3.tmplist > Katarina.mp3.urllist
+    -e 's/^\(\([^	]*\)	.*	out_file_suffix:---\)$/\1\2/' \
+    -e 's/^\([^	]*\)	//' \
+    -e 's/	out_file_suffix:---$//' \
+    > Katarina.mp3.urllist
 
 ## unstructured MP3 links following the table...
 #./plinks.pl -b -pt -t -tl 1 "$INDEX" \
@@ -68,12 +79,18 @@ sed -e '/^soprano p\(61\|71\|82\) lo	/d' \
 
 ### Abbe and bert (PMs tenor)
 # MP3s
-sed -e '/^PM	/d;/^DPM	/d;/^D\^[x]PM	/d' \
+cat "$DIR"/ministers-t.mp3.tmplist | sed \
+    -e 's/$/	out_file_suffix:---/' \
+    -e 's/^\(page \([1-9][0-9]*\).*	out_file_suffix:---\)$/\1PMs p\2/' \
+    -e 's/^\([^	]*\)	//' \
+    -e '/^PM	/d;/^DPM	/d;/^D\^[^4]PM	/d' \
     -e '/^\(\(high\|middle\) split\|bass\)	.*PM.*scene8-/d' \
     -e '/^\(high\|middle\|low\) split	.*PM.*scene11-/d' \
     -e '/^\(high\|middle\) split	.*PM.*scene15-/d' \
-    -e 's/^\([^	]*\)	\(.*\)$/\2	out_file_suffix:---\1/' \
-    "$DIR"/ministers-t.mp3.tmplist > Abbert.mp3.urllist
+    -e 's/^\(\([^	]*\)	.*	out_file_suffix:---\)$/\1\2/' \
+    -e 's/^\([^	]*\)	//' \
+    -e 's/	out_file_suffix:---$//' \
+    > Abbert.mp3.urllist
 
 ### Laura and Avery (???s soprano low)
 # MP3s

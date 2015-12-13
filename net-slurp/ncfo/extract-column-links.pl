@@ -37,6 +37,11 @@ EndOfMessage
 
 
 our $INPUT_FILE;
+our $VERBOSITY = 0;
+our $PRINT_COL0_TEXT = 0;
+our $PRINT_SAME_LINE_TEXT = 0;
+our $PRINT_LINK_TEXT = 0;
+
 sub set_input_file ( $ ) {
   defined $INPUT_FILE and warn("More than one input file specified." .
 			       "  Ignoring '$INPUT_FILE'.\n");
@@ -48,6 +53,9 @@ my $item = {};
 
 sub commit () {
   if (defined $item->{tbl_label} and defined $item->{col_label}) {
+    $item->{flags}{print_col0_text} = $PRINT_COL0_TEXT;
+    $item->{flags}{print_same_line_text} = $PRINT_SAME_LINE_TEXT;
+    $item->{flags}{print_link_text} = $PRINT_LINK_TEXT;
     push @item_list, $item;
   } else {
     print STDERR "Warning: item incomplete; skipped!\n";
@@ -86,11 +94,10 @@ sub set_col_label ( $ ) {
   ($item->{col_label}) = @_;
 }
 
-our $VERBOSITY = 0;
-our $PRINT_LINK_TEXT;
-
 GetOptions('file|f=s' => sub { set_input_file $_[1] },
 	   'verbose|v+' => \$VERBOSITY,
+	   'print-rows|rows|r!' => \$PRINT_COL0_TEXT,
+	   'print-line-text|line-text|lt!' => \$PRINT_SAME_LINE_TEXT,
 	   'print-links|links|l!' => \$PRINT_LINK_TEXT,
 	   'message|m=s' => sub { set_msg $_[1] },
 	   'table|t=s' => sub { set_tbl_label $_[1] },
@@ -155,20 +162,45 @@ sub slurp_from_handle ( $ ) {
   $d;
 }
 
-sub clean ( $ ) {
-  my ($text) = @_;
-  $text =~ s/[\xA0\xC2]/ /sg;
-  $text =~ s/^\s+//s;
-  $text =~ s/\s+$//s;
-  $text =~ s/\s+/ /sg;
+# NB: this implementation matches plinks.
+sub get_text ( @ ) {
+  my (@nodes) = @_;
+  @nodes = grep defined, @nodes;
+  return '' unless @nodes;
+  @nodes = map $_->clone, @nodes;
+  my $text = join '', map(($_->deobjectify_text() || $_->as_text), @nodes);
+  # 0xA0 is a non-breaking space in Latin-1 and Unicode.
+  # 0xC2 0xA0 is the UTF-8 representation of U+00A0; this is a horrible hack.
+  $text =~ s/[\s\xA0\xC2]+/ /sg;
+  $text =~ s/^ //;  $text =~ s/ $//;
   $text;
 }
 
-sub clean_text ( $ ) {
-  my ($element) = @_;
-  my $text = ref($element) ? $element->as_text : $element;
-  clean($text);
+# NB: this implementation matches plinks.
+sub get_same_line_siblings ( $ ) {
+  my ($node) = @_;
+  return '' unless $node;
+  my @list = ($node);
+  {
+    my $prev = $node;
+    while (1) {
+      $prev = $prev->left or last;
+      $prev->look_down(_tag => qr/^(?:br|hr)$/) and last;
+      unshift @list, $prev;
+    }
+  }
+  {
+    my $next = $node;
+    while (1) {
+      $next = $next->right or last;
+      $next->look_down(_tag => qr/^(?:br|hr)$/) and last;
+      push @list, $next;
+    }
+  }
+  # TODO: go to parent if list has only 1 node?
+  @list;
 }
+
 
 # ----------------------------------------------------------------------
 
@@ -181,19 +213,26 @@ sub read_page ( $ ) {
   printf STDERR "    %-67s ", "Parsing data into a tree..." if $VERBOSITY;
   my $tree = HTML::TreeBuilder->new;
   $tree->parse_content($content);
+  $tree->objectify_text();
   print STDERR "done.\n" if $VERBOSITY;
 
   $tree;
 }
 
-sub extract ( $$$$$$ ) {
-  my ($tree, $handle, $msg, $tbl_label, $tbl_idx, $col_label) = @_;
+sub distribute ( $$ ) {
+  my ($index, $array) = @_;
+  map [@{$array}[0..($index-1)], $_, @{$array}[($index+1)..$#{$array}]],
+    @{$array->[$index]};
+}
+
+sub extract ( $$$$$$$ ) {
+  my ($tree, $handle, $msg, $tbl_label, $tbl_idx, $col_label, $flags) = @_;
 
   print STDERR "$msg\n" if defined $msg and length $msg;
 
   printf STDERR "    %-67s ", "Finding table..." if $VERBOSITY;
   my @matches = $tree->look_down(_tag => 'p',
-				  sub { clean_text($_[0]) =~ /$tbl_label/ });
+				  sub { get_text($_[0]) =~ /$tbl_label/ });
   @matches      or die "No results found";
   @matches == 1 or die "Multiple results found";
 
@@ -256,18 +295,23 @@ sub extract ( $$$$$$ ) {
   print STDERR "done.\n" if $VERBOSITY;
 
   printf STDERR "    %-67s ", "Finding column..." if $VERBOSITY;
-  @matches = grep $cells[0][$_] && clean_text($cells[0][$_]) =~ /$col_label/,
+  @matches = grep $cells[0][$_] && get_text($cells[0][$_]) =~ /$col_label/,
     0..$#{$cells[0]};
   @matches      or die "No results found";
   @matches == 1 or die "Multiple results found";
 
   my $col_idx = $matches[0];
   my @links =
-    map $_->look_down(_tag => 'a', href => qr/./),
-      grep defined, map $cells[$_][$col_idx], 0..$#cells;
+    map distribute(0, $_),
+      map [[ $_->[0]->look_down(_tag => 'a', href => qr/./) ], @$_ ],
+	grep defined $_->[0],
+	  map [ $cells[$_][$col_idx], $cells[$_][0] ], 0..$#cells;
   for my $link (@links) {
-    print $handle clean_text($link) . "\t" if $PRINT_LINK_TEXT;
-    print $handle $link->attr('href') . "\n";
+    print $handle get_text($link->[2]) . "\t" if $flags->{print_col0_text};
+    print $handle get_text(get_same_line_siblings($link->[0])) . "\t"
+      if $flags->{print_same_line_text};
+    print $handle get_text($link->[0]) . "\t" if $flags->{print_link_text};
+    print $handle $link->[0]->attr('href') . "\n";
   }
   print STDERR "done.\n" if $VERBOSITY;
 }
@@ -277,6 +321,7 @@ sub extract ( $$$$$$ ) {
   my $tree = read_page input_file_handle $INPUT_FILE;
   for my $item (@item_list) {
     extract $tree, output_handle($item->{output}), $item->{msg},
-      $item->{tbl_label}, ($item->{tbl_idx} || 0), $item->{col_label};
+      $item->{tbl_label}, ($item->{tbl_idx} || 0), $item->{col_label},
+	$item->{flags};
   }
 }
