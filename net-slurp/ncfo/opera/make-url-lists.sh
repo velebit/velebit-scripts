@@ -43,7 +43,7 @@ add_satb_section 'Courtiers/Frogs' 'frogs'
 add_satb_section 'Courtiers/Myna Birds' 'mynas'
 add_satb_section 'Weavers/Jackals' 'jackals'
 add_satb_section 'Village Elders/Doves/Wise Teachers' 'elders'
-add_satb_section 'Milkmaids/Washerwomen/Koel-birds' 'koels'
+add_satb_section 'Farmers/Washerwomen/Koel-birds' 'koels'
 add_satb_section 'Village Children/Mosquitoes' 'mosquitoes'
 add_satb_section 'Prime Ministers/Brain-fever Birds' 'ministers' \
     '--line-text' '--no-line-text'
@@ -92,17 +92,32 @@ cat "$DIR"/ministers-t.mp3.tmplist | sed \
     -e 's/	out_file_suffix:---$//' \
     > Abbert.mp3.urllist
 
-### Laura and Avery (???s soprano low)
+### Laura and Avery (peacocks soprano low)
 # MP3s
 sed -e '/^soprano p\(61\|71\|82\|105\|120\) hi	/d' \
     -e 's/^\([^	]*\)	\(.*\)$/\2	out_file_suffix:---\1/' \
     "$DIR"/peacocks-s.mp3.tmplist > Laura+Avery.mp3.urllist
 
-### Mynas soprano low (keep for now)
-# MP3s
-sed -e '/^soprano p\(61\|71\|105\) hi	/d' \
+### Myna Birds/Courtiers soprano low
+#     Gast/Verrilli
+sed -e '/^soprano p\(61\|71\|82\|105\|120\) hi	/d' \
     -e 's/^\([^	]*\)	\(.*\)$/\2	out_file_suffix:---\1/' \
     "$DIR"/mynas-s.mp3.tmplist > mynas-soprano-low.mp3.urllist
+
+### Myna Birds/Courtiers alto
+#     Gast/Verrilli
+sed -e 's/^\([^	]*\)	\(.*\)$/\2	out_file_suffix:---\1/' \
+    "$DIR"/mynas-a.mp3.tmplist > mynas-alto.mp3.urllist
+
+### Jackals/Weavers tenor
+#     Heather Barney & David Gordon Mitten
+sed -e 's/^\([^	]*\)	\(.*\)$/\2	out_file_suffix:---\1/' \
+    "$DIR"/jackals-t.mp3.tmplist > jackals-tenor.mp3.urllist
+
+### Doves/Village Elders alto
+#     Joanne Nicklas & Eliza Weinberger
+sed -e 's/^\([^	]*\)	\(.*\)$/\2	out_file_suffix:---\1/' \
+    "$DIR"/elders-a.mp3.tmplist > elders-alto.mp3.urllist
 
 #####  video
 if [ "$INDEX_VIDEO" = "$INDEX" ]; then
