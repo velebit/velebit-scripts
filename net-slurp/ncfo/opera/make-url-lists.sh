@@ -14,6 +14,21 @@ reset_sections () {
 }
 reset_sections
 
+add_section_column () {
+    local section="$1"; shift
+    local column="$1"; shift
+    local name="$1"; shift
+    local flags_on="$1"; shift
+    local flags_off="$1"; shift
+
+    ecl_args+=(-m "  .   $name ($section)" $flags_on)
+    # update section search expression; should happen AFTER defining message!
+    section="`echo "$section" | sed -e 's, ?\([/&]\) ?, *\1 *,'`"
+
+    ecl_args+=(-t "$section" -c "$column" -o "$DIR"/"$name.mp3.tmplist" \
+	$flags_off)
+}
+
 add_satb_section () {
     local section="$1"; shift
     local base="$1"; shift
@@ -22,7 +37,7 @@ add_satb_section () {
 
     ecl_args+=(-m "  .   $base ($section)" $flags_on)
     # update section search expression; should happen AFTER defining message!
-    section="`echo "$section" | sed -e 's,/, */ *,'`"
+    section="`echo "$section" | sed -e 's,\([/&]\), *\1 *,'`"
 
     for voice in 'Soprano' 'Alto' 'Tenor' 'Bass'; do
 	short="`echo "$voice" | sed -e 's/^\(.\).*/\1/;y/SATB/satb/'`"
@@ -48,7 +63,10 @@ add_satb_section 'Village Children/Mosquitoes' 'mosquitoes'
 add_satb_section 'Prime Ministers/Brain-fever Birds' 'ministers' \
     '--line-text' '--no-line-text'
 #    '--rows --line-text' '--no-rows --no-line-text'
-# 'Five Kids'
+add_section_column 'Five Kids' 'Steve & Nina' 'steve-nina'
+add_section_column 'Five Kids' 'Carla' 'carla'
+add_section_column 'Five Kids' 'Laura' 'laura'
+add_section_column 'Five Kids' 'Sam' 'sam'
 extract_sections
 
 ##### individual parts

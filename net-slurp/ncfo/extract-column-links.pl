@@ -297,8 +297,10 @@ sub extract ( $$$$$$$ ) {
   printf STDERR "    %-67s ", "Finding column..." if $VERBOSITY;
   @matches = grep $cells[0][$_] && get_text($cells[0][$_]) =~ /$col_label/,
     0..$#{$cells[0]};
-  @matches      or die "No results found";
-  @matches == 1 or die "Multiple results found";
+  @matches      or die("No results found for /$col_label/; headings are: " .
+		       "@{[map qq['$_'], map get_text($_), @{$cells[0]}]}");
+  @matches == 1 or die("Multiple results for /$col_label/; headings are: " .
+		       "@{[map qq['$_'], map get_text($_), @{$cells[0]}]}");
 
   my $col_idx = $matches[0];
   my @links =
