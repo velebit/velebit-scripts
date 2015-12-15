@@ -86,7 +86,7 @@ done
 ### Katarina (PMs soprano high)
 # MP3s
 cat "$DIR"/ministers-s.cooked.mp3.tmplist | sed \
-    -e '/^soprano p\(61\|71\|82\) lo	/d' \
+    -e '/^soprano p\(61\|71\|82\|105\) lo	/d' \
     -e '/^PM	/d;/^DPM	/d;/^D\^[^5]PM	/d' \
     -e '/^\(\(middle\|low\) split\|bass\)	.*PM.*scene8-/d' \
     -e '/^\(\(middle\|low\) split\|tenor\)	.*PM.*scene11-/d' \
