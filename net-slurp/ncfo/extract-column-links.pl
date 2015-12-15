@@ -10,19 +10,30 @@ use Carp qw( carp croak );
 
 sub Usage ( @ ) {
   die join "\n\n", @_, <<"EndOfMessage";
-Usage: $0 [options | {HTML_FILE} {TABLE_LABEL} [+{TABLE_INDEX}] {COLUMN_LABEL}]
+Usage: $0 OPTIONS...
+  or:  $0 [OPTIONS...] HTML_FILE TABLE_LABEL [+TABLE_INDEX] COLUMN_LABEL
 Global options:
   --file HTML_FILE       (-f)  The name of the input HTML file.
   --verbose              (-v)  Display additional output messages.
-  --print-links          (-l)  Prefix URLs with their link text and a tab.
-Repeatable options:
-  --message TEXT         (-m)  Print a message before processing the table.
+Data selection options (repeatable):
   --table TABLE_LABEL    (-t)  The label in HTML before the desired table.
   --index TABLE_INDEX    (-i)  The index offset to the desired table (e.g. to
                                get act 2).  [default: 0]
   --column COLUMN_LABEL  (-c)  The label of the desired column in the HTML
                                table.
-  --output OUTPUT_FILE   (-o)  Write output to the specified file.
+Output format options options (repeatable):
+  --print-rows           (-r)  Prefix URLs with the row heading from the first
+                               column, and a tab.
+  --print-row-lines     (-rl)  Prefix URLs with a single line (delimited by
+                               <br> etc) from the row heading whose line index
+                               matches the line index of the link, and a tab.
+  --print-line-text     (-lt)  Prefix URLs with the text on the same line
+                               and a tab.
+  --print-links          (-l)  Prefix URLs with their link text and a tab.
+  --output OUTPUT_FILE   (-o)  Write output to the specified file.  (May
+                               automatically commit preceding options, as -G.)
+Miscellaneous options (repeatable):
+  --message TEXT         (-m)  Print a message before processing next table.
   --go                   (-G)  Commit the preceding options so they can be
                                specified several times.
 
@@ -39,6 +50,7 @@ EndOfMessage
 our $INPUT_FILE;
 our $VERBOSITY = 0;
 our $PRINT_COL0_TEXT = 0;
+our $PRINT_COL0_LINE_TEXT = 0;
 our $PRINT_SAME_LINE_TEXT = 0;
 our $PRINT_LINK_TEXT = 0;
 
@@ -54,6 +66,7 @@ my $item = {};
 sub commit () {
   if (defined $item->{tbl_label} and defined $item->{col_label}) {
     $item->{flags}{print_col0_text} = $PRINT_COL0_TEXT;
+    $item->{flags}{print_col0_line_text} = $PRINT_COL0_LINE_TEXT;
     $item->{flags}{print_same_line_text} = $PRINT_SAME_LINE_TEXT;
     $item->{flags}{print_link_text} = $PRINT_LINK_TEXT;
     push @item_list, $item;
@@ -97,6 +110,7 @@ sub set_col_label ( $ ) {
 GetOptions('file|f=s' => sub { set_input_file $_[1] },
 	   'verbose|v+' => \$VERBOSITY,
 	   'print-rows|rows|r!' => \$PRINT_COL0_TEXT,
+	   'print-row-lines|row-line|rl!' => \$PRINT_COL0_LINE_TEXT,
 	   'print-line-text|line-text|lt!' => \$PRINT_SAME_LINE_TEXT,
 	   'print-links|links|l!' => \$PRINT_LINK_TEXT,
 	   'message|m=s' => sub { set_msg $_[1] },
@@ -198,6 +212,30 @@ sub get_same_line_siblings ( $ ) {
     }
   }
   # TODO: go to parent if list has only 1 node?
+  @list;
+}
+
+sub count_line_breaks ( $ ) {
+  my ($node) = @_;
+  return 0 unless $node;
+  my $count = 0;
+  my $prev = $node;
+  while (1) {
+    $prev = $prev->left or last;
+    $count += scalar @{[ $prev->look_down(_tag => qr/^(?:br|hr)$/) ]};
+  }
+  $count;
+}
+
+sub get_line_by_number ( $$ ) {
+  my ($parent, $number) = @_;
+  return unless $parent;
+  my (@list);
+  for my $node ($parent->content_list) {
+    push @list, $node if $number == 0;
+    $number -= scalar @{[ $node->look_down(_tag => qr/^(?:br|hr)$/) ]};
+    last if $number < 0;
+  }
   @list;
 }
 
@@ -310,6 +348,10 @@ sub extract ( $$$$$$$ ) {
 	  map [ $cells[$_][$col_idx], $cells[$_][0] ], 0..$#cells;
   for my $link (@links) {
     print $handle get_text($link->[2]) . "\t" if $flags->{print_col0_text};
+    print $handle
+      get_text(get_line_by_number($link->[2],
+				  count_line_breaks($link->[0]))) . "\t"
+      if $flags->{print_col0_line_text};
     print $handle get_text(get_same_line_siblings($link->[0])) . "\t"
       if $flags->{print_same_line_text};
     print $handle get_text($link->[0]) . "\t" if $flags->{print_link_text};

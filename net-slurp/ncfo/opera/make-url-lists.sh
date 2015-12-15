@@ -61,8 +61,7 @@ add_satb_section 'Village Elders/Doves/Wise Teachers' 'elders'
 add_satb_section 'Farmers/Washerwomen/Koel-birds' 'koels'
 add_satb_section 'Village Children/Mosquitoes' 'mosquitoes'
 add_satb_section 'Prime Ministers/Brain-fever Birds' 'ministers' \
-    '--line-text' '--no-line-text'
-#    '--rows --line-text' '--no-rows --no-line-text'
+    '--row-line --line-text' '--no-row-line --no-line-text'
 add_section_column 'Five Kids' 'Steve & Nina' 'steve-nina'
 add_section_column 'Five Kids' 'Carla' 'carla'
 add_section_column 'Five Kids' 'Laura' 'laura'
@@ -72,20 +71,27 @@ extract_sections
 ##### individual parts
 echo "... individual parts" >&2
 
+for i in s a t b; do
+    cat "$DIR"/ministers-"$i".mp3.tmplist | sed \
+	-e 's/$/	out_file_suffix:---/' \
+	-e 's/^\(\([^	]* \)\?\(bar \?[1-9][^	]*\)	\([^	]*\)	\([^	]*\)	.*	out_file_suffix:---\)$/\1\2\5 \3/' \
+	-e 's/^\([^	]*\)	//' \
+	-e 's/^\(page \([1-9][0-9]*\).*	out_file_suffix:---\)$/\1PMs p\2/' \
+	-e 's/^\([^	]*\)	//' \
+	-e 's/^\(\([^	]*\)	.*	out_file_suffix:---\)$/\1\2/' \
+	-e 's/	out_file_suffix:---$//' \
+	> "$DIR"/ministers-"$i".cooked.mp3.tmplist
+done
+
 ### Katarina (PMs soprano high)
 # MP3s
-cat "$DIR"/ministers-s.mp3.tmplist | sed \
-    -e 's/$/	out_file_suffix:---/' \
-    -e 's/^\(page \([1-9][0-9]*\).*	out_file_suffix:---\)$/\1PMs p\2/' \
-    -e 's/^\([^	]*\)	//' \
+cat "$DIR"/ministers-s.cooked.mp3.tmplist | sed \
     -e '/^soprano p\(61\|71\|82\) lo	/d' \
-    -e '/^PM	/d;/^DPM	/d;/^D\^[^6]PM	/d' \
+    -e '/^PM	/d;/^DPM	/d;/^D\^[^5]PM	/d' \
     -e '/^\(\(middle\|low\) split\|bass\)	.*PM.*scene8-/d' \
     -e '/^\(\(middle\|low\) split\|tenor\)	.*PM.*scene11-/d' \
     -e '/^\(middle\|low\) split	.*PM.*scene15-/d' \
-    -e 's/^\(\([^	]*\)	.*	out_file_suffix:---\)$/\1\2/' \
     -e 's/^\([^	]*\)	//' \
-    -e 's/	out_file_suffix:---$//' \
     > Katarina.mp3.urllist
 
 ## unstructured MP3 links following the table...
@@ -97,17 +103,12 @@ cat "$DIR"/ministers-s.mp3.tmplist | sed \
 
 ### Abbe and bert (PMs tenor)
 # MP3s
-cat "$DIR"/ministers-t.mp3.tmplist | sed \
-    -e 's/$/	out_file_suffix:---/' \
-    -e 's/^\(page \([1-9][0-9]*\).*	out_file_suffix:---\)$/\1PMs p\2/' \
-    -e 's/^\([^	]*\)	//' \
+cat "$DIR"/ministers-t.cooked.mp3.tmplist | sed \
     -e '/^PM	/d;/^DPM	/d;/^D\^[^4]PM	/d' \
     -e '/^\(\(high\|middle\) split\|bass\)	.*PM.*scene8-/d' \
     -e '/^\(high\|middle\|low\) split	.*PM.*scene11-/d' \
     -e '/^\(high\|middle\) split	.*PM.*scene15-/d' \
-    -e 's/^\(\([^	]*\)	.*	out_file_suffix:---\)$/\1\2/' \
     -e 's/^\([^	]*\)	//' \
-    -e 's/	out_file_suffix:---$//' \
     > Abbert.mp3.urllist
 
 ### Laura and Avery (peacocks soprano low)
