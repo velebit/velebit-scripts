@@ -5,6 +5,7 @@ cd ..
 PATH="${PATH}:${HOME}/perl-lib/bin"
 mp3info2='mp3info2'
 verbose=
+dryrun=
 
 id3_artist="NCFO practice"
 id3_album_prefix="`/bin/pwd | sed -e 's,.*[\\/],,'`: "
@@ -33,10 +34,12 @@ update_tags_from_playlist () {
 	track=$(($track + 1))
 	local name="`echo "$file" | sed -e 's,.*/,,' -e 's/\.mp3$//i'`"
 	echo "Updating tags for $file..."
-	##$mp3info2 -d ID3v1,ID3v2 -p "" "$file"
-	$mp3info2 -t "$name" -a "$id3_artist" \
-	    -l "$id3_album_prefix$who$id3_album_suffix" \
-	    -n "$track/$num_tracks" -p "" "$file"
+	if [ -z "$dryrun" ]; then
+	    ##$mp3info2 -d ID3v1,ID3v2 -p "" "$file"
+	    $mp3info2 -t "$name" -a "$id3_artist" \
+		-l "$id3_album_prefix$who$id3_album_suffix" \
+		-n "$track/$num_tracks" -p "" "$file"
+	fi
 	if [ -n "$verbose" ]; then
 	    $mp3info2 -D "$file"
 	fi
@@ -71,6 +74,7 @@ process_playlist_lines () {
 
 while true; do
     case "$1" in
+	-N) dryrun=yes; shift ;;
 	-n) mp3info2='mp3info2 -D'; shift ;;
 	-v) verbose=yes; shift ;;
 	-a) id3_artist="$2"; shift; shift ;;
