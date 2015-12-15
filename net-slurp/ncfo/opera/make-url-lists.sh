@@ -62,10 +62,10 @@ add_satb_section 'Farmers/Washerwomen/Koel-birds' 'koels'
 add_satb_section 'Village Children/Mosquitoes' 'mosquitoes'
 add_satb_section 'Prime Ministers/Brain-fever Birds' 'ministers' \
     '--row-line --line-text' '--no-row-line --no-line-text'
-add_section_column 'Five Kids' 'Steve & Nina' 'steve-nina'
-add_section_column 'Five Kids' 'Carla' 'carla'
-add_section_column 'Five Kids' 'Laura' 'laura'
-add_section_column 'Five Kids' 'Sam' 'sam'
+add_section_column 'Five Kids' 'Steve & Nina' 'kids-steve-nina'
+add_section_column 'Five Kids' 'Carla' 'kids-carla'
+add_section_column 'Five Kids' 'Laura' 'kids-laura'
+add_section_column 'Five Kids' 'Sam' 'kids-sam'
 extract_sections
 
 ##### individual parts
@@ -111,32 +111,37 @@ cat "$DIR"/ministers-t.cooked.mp3.tmplist | sed \
     -e 's/^\([^	]*\)	//' \
     > Abbert.mp3.urllist
 
-### Laura and Avery (peacocks soprano low)
-# MP3s
+### Peacocks/Courtiers soprano low
+#     Laura Pitone and Avery Cole
 sed -e '/^soprano p\(61\|71\|82\|105\|120\) hi	/d' \
     -e 's/^\([^	]*\)	\(.*\)$/\2	out_file_suffix:---\1/' \
-    "$DIR"/peacocks-s.mp3.tmplist > Laura+Avery.mp3.urllist
+    "$DIR"/peacocks-s.mp3.tmplist > X-peacocks-soprano-low.mp3.urllist
+
+### Peacocks/Courtiers alto
+#     Eliza Weinberger (Joanne Nicklas's daughter)
+sed -e 's/^\([^	]*\)	\(.*\)$/\2	out_file_suffix:---\1/' \
+    "$DIR"/peacocks-a.mp3.tmplist > X-peacocks-alto.mp3.urllist
 
 ### Myna Birds/Courtiers soprano low
 #     Gast/Verrilli
 sed -e '/^soprano p\(61\|71\|82\|105\|120\) hi	/d' \
     -e 's/^\([^	]*\)	\(.*\)$/\2	out_file_suffix:---\1/' \
-    "$DIR"/mynas-s.mp3.tmplist > mynas-soprano-low.mp3.urllist
+    "$DIR"/mynas-s.mp3.tmplist > X-mynas-soprano-low.mp3.urllist
 
 ### Myna Birds/Courtiers alto
 #     Gast/Verrilli
 sed -e 's/^\([^	]*\)	\(.*\)$/\2	out_file_suffix:---\1/' \
-    "$DIR"/mynas-a.mp3.tmplist > mynas-alto.mp3.urllist
+    "$DIR"/mynas-a.mp3.tmplist > X-mynas-alto.mp3.urllist
 
 ### Jackals/Weavers tenor
 #     Heather Barney & David Gordon Mitten
 sed -e 's/^\([^	]*\)	\(.*\)$/\2	out_file_suffix:---\1/' \
-    "$DIR"/jackals-t.mp3.tmplist > jackals-tenor.mp3.urllist
+    "$DIR"/jackals-t.mp3.tmplist > X-jackals-tenor.mp3.urllist
 
 ### Doves/Village Elders alto
-#     Joanne Nicklas & Eliza Weinberger
+#     Joanne Nicklas
 sed -e 's/^\([^	]*\)	\(.*\)$/\2	out_file_suffix:---\1/' \
-    "$DIR"/elders-a.mp3.tmplist > elders-alto.mp3.urllist
+    "$DIR"/elders-a.mp3.tmplist > X-elders-alto.mp3.urllist
 
 #####  video
 if [ "$INDEX_VIDEO" = "$INDEX" ]; then
