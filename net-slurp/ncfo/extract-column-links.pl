@@ -270,9 +270,11 @@ sub extract ( $$$$$$$ ) {
 
   printf STDERR "    %-67s ", "Finding table..." if $VERBOSITY;
   my @matches = $tree->look_down(_tag => 'p',
-				  sub { get_text($_[0]) =~ /$tbl_label/ });
+				  sub { get_text($_[0]) =~ /$tbl_label/ and
+					  ! $_[0]->look_down(_tag => 'a') });
+  #$_->dump, print("---\n") for @matches;
   @matches      or die "No results found";
-  @matches == 1 or die "Multiple results found";
+  @matches == 1 or die "Multiple results found for '$tbl_label'";
 
   my $node = $matches[0];
   my $index = $tbl_idx;
