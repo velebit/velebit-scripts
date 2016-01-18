@@ -86,13 +86,28 @@ done
 ### Katarina (PMs soprano high)
 # MP3s
 cat "$DIR"/ministers-s.cooked.mp3.tmplist | sed \
+    -e '/scene9-2/,$d' \
     -e '/^soprano p\(61\|71\|82\|105\) lo	/d' \
-    -e '/^PM	/d;/^DPM	/d;/^D\^[^5]PM	/d' \
-    -e '/^\(\(middle\|low\) split\|bass\)	.*PM.*scene8-/d' \
-    -e '/^\(\(middle\|low\) split\|tenor\)	.*PM.*scene11-/d' \
-    -e '/^\(middle\|low\) split	.*PM.*scene15-/d' \
+    -e '/^\(\(middle\|low\) split\|bass\)	.*PM.*scene8[-_]/d' \
+    -e '/^\(\|D\|D\^[^X]\)PM	.*scene8[-_].*bar799/d' \
+    -e '/^\(\|D\|D\^[^X]\)PM	.*scene8[-_].*bar807/d' \
+    -e '/^\(\|D\|D\^[^X]\)PM	.*scene8[-_].*bar839/d' \
     -e 's/^\([^	]*\)	//' \
     > Katarina.mp3.urllist
+cat "$DIR"/elders-s.mp3.tmplist | sed \
+    -e '/^doves.*scene9[-_]/!d' \
+    -e 's/^\([^	]*\)	\(.*\)$/\2	out_file_suffix:---\1/' \
+    >> Katarina.mp3.urllist
+cat "$DIR"/ministers-s.cooked.mp3.tmplist | sed \
+    -e '/scene9-2/,$!d' \
+    -e '/^soprano p\(61\|71\|82\|105\) lo	/d' \
+    -e '/^\(\(middle\|low\) split\|tenor\)	.*PM.*scene11[-_]/d' \
+    -e '/^\(middle\|low\) split	.*PM.*scene15[-_]/d' \
+    -e '/^\(\|D\|D\^[^6]\)PM	.*scene15[-_].*bar1785/d' \
+    -e '/^\(\|D\|D\^[^X]\)PM	.*scene15[-_].*bar1818/d' \
+    -e '/^\(\|D\|D\^[^6]\)PM	.*scene15[-_].*bar1830/d' \
+    -e 's/^\([^	]*\)	//' \
+    >> Katarina.mp3.urllist
 
 ## unstructured MP3 links following the table...
 #./plinks.pl -b -pt -t -tl 1 "$INDEX" \
@@ -102,14 +117,57 @@ cat "$DIR"/ministers-s.cooked.mp3.tmplist | sed \
 #          -e '/[^	]*low/I!d;s/^[^	]*	//' >> Katarina.mp3.urllist
 
 ### Abbe and bert (PMs tenor)
-# MP3s
+# MP3s: common
 cat "$DIR"/ministers-t.cooked.mp3.tmplist | sed \
-    -e '/^PM	/d;/^DPM	/d;/^D\^[^4]PM	/d' \
-    -e '/^\(\(high\|middle\) split\|bass\)	.*PM.*scene8-/d' \
-    -e '/^\(high\|middle\|low\) split	.*PM.*scene11-/d' \
-    -e '/^\(high\|middle\) split	.*PM.*scene15-/d' \
+    -e '/PM.*scene8[-_]/d' \
+    -e '/^\(high\|middle\|low\) split	.*PM.*scene11[-_]/d' \
+    -e '/PM.*scene15[-_]/d' \
     -e 's/^\([^	]*\)	//' \
-    > Abbert.mp3.urllist
+    > Abbe+bert.mp3.urllist
+
+# MP3s: Abbe only
+cat "$DIR"/ministers-t.cooked.mp3.tmplist | sed \
+    -e '/PM.*scene8[-_]/!d' \
+    -e '/^\(\(high\|middle\) split\|bass\)	/d' \
+    -e '/^\(\|D\|D\^[^3]\)PM	.*bar799/d' \
+    -e '/^\(\|D\|D\^[^4]\)PM	.*bar807/d' \
+    -e '/^\(\|D\|D\^[^4]\)PM	.*bar839/d' \
+    -e 's/^\([^	]*\)	//' \
+    > Abbe.mp3.urllist
+cat "$DIR"/elders-a.mp3.tmplist | sed \
+    -e '/^doves.*scene9[-_]/!d' \
+    -e 's/^\([^	]*\)	\(.*\)$/\2	out_file_suffix:---\1/' \
+    >> Abbe.mp3.urllist
+cat "$DIR"/ministers-t.cooked.mp3.tmplist | sed \
+    -e '/PM.*scene15[-_]/!d' \
+    -e '/^\(high\|middle\) split	/d' \
+    -e '/^\(\|D\|D\^[^4]\)PM	.*bar1785/d' \
+    -e '/^\(\|D\|D\^[^5]\)PM	.*bar1818/d' \
+    -e '/^\(\|D\|D\^[^6]\)PM	.*bar1830/d' \
+    -e 's/^\([^	]*\)	//' \
+    >> Abbe.mp3.urllist
+
+# MP3s: bert only
+cat "$DIR"/ministers-t.cooked.mp3.tmplist | sed \
+    -e '/PM.*scene8[-_]/!d' \
+    -e '/^\(\(middle\|low\) split\|bass\)	/d' \
+    -e '/^\(\|D\|D\^[^5]\)PM	.*bar799/d' \
+    -e '/^\(p\|D\|D\^[^p]\)PM	.*bar807/d' \
+    -e '/^\(\|D\|D\^[^3]\)PM	.*bar839/d' \
+    -e 's/^\([^	]*\)	//' \
+    > bert.mp3.urllist
+cat "$DIR"/elders-t.mp3.tmplist | sed \
+    -e '/^doves.*scene9[-_]/!d' \
+    -e 's/^\([^	]*\)	\(.*\)$/\2	out_file_suffix:---\1/' \
+    >> bert.mp3.urllist
+cat "$DIR"/ministers-t.cooked.mp3.tmplist | sed \
+    -e '/PM.*scene15[-_]/!d' \
+    -e '/^\(middle\|low\) split	/d' \
+    -e '/^\(p\|D\|D\^[^p]\)PM	.*bar1785/d' \
+    -e '/^\(\|D\|D\^[^3]\)PM	.*bar1818/d' \
+    -e '/^\(\|D\|D\^[^6]\)PM	.*bar1830/d' \
+    -e 's/^\([^	]*\)	//' \
+    >> bert.mp3.urllist
 
 ### Peacocks/Courtiers soprano low
 #     Laura Pitone and Avery Cole
