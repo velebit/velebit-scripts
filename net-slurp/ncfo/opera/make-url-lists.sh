@@ -125,6 +125,7 @@ cat "$DIR"/ministers-t.cooked.mp3.tmplist | sed \
     -e '/PM.*scene8[-_]/d' \
     -e '/PM.*scene11[-_]/d' \
     -e '/PM.*scene15[-_]/d' \
+    -e '/PM.*scene16[-_]/d' \
     -e 's/^\([^	]*\)	//' \
     > Abbe+bert.mp3.urllist
 
@@ -154,6 +155,10 @@ cat "$DIR"/ministers-t.cooked.mp3.tmplist | sed \
     -e '/^\(\|D\|D\^[^6]\)PM	.*bar1830/d' \
     -e 's/^\([^	]*\)	//' \
     >> Abbe.mp3.urllist
+cat "$DIR"/ministers-t.cooked.mp3.tmplist | sed \
+    -e '/PM.*scene16[-_]/!d' \
+    -e 's/^\([^	]*\)	//' \
+    >> Abbe.mp3.urllist
 
 # MP3s: bert only
 cat "$DIR"/ministers-t.cooked.mp3.tmplist | sed \
@@ -179,6 +184,10 @@ cat "$DIR"/ministers-t.cooked.mp3.tmplist | sed \
     -e '/^\(p\|D\|D\^[^p]\)PM	.*bar1785/d' \
     -e '/^\(\|D\|D\^[^3]\)PM	.*bar1818/d' \
     -e '/^\(\|D\|D\^[^6]\)PM	.*bar1830/d' \
+    -e 's/^\([^	]*\)	//' \
+    >> bert.mp3.urllist
+cat "$DIR"/ministers-b.cooked.mp3.tmplist | sed \
+    -e '/PM.*scene16[-_]/!d' \
     -e 's/^\([^	]*\)	//' \
     >> bert.mp3.urllist
 
@@ -229,6 +238,7 @@ cat "$tmplist" \
     | sed -e '/^MIRROR[^	]*VIDEO/I!d' \
           -e 's/^[^	]*	//' \
           -e '/^\(Frog\|Peacock\|Jackal\|Koel Bird\|Mosquito\) Chorus\(, Measure [0-9]*\)\?	/Id' \
+          -e '/^Five Kids	/Id' \
           -e '/^Jackal Movements [1-9]	/Id' \
           -e 's/^[^	]*	//' \
     > mirror.video.urllist
@@ -236,6 +246,7 @@ cat "$tmplist" \
     | sed -e '/^REGULAR[^	]*VIDEO/I!d' \
           -e 's/^[^	]*	//' \
           -e '/^\(Frog\|Peacock\|Jackal\|Koel Bird\|Mosquito\) Chorus\(, Measure [0-9]*\)\?	/Id' \
+          -e '/^Five Kids	/Id' \
           -e '/^Jackal Movements [1-9]	/Id' \
           -e 's/^[^	]*	//' \
     > regular.video.urllist
