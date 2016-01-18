@@ -13,7 +13,7 @@ use IO::File;
 
 sub Usage () {
   print STDERR <<'EndOfUsage';
-Usage: $0 [flags] dir1 dir2
+Usage: $0 [flags] dir1 dir2 ...
 Flags:
   --listing     (-l)  Print only file names (relative to the root).
   --identical   (-s)  Report identical files.
@@ -31,6 +31,9 @@ Flags:
   --no-check-owner    Do not check the file/directory ownership (UID or GID).
   --no-check-nlinks   Do not check the file/directory hard link count.
 
+  --block-size SIZE   Use the specified block size.  (Default: 1M)
+                      Can be specified as <NUM> (bytes), <NUM>K or <NUM>M.
+
   --debug       (-d)  Enable debugging output.
 EndOfUsage
   exit 0;
@@ -42,6 +45,7 @@ our $CHECK_SIZE_BEFORE_CONTENTS = 1;
 our $CHECK_MODE = 1;
 our $CHECK_OWNERSHIP = 1;
 our $CHECK_NLINKS = 1;
+our $FILE_READ_LEN = 1024*1024;  # 1MB
 
 Getopt::Long::Configure qw( bundling );
 GetOptions('help|h|?'           => \&Usage,
@@ -55,9 +59,23 @@ GetOptions('help|h|?'           => \&Usage,
            'check-mode|mode!'   => \$CHECK_MODE,
            'check-owner|owner!' => \$CHECK_OWNERSHIP,
            'check-nlinks|nlinks!' => \$CHECK_NLINKS,
+	   'block-size|bs=s'    => \$FILE_READ_LEN,
           ) or Usage;
 
 @ARGV >= 2 or Usage;
+
+SIZE_FORMAT:
+{
+  $FILE_READ_LEN =~ /^\d+$/ and last SIZE_FORMAT;
+  $FILE_READ_LEN =~ /^(\d+(?:\.\d+)?)K$/i
+    and $FILE_READ_LEN = int($1 * 1024), last SIZE_FORMAT;
+  $FILE_READ_LEN =~ /^(\d+(?:\.\d+)?)M$/i
+    and $FILE_READ_LEN = int($1 * 1024 * 1024), last SIZE_FORMAT;
+  $FILE_READ_LEN =~ /^(\d+(?:\.\d+)?)G$/i
+    and $FILE_READ_LEN = int($1 * 1024 * 1024 * 1024), last SIZE_FORMAT;
+  die "Unknown size specification '$FILE_READ_LEN'!\n";
+}
+$FILE_READ_LEN =~ /^\d+$/ or die;
 
 # Convert the exclude list into regexps.
 my %glob2re = ( '?' => '.', '*' => '.*' );
@@ -304,8 +322,6 @@ sub tdiff_symlinks ( $$@ ) {
   }
 }
 
-use constant FILE_READ_LEN => 1024*1024;  # 1MB
-
 sub tdiff_files ( $$@ ) {
   my ($flags, $rpath, @info) = @_;
   dbg_comparing 3, 'plain files', $rpath, @info;
@@ -349,7 +365,7 @@ sub tdiff_files ( $$@ ) {
 	# Profiling shows a lot of time spent in IO::Handle::read here, but
 	# almost all of it is actually in Perl's read() call.  So there's
 	# no benefit in switching from the method call to read(FH, ...).
-        my $ret = $group[$i]{handle}->read($buffers[$i], FILE_READ_LEN, 4);
+        my $ret = $group[$i]{handle}->read($buffers[$i], $FILE_READ_LEN, 4);
         $ret and length($buffers[$i]) != $ret+4
           and die "internal error: mismatch @{[length($buffers[$i]), $ret]}";
         $ret and next FILE;
