@@ -123,7 +123,7 @@ cat "$DIR"/ministers-s.cooked.mp3.tmplist | sed \
 # MP3s: common
 cat "$DIR"/ministers-t.cooked.mp3.tmplist | sed \
     -e '/PM.*scene8[-_]/d' \
-    -e '/^\(high\|middle\|low\) split	.*PM.*scene11[-_]/d' \
+    -e '/PM.*scene11[-_]/d' \
     -e '/PM.*scene15[-_]/d' \
     -e 's/^\([^	]*\)	//' \
     > Abbe+bert.mp3.urllist
@@ -140,6 +140,11 @@ cat "$DIR"/ministers-t.cooked.mp3.tmplist | sed \
 cat "$DIR"/elders-a.mp3.tmplist | sed \
     -e '/^doves.*scene9[-_]/!d' \
     -e 's/^\([^	]*\)	\(.*\)$/\2	out_file_suffix:---\1/' \
+    >> Abbe.mp3.urllist
+cat "$DIR"/ministers-t.cooked.mp3.tmplist | sed \
+    -e '/PM.*scene11[-_]/!d' \
+    -e '/^\(\(high\|middle\) split\|tenor\)	/d' \
+    -e 's/^\([^	]*\)	//' \
     >> Abbe.mp3.urllist
 cat "$DIR"/ministers-t.cooked.mp3.tmplist | sed \
     -e '/PM.*scene15[-_]/!d' \
@@ -162,6 +167,11 @@ cat "$DIR"/ministers-t.cooked.mp3.tmplist | sed \
 cat "$DIR"/elders-t.mp3.tmplist | sed \
     -e '/^doves.*scene9[-_]/!d' \
     -e 's/^\([^	]*\)	\(.*\)$/\2	out_file_suffix:---\1/' \
+    >> bert.mp3.urllist
+cat "$DIR"/ministers-t.cooked.mp3.tmplist | sed \
+    -e '/PM.*scene11[-_]/!d' \
+    -e '/^\(\(high\|middle\|low\) split\)	/d' \
+    -e 's/^\([^	]*\)	//' \
     >> bert.mp3.urllist
 cat "$DIR"/ministers-t.cooked.mp3.tmplist | sed \
     -e '/PM.*scene15[-_]/!d' \
