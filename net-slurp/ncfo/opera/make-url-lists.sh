@@ -217,11 +217,17 @@ fi
 echo "... video" >&2
 cat "$tmplist" \
     | sed -e '/^MIRROR[^	]*VIDEO/I!d' \
-          -e 's/^[^	]*	//;s/^[^	]*	//' \
+          -e 's/^[^	]*	//' \
+          -e '/^\(Frog\|Peacock\|Jackal\|Koel Bird\|Mosquito\) Chorus\(, Measure [0-9]*\)\?	/Id' \
+          -e '/^Jackal Movements [1-9]	/Id' \
+          -e 's/^[^	]*	//' \
     > mirror.video.urllist
 cat "$tmplist" \
     | sed -e '/^REGULAR[^	]*VIDEO/I!d' \
-          -e 's/^[^	]*	//;s/^[^	]*	//' \
+          -e 's/^[^	]*	//' \
+          -e '/^\(Frog\|Peacock\|Jackal\|Koel Bird\|Mosquito\) Chorus\(, Measure [0-9]*\)\?	/Id' \
+          -e '/^Jackal Movements [1-9]	/Id' \
+          -e 's/^[^	]*	//' \
     > regular.video.urllist
 
 ### demo MP3s
