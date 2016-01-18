@@ -47,5 +47,5 @@ inspect() {
     | ./process-files.pl "${PF_ARGS[@]}"
 ./urllist2process.pl "${U2P_VIDEO_ARGS[@]}" *.video.urllist | inspect V1 \
     | ./process-files.pl "${PF_ARGS[@]}"
-./id3-tags.sh
 (d="`pwd`"; cd ../video && "$d"/split-into-subdirs.sh)
+./id3-tags.sh
