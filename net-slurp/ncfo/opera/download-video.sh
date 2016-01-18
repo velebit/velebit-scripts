@@ -1,6 +1,6 @@
 #!/bin/sh
-#node=197
-page=Weavers_Wedding_2016_Practice_Materials
+#page=Weavers_Wedding_2016_Practice_Materials
+page=Weavers_Wedding_2016_Choreography_Videos
 file="`basename "$page"`"
 type=video
 dir=video
@@ -21,7 +21,7 @@ cat download-index.log
 rm -f "$dir/$file".orig
 
 rm -f "$dir"/index.html; mv "$dir/$file" "$dir"/index.html
-./make-url-lists.sh "$dir"/index.html
+./make-url-lists.sh '' '' "$dir"/index.html
 sed -e 's/	.*//' *."$type".urllist | sort | uniq \
     > "$type"-master.urllist
 wget --load-cookies cookies.txt -i "$type"-master.urllist \

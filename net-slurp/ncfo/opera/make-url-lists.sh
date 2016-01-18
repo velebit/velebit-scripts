@@ -1,7 +1,10 @@
 #!/bin/sh
-INDEX="${1-mp3/index.html}"
-INDEX_PDF="${2-${INDEX}}"
-INDEX_VIDEO="${3-${INDEX}}"
+INDEX="$1"; shift
+INDEX_PDF="$1"; shift
+INDEX_VIDEO="$1"; shift
+[ -z "$INDEX" ] && INDEX="mp3/index.html"
+[ -z "$INDEX_PDF" ] && INDEX_PDF="${INDEX}"
+[ -z "$INDEX_VIDEO" ] && INDEX_VIDEO="video/index.html"
 
 DIR=tmplists
 rm -f *.urllist "$DIR"/*.urllist *.tmplist "$DIR"/*.tmplist
@@ -208,16 +211,16 @@ else
     tmplist=big.video.tmplist
 fi
 if [ ! -e "$tmplist" ]; then
-    echo "... big list" >&2
+    echo "... big list (`echo "$tmplist" | sed -e 's/^big\.//;s/\..*//'`)" >&2
     ./plinks.pl -hb -t "$INDEX_VIDEO" > "$tmplist"
 fi
 echo "... video" >&2
 cat "$tmplist" \
-    | sed -e '/^[^	]*VIDEO/I!d;/^[^	]*MIRROR/I!d' \
+    | sed -e '/^MIRROR[^	]*VIDEO/I!d' \
           -e 's/^[^	]*	//;s/^[^	]*	//' \
     > mirror.video.urllist
 cat "$tmplist" \
-    | sed -e '/^[^	]*VIDEO/I!d;/^[^	]*MIRROR/Id' \
+    | sed -e '/^REGULAR[^	]*VIDEO/I!d' \
           -e 's/^[^	]*	//;s/^[^	]*	//' \
     > regular.video.urllist
 
@@ -225,7 +228,7 @@ cat "$tmplist" \
 if [ -e .generate-demo ]; then
     tmplist=big.mp3.tmplist
     if [ ! -e "$tmplist" ]; then
-	echo "... big list" >&2
+	echo "... big list (`echo "$tmplist" | sed -e 's/^big\.//;s/\..*//'`)" >&2
 	./plinks.pl -hb -t "$INDEX" > "$tmplist"
     fi
     echo "... demo" >&2
@@ -240,7 +243,7 @@ fi
 if [ -e .generate-orchestra ]; then
     tmplist=big.mp3.tmplist
     if [ ! -e "$tmplist" ]; then
-	echo "... big list" >&2
+	echo "... big list (`echo "$tmplist" | sed -e 's/^big\.//;s/\..*//'`)" >&2
 	./plinks.pl -hb -t "$INDEX" > "$tmplist"
     fi
     echo "... orchestra" >&2
@@ -258,7 +261,7 @@ else
     tmplist=big.pdf.tmplist
 fi
 if [ ! -e "$tmplist" ]; then
-    echo "... big list" >&2
+    echo "... big list (`echo "$tmplist" | sed -e 's/^big\.//;s/\..*//'`)" >&2
     ./plinks.pl -hb -t "$INDEX_PDF" > "$tmplist"
 fi
 echo "... score" >&2
