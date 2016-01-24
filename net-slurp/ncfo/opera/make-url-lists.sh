@@ -163,7 +163,8 @@ cat "$DIR"/ministers-t.cooked.mp3.tmplist | sed \
 # MP3s: bert only
 cat "$DIR"/ministers-t.cooked.mp3.tmplist | sed \
     -e '/PM.*scene8[-_]/!d' \
-    -e '/^\(\(middle\|low\) split\|bass\)	/d' \
+    -e '/^\(\(middle\|low\) split\|bass\)	.*scene8[-_][^2]/d' \
+    -e '/^\(\(middle\) split\|bass\)	.*scene8[-_]2/d' \
     -e '/^\(\|D\|D\^[^5]\)PM	.*bar799/d' \
     -e '/^\(p\|D\|D\^[^p]\)PM	.*bar807/d' \
     -e '/^\(\|D\|D\^[^3]\)PM	.*bar839/d' \
@@ -237,7 +238,7 @@ echo "... video" >&2
 cat "$tmplist" \
     | sed -e '/^MIRROR[^	]*VIDEO/I!d' \
           -e 's/^[^	]*	//' \
-          -e '/^\(Frog\|Peacock\|Jackal\|Koel Bird\|Mosquito\) Chorus\(, Measure [0-9]*\)\?	/Id' \
+          -e '/^\(Frog\|Peacock\|Jackal\|Koel Bird\|Mosquito\|Villagers\) Chorus\(, Measure [0-9]*\)\?	/Id' \
           -e '/^Five Kids	/Id' \
           -e '/^Jackal Movements [1-9]	/Id' \
           -e 's/^[^	]*	//' \
