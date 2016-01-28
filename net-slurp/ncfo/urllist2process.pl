@@ -19,7 +19,7 @@ while (<>) {
     map [split /:/, $_, 2], @tags;
   my $file = $url;
   $file =~ s,.*/,,;
-  $file =~ s,\%(2[0-9A-E]),chr(hex($1)),eig;
+  $file =~ s,\%([0-9A-E]{2}),chr(hex($1)),eig;
   my $dir = $ARGV;
   $dir =~ s,.*/,,;
   $dir =~ s,\..*,,;

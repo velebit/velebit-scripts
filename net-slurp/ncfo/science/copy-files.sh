@@ -13,12 +13,17 @@ while true; do
 done
 
 CF_ARGS=(-rf canonical-replacements.txt \
-    --no-replace-any-prefix --fallback-prefix LLMzz_)
+    --no-replace-any-prefix --fallback-prefix GoSzz_)
 
 inspect() {
-    #tee "log-$1.tmp"
-    cat
+    rm -f "log-$1.tmp"
+    if [ -e .inspect ]; then
+	tee "log-$1.tmp"
+    else
+	cat
+    fi
 }
+
 
 ./make-url-lists.sh
 ./urllist2process.pl *.mp3.urllist | inspect M1 \

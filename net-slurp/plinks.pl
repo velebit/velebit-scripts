@@ -19,6 +19,7 @@ our $STRONG_IS_HEADING_TOO = 0;
 our $SHOW_STRONG_OR_HEADING = 0;
 our $SHOW_PARENT1_TEXT = 0;
 our $SHOW_SAME_LINE_TEXT = 0;
+our $SHOW_SAME_LINE_NUM_LINKS = 0;
 our $SHOW_TEXT = 0;
 our $TABLE_LEVEL;
 GetOptions('verbose|v+' => \$VERBOSITY,
@@ -30,6 +31,7 @@ GetOptions('verbose|v+' => \$VERBOSITY,
 	   'show-bold-or-heading|hb!' => \$SHOW_STRONG_OR_HEADING,
 	   'show-parent-text|pt!' => \$SHOW_PARENT1_TEXT,
 	   'show-line-text|lt!' => \$SHOW_SAME_LINE_TEXT,
+	   'show-line-links|ll!' => \$SHOW_SAME_LINE_NUM_LINKS,
 	   'show-text|t!' => \$SHOW_TEXT,
 	   'table-level|tl=i' => \$TABLE_LEVEL,
 	   'not-in-table' => sub { $TABLE_LEVEL = 0 },
@@ -55,6 +57,13 @@ sub get_text ( @ ) {
   $text =~ s/[\s\xA0\xC2]+/ /sg;
   $text =~ s/^ //;  $text =~ s/ $//;
   $text;
+}
+
+
+sub get_num_links ( @ ) {
+  my (@nodes) = @_;
+  my @links = map $_->look_down(_tag => 'a'), grep defined, @nodes;
+  scalar @links;
 }
 
 
@@ -190,6 +199,13 @@ if ($SHOW_SAME_LINE_TEXT) {
   printf STDERR "    %-67s ", "Extracting text on the same line..." if $VERBOSITY;
   $_->{same_line_text} = get_text(get_same_line_siblings($_->{tag})) for @pages;
   push @fields, 'same_line_text';
+  print STDERR "done.\n" if $VERBOSITY;
+}
+
+if ($SHOW_SAME_LINE_NUM_LINKS) {
+  printf STDERR "    %-67s ", "Extracting # links on the same line..." if $VERBOSITY;
+  $_->{same_line_num_links} = get_num_links(get_same_line_siblings($_->{tag})) for @pages;
+  push @fields, 'same_line_num_links';
   print STDERR "done.\n" if $VERBOSITY;
 }
 

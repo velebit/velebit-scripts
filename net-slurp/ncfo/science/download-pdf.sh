@@ -1,6 +1,5 @@
 #!/bin/sh
-#page=node/175
-page=2015_Little_Light_Music_Lyrics_and_Sheet_Music
+page=2016_Giants_Of_Science_Practice_Page
 file="`basename "$page"`"
 type=pdf
 dir=pdf
@@ -11,7 +10,7 @@ cp -p "$dir/$file" "$dir/$file".orig
 wget --load-cookies cookies.txt \
     -nd -P "$dir" -N --restrict-file-names=windows \
     -A .pdf,.PDF,"$file" -r -l 1 \
-    -R Brochure-2014-09-30.pdf,Booklet-2014-09-30.pdf \
+    -R 2016SponsorshipBrochure.pdf,2016SponsorshipBrochure-booklet.pdf \
     --progress=bar:force \
     http://www.familyopera.org/drupal/"$page" \
   2>&1 | tee "$log"

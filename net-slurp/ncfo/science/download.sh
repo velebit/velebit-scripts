@@ -1,11 +1,9 @@
 #!/bin/sh
-#node=174
-page=2015_Little_Light_Music_Practice_MP3s
+page=2016_Giants_Of_Science_Practice_Page
 file="`basename "$page"`"
 type=mp3
 dir=mp3
-#log=download-"$type".log
-log=download.log
+log=download-"$type".log
 if [ -f "$dir"/index.html ]; then
     rm -f "$dir/$file"; mv "$dir"/index.html "$dir/$file"; fi
 cp -p "$dir/$file" "$dir/$file".orig
