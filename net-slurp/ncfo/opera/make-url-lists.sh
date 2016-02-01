@@ -79,7 +79,7 @@ for i in s a t b; do
 	-e 's/$/	out_file_suffix:---/' \
 	-e 's/^\(\([^	]* \)\?\(bar \?[1-9][^	]*\)	\([^	]*\)	\([^	]*\)	.*	out_file_suffix:---\)$/\1\2\5 \3/' \
 	-e 's/^\([^	]*\)	//' \
-	-e 's/^\(page \([1-9][0-9]*\).*	out_file_suffix:---\)$/\1PMs p\2/' \
+	-e 's/^\*\?\(page \([1-9][0-9]*\).*	out_file_suffix:---\)$/\1PMs p\2/' \
 	-e 's/^\([^	]*\)	//' \
 	-e 's/^\(\([^	]*\)	.*	out_file_suffix:---\)$/\1\2/' \
 	-e 's/	out_file_suffix:---$//' \
@@ -90,8 +90,8 @@ done
 # MP3s
 cat "$DIR"/ministers-s.cooked.mp3.tmplist | sed \
     -e '/scene9-2/,$d' \
-    -e '/^soprano p\(61\|71\|82\|105\) lo	/d' \
-    -e '/^\(\(middle\|low\) split\|bass\)	.*PM.*scene8[-_]/d' \
+    -e '/^soprano p\(46\|61\|71\) lo	/d' \
+    -e '/^\(\(high-\|low-\)\?middle\|low\|tenor\)\( split\)\?	.*PM.*[Ss]cene8[-_]/d' \
     -e '/^\(\|D\|D\^[^X]\)PM	.*scene8[-_].*bar799/d' \
     -e '/^\(\|D\|D\^[^X]\)PM	.*scene8[-_].*bar807/d' \
     -e '/^\(\|D\|D\^[^X]\)PM	.*scene8[-_].*bar839/d' \
@@ -103,7 +103,7 @@ cat "$DIR"/elders-s.mp3.tmplist | sed \
     >> Katarina.mp3.urllist
 cat "$DIR"/ministers-s.cooked.mp3.tmplist | sed \
     -e '/scene9-2/,$!d' \
-    -e '/^soprano p\(61\|71\|82\|105\) lo	/d' \
+    -e '/^soprano p\(71\|82\|105\) lo	/d' \
     -e '/^\(\(middle\|low\) split\|tenor\)	.*PM.*scene11[-_]/d' \
     -e '/^\(middle\|low\) split	.*PM.*scene15[-_]/d' \
     -e '/^\(\|D\|D\^[^6]\)PM	.*scene15[-_].*bar1785/d' \
@@ -122,7 +122,7 @@ cat "$DIR"/ministers-s.cooked.mp3.tmplist | sed \
 ### Abbe and bert (PMs tenor)
 # MP3s: common
 cat "$DIR"/ministers-t.cooked.mp3.tmplist | sed \
-    -e '/PM.*scene8[-_]/d' \
+    -e '/PM.*[Ss]cene8[-_]/d' \
     -e '/PM.*scene11[-_]/d' \
     -e '/PM.*scene15[-_]/d' \
     -e '/PM.*scene16[-_]/d' \
@@ -131,8 +131,8 @@ cat "$DIR"/ministers-t.cooked.mp3.tmplist | sed \
 
 # MP3s: Abbe only
 cat "$DIR"/ministers-t.cooked.mp3.tmplist | sed \
-    -e '/PM.*scene8[-_]/!d' \
-    -e '/^\(\(high\|middle\) split\|bass\)	/d' \
+    -e '/PM.*[Ss]cene8[-_]/!d' \
+    -e '/^\(high\|\(high-\|low-\)\?middle\|tenor\)\( split\)\?	/d' \
     -e '/^\(\|D\|D\^[^3]\)PM	.*bar799/d' \
     -e '/^\(\|D\|D\^[^4]\)PM	.*bar807/d' \
     -e '/^\(\|D\|D\^[^4]\)PM	.*bar839/d' \
@@ -162,9 +162,9 @@ cat "$DIR"/ministers-t.cooked.mp3.tmplist | sed \
 
 # MP3s: bert only
 cat "$DIR"/ministers-t.cooked.mp3.tmplist | sed \
-    -e '/PM.*scene8[-_]/!d' \
-    -e '/^\(\(middle\|low\) split\|bass\)	.*scene8[-_][^2]/d' \
-    -e '/^\(\(middle\) split\|bass\)	.*scene8[-_]2/d' \
+    -e '/PM.*[Ss]cene8[-_]/!d' \
+    -e '/^\(\(middle\|low\) split\|bass\)	.*[Ss]cene8[-_][^2]/d' \
+    -e '/^\(high\|\(high-\|low-\)\?middle\|low\)	.*[Ss]cene8[-_]2/d' \
     -e '/^\(\|D\|D\^[^5]\)PM	.*bar799/d' \
     -e '/^\(p\|D\|D\^[^p]\)PM	.*bar807/d' \
     -e '/^\(\|D\|D\^[^3]\)PM	.*bar839/d' \
