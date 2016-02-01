@@ -15,4 +15,5 @@
 ^(?=.*Noether) => GoS15_
 ^(?=.*Schr.{1,2}dinger) => GoS16_
 ^(?=.*Tesla.*Edison) => GoS17_
+^(?=.*Edison.*Tesla) => GoS17_
 ^(?=.*Tyson) => GoS18_
