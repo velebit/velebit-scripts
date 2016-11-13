@@ -2,7 +2,7 @@
 INDEX="${1-mp3/index.html}"
 INDEX_PDF="${2-${INDEX}}"
 
-DIR=urllists
+DIR=tmplists
 rm -f *.urllist "$DIR"/*.urllist *.tmplist "$DIR"/*.tmplist
 if [ ! -d "$DIR" ]; then mkdir "$DIR"; fi
 
@@ -12,27 +12,33 @@ t='	'
 c='[^'"$t"']'
 
 FULL="$DIR/raw0.tmplist"
-./plinks.pl -hb -lt -ll -t "$INDEX" > "$FULL"
+./plinks.pl -hb -lt -ll -t "$INDEX" \
+    > "$FULL"
 for voice in soprano alto tenor bass; do
     LEVEL1="$DIR/raw1-$voice.tmplist"
     sed -e '/^'"$voice"'.*\.mp3$/I!d' \
 	-e 's/^'"$c*$t"'//' \
+	-e '/^'"$c*Jane$c*Goodall"'/{;/^'"$c*$t$c*$t$c*down"'/!d;}' \
 	"$FULL" > "$LEVEL1"
 
     for split in '' -low -high; do
 	LEVEL2="$DIR/raw2-$voice$split.tmplist"
 
-	skip_split=
 	case "$voice$split" in
 	    soprano|alto|tenor-*|bass-*)
 		continue ;;
-	    soprano-high) skip_split='\(low\|middle\) split' ;;
-	    soprano-low)  skip_split='\(high\) split' ;;
-	    alto-high)    skip_split='\(low\) split' ;;
-	    alto-low)     skip_split='\(middle\|high\) split' ;;
+	    soprano-high) skip_split='\(low\|middle\)' ;;
+	    soprano-low)  skip_split='\(high\)' ;;
+	    alto-high)    skip_split='\(low\)'; skip_harm='middle' ;;
+	    alto-low)     skip_split='\(middle\|high\)'; skip_harm='high'  ;;
 	esac
 	if [ -n "$skip_split" ]; then
-	    sed -e '/^'"$c*$t$c*$t$c*$skip_split"'/d' \
+	    skip='\('"$skip_split split"'\|'"step $skip_split"
+	    if [ -n "$skip_harm" ]; then
+		skip="$skip"'\|'"$skip_harm harmony"
+	    fi
+	    skip="$skip"'\|last note F\)'
+	    sed -e '/^'"$c*$t$c*$t$c*$skip"'/d' \
 		"$LEVEL1" > "$LEVEL2"
 	else
 	    sed -e ':dummy' \
@@ -75,7 +81,13 @@ done
 
 sed -e '/^demo.*\.mp3$/I!d' \
     -e 's/^'"$c*$t"'//' -e 's/^'"$c*$t"'//' \
+    -e '/^2'"$t"'Jane Goodall'"$t"'/d' \
     -e 's/^'"$c*$t"'//' -e 's/^'"$c*$t"'//' "$FULL" > "$DIR"/demo.mp3.urllist
+
+sed -e '/^soloist.*\.mp3$/I!d' \
+    -e 's/^'"$c*$t"'//' -e 's/^'"$c*$t"'//' \
+    -e '/^2'"$t"'Jane Goodall'"$t"'/d' \
+    -e 's/^'"$c*$t"'//' -e 's/^'"$c*$t"'//' "$FULL" > "$DIR"/solo.mp3.urllist
 
 #sed -e '/\.pdf$/I!d' \
 #    -e 's/^'"$c*$t"'//' -e 's/^'"$c*$t"'//' \
@@ -88,8 +100,12 @@ fi
 
 ### specific URL lists for our family
 
-cp "$DIR"/soprano-high-kids.mp3.urllist \
-    Katarina+Luka.mp3.urllist
+sed -e '1,/AnnieJumpCannon/!d' \
+    "$DIR"/soprano-high-kids.mp3.urllist > Katarina+Luka.mp3.urllist
+sed -e '/AnnieJumpCannon/!d' \
+    "$DIR"/solo.mp3.urllist >> Katarina+Luka.mp3.urllist
+sed -e '1,/AnnieJumpCannon/d' \
+    "$DIR"/soprano-high-kids.mp3.urllist >> Katarina+Luka.mp3.urllist
 
 sed -e '/NothingForNow/Id' \
     "$DIR"/alto-low-adults.mp3.urllist > Abbe.mp3.urllist
@@ -108,13 +124,13 @@ ln -s "$DIR"/demo.mp3.urllist demo.mp3.urllist
 
 other=
 #other="$other soprano-high-kids"
-#other="$other soprano-high-adults"
+other="$other soprano-high-adults"
 #other="$other soprano-low-kids"
-#other="$other soprano-low-adults"
+other="$other soprano-low-adults"
 #other="$other alto-high-kids"
 #other="$other alto-high-adults"
 #other="$other alto-low-kids"
-#other="$other alto-low-adults"
+other="$other alto-low-adults"
 
 for vap in $other; do
     file="$vap".mp3.urllist

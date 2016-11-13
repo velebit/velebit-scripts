@@ -2,12 +2,14 @@
 ^(?=.*Archimedes) => GoS02_
 ^(?=.*Cannon) => GoS03_
 ^(?=.*Carver) => GoS04_
+^(?=.*Peanut.*Man) => GoS04_
 ^(?=.*Copernicus.*Kepler) => GoS05_
 ^(?=.*Curie) => GoS06_
 ^(?=.*Darwin) => GoS07_
 ^(?=.*Einstein) => GoS08_
 ^(?=.*Galileo) => GoS09_
 ^(?=.*Goodall) => GoS10_
+^(?=.*Lamarr) => GoS11_
 ^(?=.*Beauty.*Brain) => GoS11_
 ^(?=.*Lovelace) => GoS12_
 ^(?=.*Michelson.*Morley) => GoS13_
