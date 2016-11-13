@@ -6,6 +6,7 @@ PATH="${PATH}:${HOME}/perl-lib/bin"
 mp3info2='mp3info2'
 verbose=
 dryrun=
+wipe=
 
 id3_artist="NCFO practice"
 id3_album_prefix="`/bin/pwd | sed -e 's,.*[\\/],,'`: "
@@ -35,7 +36,9 @@ update_tags_from_playlist () {
 	local name="`echo "$file" | sed -e 's,.*/,,' -e 's/\.mp3$//i'`"
 	echo "Updating tags for $file..."
 	if [ -z "$dryrun" ]; then
-	    ##$mp3info2 -d ID3v1,ID3v2 -p "" "$file"
+	    if [ -n "$wipe" ]; then
+		$mp3info2 -d ID3v1,ID3v2 -p "" "$file"
+	    fi
 	    $mp3info2 -t "$name" -a "$id3_artist" \
 		-l "$id3_album_prefix$who$id3_album_suffix" \
 		-n "$track/$num_tracks" -p "" "$file"
@@ -85,6 +88,7 @@ while true; do
 	-xw2) id3_strip_style=word2; shift ;;
 	-xw3) id3_strip_style=word3; shift ;;
 	-xp) id3_strip_style=paren; shift ;;
+	-W) wipe=yes; shift ;;
 	*)  break ;;
     esac
 done
