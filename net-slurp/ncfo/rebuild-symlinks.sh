@@ -8,7 +8,18 @@ find_top_level_symlinks () {
 }
 
 get_subdirs () {
-    echo `ls -l "$TOP" | sed -e '/^d/!d;s/.* //;s/$/ |/'` -
+    ls -l "$TOP" | sed -e '/^d/!d;s/.* //'
+}
+get_abbrev_subdirs () {
+    get_subdirs | sed -e 's/performance.*/performance.../' | uniq
+}
+show_abbrev_expansion_subdirs () {
+    for d in performance; do
+	echo "  $d...:" `get_subdirs | sed -e '/^'"$d"'/!d;s/^'"$d"'//'`
+    done
+}
+get_abbrev_subdir_args () {
+    echo `get_abbrev_subdirs | sed -e 's/$/ |/'` -
 }
 
 if [ $# -lt 1 ]; then
@@ -32,7 +43,8 @@ esac
 if [ -z "$subdir" -o ! \( "$subdir" = "-" -o -d "$TOP/$subdir" \) ]; then
     echo "If guessing is not possible, you must specify an argument!" >&2
     echo "" >&2
-    echo "Usage: `basename "$0"` [`get_subdirs`]" >&2
+    echo "Usage: `basename "$0"` [`get_abbrev_subdir_args`]" >&2
+    show_abbrev_expansion_subdirs
     exit 1
 fi
 
