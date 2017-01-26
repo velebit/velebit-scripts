@@ -18,15 +18,15 @@ my $SHORT_PREFIX;
 my $FALLBACK_PREFIX;
 my $DEBUGGING = 0;
 
-sub add_replacement ( $ ) {
-  my ($string) = @_;
+sub add_replacement ( $@ ) {
+  my ($string, %flags) = @_;
   my ($regex, $replacement);
   ($regex, $replacement) = ($string =~ /^(.*)=>\s*(.*?)$/)
     or ($regex, $replacement) = ($string =~ /^(.*)=\s*(.*?)$/)
       or die "Could not parse replacement string '$string'";
   $regex =~ s/\s+$//s;
   $regex = qr/$regex/i;
-  push @EXTRA_REPLACEMENTS, [ $regex, $replacement ];
+  push @EXTRA_REPLACEMENTS, [ $regex, $replacement, \%flags ];
 }
 
 sub from_file ( $$ ) {
@@ -53,6 +53,8 @@ GetOptions('print-short-name|short-name|ps!' => \$PRINT_SHORT_NAME,
 	     sub { from_file($_[1],
 			     sub { push @EXTRA_STRIPPED_STRINGS, $_[0]; }); },
 	   'replace|r=s' => sub { add_replacement($_[1]); },
+	   'replace-global|rg=s' => sub { add_replacement($_[1],
+							  repeated => 1); },
 	   'replace-from-file|rf=s' =>
 	     sub { from_file($_[1], \&add_replacement); },
 	   'auto-prefix=s' => \$SHORT_PREFIX,
@@ -125,12 +127,14 @@ sub canonicalize_file ( $ ) {
   printf STDERR "cf%02d> %s [2dn]\n", ++$stage, $file if $DEBUGGING > 0;
   my $replaced;
   ++$stage;
+  for (0..$#EXTRA_REPLACEMENTS)
   {
-    my $r;
-    $r = $EXTRA_REPLACEMENTS[$_],
-      ($file =~ s/$r->[0]/qq(qq($r->[1]))/ee and $replaced = 1),
-	($DEBUGGING > 1 and printf STDERR "cf%02d> %s [xr$_]\n", $stage, $file)
-	  for 0..$#EXTRA_REPLACEMENTS;
+    my $r = $EXTRA_REPLACEMENTS[$_];
+    my $first = 1;
+    ($replaced = 1, $first = 0)
+      while ($first or $r->[2]{repeated})
+	and $file =~ s/$r->[0]/qq(qq($r->[1]))/ee;
+    $DEBUGGING > 1 and printf STDERR "cf%02d> %s [xr$_]\n", $stage, $file;
   }
   printf STDERR "cf%02d> %s [xr]\n", $stage, $file if $DEBUGGING == 1;
   if (! $replaced and defined $FALLBACK_PREFIX and length $FALLBACK_PREFIX) {
