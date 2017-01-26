@@ -15,7 +15,7 @@ while true; do
 	    STRIP_PREFIX=(cat); shift ;;
 	-w|--keep-word-separators)
 	    REPLACE_SPACES=(cat); shift ;;
-	-*)
+	-?*)
 	    echo "Unknown flag '$1'!" >&2 ; exit 1 ;;
 	*)
 	    break ;;
@@ -38,13 +38,13 @@ sort_tracks () {
 }
 
 strip_prefix () {
-    perl -pe 's/^[0-9A-Z](\w*[0-9A-Z])?(?:[0-9](\.[0-9])?[a-z]?|\+[a-z])[-_]//'
+    perl -pe 's/^[0-9A-Z](\w*[0-9A-Z])?(?:[0-9](\.[0-9])?[a-z]?|\+[a-z])[-_\s]//'
 }
 
 show_tracks () {
     for arg in "$@"; do
 	if [ "$arg" = "-" ]; then
-	    cat   # read from stdin
+	    sed -e '/^#/d;s/^[ 	]*//;/^$/d'   # read from stdin
 	elif [ -d "$arg" ]; then
 	    ls "$arg"/*.[mM][pP]3 | sort_tracks
 	elif [ -f "$arg" ]; then
