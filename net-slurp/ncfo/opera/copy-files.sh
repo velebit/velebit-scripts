@@ -3,17 +3,7 @@
 U2P_MP3_ARGS=()
 U2P_VIDEO_ARGS=(-s video/ -d ../video/)
 
-CF_ARGS=(--no-replace-any-prefix --prefix ''
-    -r '---(.*) p(\d+)(?: .*)?$=_pg-$2'
-    -r '---(.*) bar[- ]?(\d+)(?: .*)?$=_bar-$2'
-    -r '---.*$='
-    -r ' +=_'
-    -r '[-_]Practice(?:$|(?=[-_ ]))='
-    -r '^(.*?)[-_]WWscene(\d+(?:[-\.](?!8va)\d+)?)[-_]?=scene-$2___$1_'
-    -r '^scene-(.*)___(.*)_((pg|bar)-\d+)$=scene-$1_$3_$2' -r '___=_'
-    -r '^scene-(\d+)-(?!8va)(\d+)=scene-$1.$2'
-    -r '^scene-(\d+)\.(?!8va)(\d+)(.*cascade)=scene-$1.c$2$3'
-)
+CF_ARGS=(--no-replace-any-prefix --prefix '')
 
 PF_ARGS=()
 

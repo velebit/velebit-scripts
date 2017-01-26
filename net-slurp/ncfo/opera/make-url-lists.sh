@@ -10,251 +10,190 @@ DIR=tmplists
 rm -f *.urllist "$DIR"/*.urllist *.tmplist "$DIR"/*.tmplist
 if [ ! -d "$DIR" ]; then mkdir "$DIR"; fi
 
-##### temporary hack
-
-tmplist=big.mp3.tmplist
-echo "... big list (`echo "$tmplist" | sed -e 's/^big\.//;s/\..*//'`)" >&2
-./plinks.pl -hb -t "$INDEX" > "$tmplist"
-
-for i in Soprano Alto Tenor Demo; do
-    j="`echo "$i" | tr '[A-Z]' '[a-z]' | sed -e 's/^ac$/alto_c/'`"
-    case "$j" in demo) or_intro='';; *) or_intro='\|Intro';; esac
-    echo "... $j (tmp hack)" >&2
-    cat "$tmplist" \
-	| sed -e '/\.mp3$/I!d;/^[^	]*	\('"$i$or_intro"'\)/!d' \
-	      -e 's/^[^	]*	//' \
-	      -e 's/^\([^	]*\)	\(.*\)$/\2/' \
-	> "$j".mp3.urllist
-done
-if [ "$INDEX_PDF" = "$INDEX" ]; then
-    tmplist=big.mp3.tmplist
-else
-    tmplist=big.pdf.tmplist
-fi
-if [ ! -e "$tmplist" ]; then
-    echo "... big list (`echo "$tmplist" | sed -e 's/^big\.//;s/\..*//'`)" >&2
-    ./plinks.pl -hb -t "$INDEX_PDF" > "$tmplist"
-fi
-echo "... score" >&2
-./plinks.pl "$INDEX_PDF" \
-    | sed  -e '/\.pdf$/I!d;/^[^	]*score/I!d;/LibrettoBook/d' \
-           -e 's/^[^	]*	//' \
-           -e 's/^[^	]*	//' > score.pdf.urllist
-exit 0
-
 ##### generic prep
 
-reset_sections () {
-    ecl_args=(-f "$INDEX")
-}
-reset_sections
+# NOTE: this is an extraction implementation based on plinks, for use
+# with MP3s organized into text sections.  If the MP3s are organized
+# into a table, a different kind of solution based on
+# extract-column-links will be needed; see e.g. Weaver's Wedding 2016.
 
-add_section_column () {
+tmplist=big.mp3.tmplist
+if [ ! -e "$tmplist" ]; then
+    echo "... big list (`echo "$tmplist" | sed -e 's/^big\.//;s/\..*//'`)" >&2
+    ./plinks.pl -hb -t "$INDEX" > "$tmplist"
+fi
+
+extract_section () {
     local section="$1"; shift
-    local column="$1"; shift
-    local name="$1"; shift
-    local flags_on="$1"; shift
-    local flags_off="$1"; shift
+    local file="$1"; shift
+    local files_prefix="$1"; shift
+    local files_suffix="$1"; shift
 
-    ecl_args+=(-m "  .   $name ($section)" $flags_on)
-    # update section search expression; should happen AFTER defining message!
-    section="`echo "$section" | sed -e 's, ?\([/&]\) ?, *\1 *,'`"
+    local text_style=replace
+    #local text_style=prepend
+    local out_tag=out_file
+    if [ "$text_style" = prepend ]; then
+	out_tag=out_file_prefix
+	files_suffix="$files_suffix "
+    fi
 
-    ecl_args+=(-t "$section" -c "$column" -o "$DIR"/"$name.mp3.tmplist" \
-	$flags_off)
+    cat "$tmplist" \
+	| sed -e '/\.mp3$/I!d;/^'"$section"'/I!d' \
+	      -e 's/^[^	]*	//' \
+	      -e 's/^\([^	]*\)[:\*\?"<>|]/\1/' \
+	      -e 's/^\([^	]*\)[:\*\?"<>|]/\1/' \
+	      -e 's/^\([^	]*\)[:\*\?"<>|]/\1/' \
+	      -e 's/^\([^	]*\)[’]/\1'\''/' \
+	      -e 's/^\([^	]*\)[’]/\1'\''/' \
+	      -e 's/^\([^	]*\)[’]/\1'\''/' \
+	      -e 's/^\([^	]*\)	\(.*\)$/\2	'"$out_tag:$files_prefix"'\1'"$files_suffix"'/' \
+	      -e 's,^.*/sites/,http://www.familyopera.org/drupal/sites/,' \
+	> "$DIR"/"$file".mp3.tmplist
 }
 
-add_satb_section () {
-    local section="$1"; shift
+extract_satb_sections () {
+    local sec_prefix="$1"; shift
+    local sec_suffix="$1"; shift
     local base="$1"; shift
-    local flags_on="$1"; shift
-    local flags_off="$1"; shift
+    local files_prefix="$1"; shift
+    local files_suffix="$1"; shift
 
-    ecl_args+=(-m "  .   $base ($section)" $flags_on)
-    # update section search expression; should happen AFTER defining message!
-    section="`echo "$section" | sed -e 's,\([/&]\), *\1 *,'`"
-
-    for voice in 'Soprano' 'Alto' 'Tenor' 'Bass'; do
-	short="`echo "$voice" | sed -e 's/^\(.\).*/\1/;y/SATB/satb/'`"
-	ecl_args+=(-t "$section" -c "$voice" -o "$DIR"/"$base-$short.mp3.tmplist")
+    for voice in 'SOPRANO' 'ALTO' 'ALTO C' 'TENOR' 'BASS'; do
+	short="`echo "$voice" | sed -e 's/^\(.\)[^ ]* \?/\1/;y/SATBC/satbc/'`"
+	full_voice="$voice"
+	extract_section "$sec_prefix$full_voice$sec_suffix" "$base-$short" \
+	    "$files_prefix`echo "$short" | sed -e 'y/satb/SATB/'` " \
+	    "$files_suffix"
     done
-    ecl_args+=(-t "$section" -c '^$' -o "$DIR"/"$base-solos.mp3.tmplist" \
-	$flags_off)
 }
 
-extract_sections () {
-    echo "... sections" >&2
-    ./extract-column-links.pl -l "${ecl_args[@]}"
-    reset_sections
-}
+extract_satb_sections 'CITIZEN ' ' MP3s' 'citizens' 'Cit' ''
+extract_satb_sections 'COURTIER ' ' MP3s' 'courtiers' 'Cou' ''
 
-add_satb_section 'Courtiers/Peacocks' 'peacocks'
-add_satb_section 'Courtiers/Frogs' 'frogs'
-add_satb_section 'Courtiers/Myna Birds' 'mynas'
-add_satb_section 'Weavers/Jackals' 'jackals'
-add_satb_section 'Village Elders/Doves/Wise Teachers' 'elders'
-add_satb_section 'Farmers/Washerwomen/Koel-birds' 'koels'
-add_satb_section 'Village Children/Mosquitoes' 'mosquitoes'
-add_satb_section 'Prime Ministers/Brain-fever Birds' 'ministers' \
-    '--row-line --line-text' '--no-row-line --no-line-text'
-add_section_column 'Five Kids' 'Steve & Nina' 'kids-steve-nina'
-add_section_column 'Five Kids' 'Carla' 'kids-carla'
-add_section_column 'Five Kids' 'Laura' 'kids-laura'
-add_section_column 'Five Kids' 'Sam' 'kids-sam'
-extract_sections
+#extract_section 'FAROUK' 'Farouk-cit1'
+#extract_section 'SORAYA' 'Soraya-cit2'
+#extract_section 'ROSHAN AND BAHAAR' 'Roshan+Bahaar-cit'
+extract_section 'AZARMIK' 'Azarmik-cit3'
+extract_section 'FARZAD' 'Farzad-cit4'
+extract_section 'SHERBAN' 'Sherban-cit5'
+extract_section 'RAMIN' 'Ramin-cit6'
+extract_section 'KAVEH' 'Kaveh-cit7'
+extract_section 'AMIR' 'Amir-cit8'
+extract_section 'DARA' 'Dara-cit9'
+extract_section 'MEHRDAD' 'Mehrdad-hf1'
+extract_section 'HADI' 'Hadi-hf2'
+extract_section 'KARIM' 'Karim-hf3'
+#extract_section 'FAZLOLLA' 'Fazlolla-hf4'
+#extract_section 'ZETHAR' 'Zethar-cou'
+#extract_section 'BIZZETHA' 'Bizzetha-cou'
+#extract_section 'BIGTHA' 'Bigtha-cou'
+#extract_section 'ABAGTHA' 'Abagtha-cou'
+#extract_section 'HATHACH' 'Hathach-cou'
+#extract_section 'SAMIREH' 'Samireh-cou'
+extract_section 'CARSHENA' 'Carshena-cou'
+#extract_section 'SHETHAR AND ADMATHA' 'Shethar+Admatha-cou'
+#extract_section 'SUHRAB AND ZENDA' 'Suhrab+Zenda-cou'
+#extract_section 'GOLPAR' 'Golpar-cou'
 
-##### individual parts
-echo "... individual parts" >&2
+###### individual parts
+#echo "... individual parts" >&2
+#
+#for i in s a t b; do
+#    cat "$DIR"/ministers-"$i".mp3.tmplist | sed \
+#	-e 's/$/	out_file_suffix:---/' \
+#	-e 's/^\(\([^	]* \)\?\(bar \?[1-9][^	]*\)	\([^	]*\)	\([^	]*\)	.*	out_file_suffix:---\)$/\1\2\5 \3/' \
+#	-e 's/^\([^	]*\)	//' \
+#	-e 's/^\*\?\(page \([1-9][0-9]*\).*	out_file_suffix:---\)$/\1PMs p\2/' \
+#	-e 's/^\([^	]*\)	//' \
+#	-e 's/^\(\([^	]*\)	.*	out_file_suffix:---\)$/\1\2/' \
+#	-e 's/	out_file_suffix:---$//' \
+#	> "$DIR"/ministers-"$i".cooked.mp3.tmplist
+#done
 
-for i in s a t b; do
-    cat "$DIR"/ministers-"$i".mp3.tmplist | sed \
-	-e 's/$/	out_file_suffix:---/' \
-	-e 's/^\(\([^	]* \)\?\(bar \?[1-9][^	]*\)	\([^	]*\)	\([^	]*\)	.*	out_file_suffix:---\)$/\1\2\5 \3/' \
-	-e 's/^\([^	]*\)	//' \
-	-e 's/^\*\?\(page \([1-9][0-9]*\).*	out_file_suffix:---\)$/\1PMs p\2/' \
-	-e 's/^\([^	]*\)	//' \
-	-e 's/^\(\([^	]*\)	.*	out_file_suffix:---\)$/\1\2/' \
-	-e 's/	out_file_suffix:---$//' \
-	> "$DIR"/ministers-"$i".cooked.mp3.tmplist
-done
+extract_section 'DEMO MP3s' 'demo'
 
-### Katarina (PMs soprano high)
+### Katarina (citizens soprano, Harbona)
 # MP3s
-cat "$DIR"/ministers-s.cooked.mp3.tmplist | sed \
-    -e '/scene9-2/,$d' \
-    -e '/^soprano p\(46\|61\|71\) lo	/d' \
-    -e '/^\(\(high-\|low-\)\?middle\|low\|tenor\)\( split\)\?	.*PM.*[Ss]cene8[-_]/d' \
-    -e '/^\(\|D\|D\^[^X]\)PM	.*scene8[-_].*bar799/d' \
-    -e '/^\(\|D\|D\^[^X]\)PM	.*scene8[-_].*bar807/d' \
-    -e '/^\(\|D\|D\^[^X]\)PM	.*scene8[-_].*bar839/d' \
-    -e 's/^\([^	]*\)	//' \
+cat "$DIR"/citizens-s.mp3.tmplist | sed \
+    -e 's/NEVER_MATCHES//' \
     > Katarina.mp3.urllist
-cat "$DIR"/elders-s.mp3.tmplist | sed \
-    -e '/^doves.*scene9[-_]/!d' \
-    -e 's/^\([^	]*\)	\(.*\)$/\2	out_file_suffix:---\1/' \
-    >> Katarina.mp3.urllist
-cat "$DIR"/ministers-s.cooked.mp3.tmplist | sed \
-    -e '/scene9-2/,$!d' \
-    -e '/^soprano p\(71\|82\|105\) lo	/d' \
-    -e '/^\(\(middle\|low\) split\|tenor\)	.*PM.*scene11[-_]/d' \
-    -e '/^\(middle\|low\) split	.*PM.*scene15[-_]/d' \
-    -e '/^\(\|D\|D\^[^6]\)PM	.*scene15[-_].*bar1785/d' \
-    -e '/^\(\|D\|D\^[^X]\)PM	.*scene15[-_].*bar1818/d' \
-    -e '/^\(\|D\|D\^[^6]\)PM	.*scene15[-_].*bar1830/d' \
-    -e 's/^\([^	]*\)	//' \
+cat "$DIR"/demo.mp3.tmplist | sed \
+    -e '/TheSentence/!d' \
     >> Katarina.mp3.urllist
 
-## unstructured MP3 links following the table...
-#./plinks.pl -b -pt -t -tl 1 "$INDEX" \
-#    | sed -e '/\.mp3$/I!d' \
-#          -e '/^Soprano/!d;s/^[^	]*	//' \
-#          -e '/^[^	]*Meerkat/I!d;s/^[^	]*	//' \
-#          -e '/[^	]*low/I!d;s/^[^	]*	//' >> Katarina.mp3.urllist
-
-### Abbe and bert (PMs tenor)
-# MP3s: common
-cat "$DIR"/ministers-t.cooked.mp3.tmplist | sed \
-    -e '/PM.*[Ss]cene8[-_]/d' \
-    -e '/PM.*scene11[-_]/d' \
-    -e '/PM.*scene15[-_]/d' \
-    -e '/PM.*scene16[-_]/d' \
-    -e 's/^\([^	]*\)	//' \
-    > Abbe+bert.mp3.urllist
-
-# MP3s: Abbe only
-cat "$DIR"/ministers-t.cooked.mp3.tmplist | sed \
-    -e '/PM.*[Ss]cene8[-_]/!d' \
-    -e '/^\(high\|\(high-\|low-\)\?middle\|tenor\)\( split\)\?	/d' \
-    -e '/^\(\|D\|D\^[^3]\)PM	.*bar799/d' \
-    -e '/^\(\|D\|D\^[^4]\)PM	.*bar807/d' \
-    -e '/^\(\|D\|D\^[^4]\)PM	.*bar839/d' \
-    -e 's/^\([^	]*\)	//' \
+### Abbe (citizens alto)
+# MP3s
+cat "$DIR"/citizens-a.mp3.tmplist | sed \
+    -e 's/NEVER_MATCHES//' \
     > Abbe.mp3.urllist
-cat "$DIR"/elders-a.mp3.tmplist | sed \
-    -e '/^doves.*scene9[-_]/!d' \
-    -e 's/^\([^	]*\)	\(.*\)$/\2	out_file_suffix:---\1/' \
-    >> Abbe.mp3.urllist
-cat "$DIR"/ministers-t.cooked.mp3.tmplist | sed \
-    -e '/PM.*scene11[-_]/!d' \
-    -e '/^\(\(high\|middle\) split\|tenor\)	/d' \
-    -e 's/^\([^	]*\)	//' \
-    >> Abbe.mp3.urllist
-cat "$DIR"/ministers-t.cooked.mp3.tmplist | sed \
-    -e '/PM.*scene15[-_]/!d' \
-    -e '/^\(high\|middle\) split	/d' \
-    -e '/^\(\|D\|D\^[^4]\)PM	.*bar1785/d' \
-    -e '/^\(\|D\|D\^[^5]\)PM	.*bar1818/d' \
-    -e '/^\(\|D\|D\^[^6]\)PM	.*bar1830/d' \
-    -e 's/^\([^	]*\)	//' \
-    >> Abbe.mp3.urllist
-cat "$DIR"/ministers-t.cooked.mp3.tmplist | sed \
-    -e '/PM.*scene16[-_]/!d' \
-    -e 's/^\([^	]*\)	//' \
-    >> Abbe.mp3.urllist
+#cat "$DIR"/demo.mp3.tmplist | sed \
+#    -e '/TheSentence/!d' \
+#    >> Abbe.mp3.urllist
 
-# MP3s: bert only
-cat "$DIR"/ministers-t.cooked.mp3.tmplist | sed \
-    -e '/PM.*[Ss]cene8[-_]/!d' \
-    -e '/^\(\(middle\|low\) split\|bass\)	.*[Ss]cene8[-_][^2]/d' \
-    -e '/^\(high\|\(high-\|low-\)\?middle\|low\)	.*[Ss]cene8[-_]2/d' \
-    -e '/^\(\|D\|D\^[^5]\)PM	.*bar799/d' \
-    -e '/^\(p\|D\|D\^[^p]\)PM	.*bar807/d' \
-    -e '/^\(\|D\|D\^[^3]\)PM	.*bar839/d' \
-    -e 's/^\([^	]*\)	//' \
+### bert (citizens tenor, Azarmik)
+# MP3s
+cat "$DIR"/citizens-t.mp3.tmplist | sed \
+    -e 's/NEVER_MATCHES//' \
     > bert.mp3.urllist
-cat "$DIR"/elders-t.mp3.tmplist | sed \
-    -e '/^doves.*scene9[-_]/!d' \
-    -e 's/^\([^	]*\)	\(.*\)$/\2	out_file_suffix:---\1/' \
-    >> bert.mp3.urllist
-cat "$DIR"/ministers-t.cooked.mp3.tmplist | sed \
-    -e '/PM.*scene11[-_]/!d' \
-    -e '/^\(\(high\|middle\|low\) split\)	/d' \
-    -e 's/^\([^	]*\)	//' \
-    >> bert.mp3.urllist
-cat "$DIR"/ministers-t.cooked.mp3.tmplist | sed \
-    -e '/PM.*scene15[-_]/!d' \
-    -e '/^\(middle\|low\) split	/d' \
-    -e '/^\(p\|D\|D\^[^p]\)PM	.*bar1785/d' \
-    -e '/^\(\|D\|D\^[^3]\)PM	.*bar1818/d' \
-    -e '/^\(\|D\|D\^[^6]\)PM	.*bar1830/d' \
-    -e 's/^\([^	]*\)	//' \
-    >> bert.mp3.urllist
-cat "$DIR"/ministers-b.cooked.mp3.tmplist | sed \
-    -e '/PM.*scene16[-_]/!d' \
-    -e 's/^\([^	]*\)	//' \
+cat "$DIR"/Azarmik-cit3.mp3.tmplist \
     >> bert.mp3.urllist
 
-### Peacocks/Courtiers soprano low
-#     Laura Pitone and Avery Cole
-sed -e '/^soprano p\(61\|71\|82\|105\|120\) hi	/d' \
-    -e 's/^\([^	]*\)	\(.*\)$/\2	out_file_suffix:---\1/' \
-    "$DIR"/peacocks-s.mp3.tmplist > X-peacocks-soprano-low.mp3.urllist
+#### Meredith Gast (citizens/Haman's friends soprano + Mehrdad)
+cat "$DIR"/citizens-s.mp3.tmplist \
+    > X-MeredithGast.mp3.urllist
+cat "$DIR"/Mehrdad-hf1.mp3.tmplist \
+    >> X-MeredithGast.mp3.urllist
 
-### Peacocks/Courtiers alto
-#     Eliza Weinberger (Joanne Nicklas's daughter)
-sed -e 's/^\([^	]*\)	\(.*\)$/\2	out_file_suffix:---\1/' \
-    "$DIR"/peacocks-a.mp3.tmplist > X-peacocks-alto.mp3.urllist
+#### Erin Gast (citizens/Haman's friends alto C + Hadi)
+#### Sara Verrilli (citizens/Haman's friends alto C + Karim)
+cat "$DIR"/citizens-ac.mp3.tmplist \
+    > X-ErinGast+SaraVerrilli.mp3.urllist
+cat "$DIR"/Hadi-hf2.mp3.tmplist \
+    >> X-ErinGast+SaraVerrilli.mp3.urllist
+cat "$DIR"/Karim-hf3.mp3.tmplist \
+    >> X-ErinGast+SaraVerrilli.mp3.urllist
 
-### Myna Birds/Courtiers soprano low
-#     Gast/Verrilli
-sed -e '/^soprano p\(61\|71\|82\|105\|120\) hi	/d' \
-    -e 's/^\([^	]*\)	\(.*\)$/\2	out_file_suffix:---\1/' \
-    "$DIR"/mynas-s.mp3.tmplist > X-mynas-soprano-low.mp3.urllist
+#### Razi Youmans (citizens/Haman's friends soprano + Hadi)
+cat "$DIR"/citizens-s.mp3.tmplist \
+    > X-RaziYoumans.mp3.urllist
+cat "$DIR"/Hadi-hf2.mp3.tmplist \
+    >> X-RaziYoumans.mp3.urllist
 
-### Myna Birds/Courtiers alto
-#     Gast/Verrilli
-sed -e 's/^\([^	]*\)	\(.*\)$/\2	out_file_suffix:---\1/' \
-    "$DIR"/mynas-a.mp3.tmplist > X-mynas-alto.mp3.urllist
+#### Mindy Koyanis (citizens/Haman's friends tenor)
+#### Hope Kelley (citizens/Haman's friends tenor)
+cat "$DIR"/citizens-t.mp3.tmplist \
+    > X-Xcitizens-t.mp3.urllist
 
-### Jackals/Weavers tenor
-#     Heather Barney & David Gordon Mitten
-sed -e 's/^\([^	]*\)	\(.*\)$/\2	out_file_suffix:---\1/' \
-    "$DIR"/jackals-t.mp3.tmplist > X-jackals-tenor.mp3.urllist
+#### Heather Barney (courtiers/chamberlains tenor + Carshena)
+cat "$DIR"/courtiers-t.mp3.tmplist | sed \
+    -e '/LikeIraqVerse2/d;/FeastForUs1/d;/InsideLookinOut/d' \
+    > X-XHeatherBarney.mp3.urllist
+cat "$DIR"/Carshena-cou.mp3.tmplist \
+    >> X-XHeatherBarney.mp3.urllist
 
-### Doves/Village Elders alto
-#     Joanne Nicklas
-sed -e 's/^\([^	]*\)	\(.*\)$/\2	out_file_suffix:---\1/' \
-    "$DIR"/elders-a.mp3.tmplist > X-elders-alto.mp3.urllist
+#### Joanne Nicklas (courtiers/chamberlains alto + Edict TBD)
+cat "$DIR"/courtiers-a.mp3.tmplist | sed \
+    -e '/LikeIraqVerse2/d;/FeastForUs1/d;/InsideLookinOut/d' \
+    > X-XJoanneNicklas.mp3.urllist
+cat "$DIR"/Farzad-cit4.mp3.tmplist \
+    "$DIR"/Sherban-cit5.mp3.tmplist \
+    "$DIR"/Ramin-cit6.mp3.tmplist \
+    "$DIR"/Kaveh-cit7.mp3.tmplist \
+    "$DIR"/Amir-cit8.mp3.tmplist \
+    "$DIR"/Dara-cit9.mp3.tmplist \
+    >> X-XJoanneNicklas.mp3.urllist
+
+#### Eliza Weinberger (courtiers/chamberlains soprano + Edict TBD)
+cat "$DIR"/courtiers-s.mp3.tmplist | sed \
+    -e '/LikeIraqVerse2/d;/FeastForUs1/d;/InsideLookinOut/d' \
+    > X-XElizaWeinberger.mp3.urllist
+cat "$DIR"/Farzad-cit4.mp3.tmplist \
+    "$DIR"/Sherban-cit5.mp3.tmplist \
+    "$DIR"/Ramin-cit6.mp3.tmplist \
+    "$DIR"/Kaveh-cit7.mp3.tmplist \
+    "$DIR"/Amir-cit8.mp3.tmplist \
+    "$DIR"/Dara-cit9.mp3.tmplist \
+    >> X-XElizaWeinberger.mp3.urllist
 
 #####  video
 if [ "$INDEX_VIDEO" = "$INDEX" ]; then
@@ -268,21 +207,29 @@ if [ ! -e "$tmplist" ]; then
 fi
 echo "... video" >&2
 cat "$tmplist" \
-    | sed -e '/^MIRROR[^	]*VIDEO/I!d' \
+    | sed -e '/\.mp4$/I!d' \
+          -e '/MIRROR/I!d;/SLOW/Id' \
           -e 's/^[^	]*	//' \
-          -e '/^\(Frog\|Peacock\|Jackal\|Koel Bird\|Mosquito\|Villagers\) Chorus\(, Measure [0-9]*\)\?	/Id' \
-          -e '/^Five Kids	/Id' \
-          -e '/^Jackal Movements [1-9]	/Id' \
           -e 's/^[^	]*	//' \
-    > mirror.video.urllist
+    > mirror-fullsp.video.urllist
 cat "$tmplist" \
-    | sed -e '/^REGULAR[^	]*VIDEO/I!d' \
+    | sed -e '/\.mp4$/I!d' \
+          -e '/MIRROR/Id;/SLOW/Id' \
           -e 's/^[^	]*	//' \
-          -e '/^\(Frog\|Peacock\|Jackal\|Koel Bird\|Mosquito\) Chorus\(, Measure [0-9]*\)\?	/Id' \
-          -e '/^Five Kids	/Id' \
-          -e '/^Jackal Movements [1-9]	/Id' \
           -e 's/^[^	]*	//' \
-    > regular.video.urllist
+    > regular-fullsp.video.urllist
+cat "$tmplist" \
+    | sed -e '/\.mp4$/I!d' \
+          -e '/MIRROR/I!d;/SLOW/I!d' \
+          -e 's/^[^	]*	//' \
+          -e 's/^[^	]*	//' \
+    > mirror-slow.video.urllist
+cat "$tmplist" \
+    | sed -e '/\.mp4$/I!d' \
+          -e '/MIRROR/Id;/SLOW/I!d' \
+          -e 's/^[^	]*	//' \
+          -e 's/^[^	]*	//' \
+    > regular-slow.video.urllist
 
 ### demo MP3s
 if [ -e .generate-demo ]; then

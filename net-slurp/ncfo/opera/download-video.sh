@@ -1,6 +1,5 @@
 #!/bin/sh
-#page=Weavers_Wedding_2016_Practice_Materials
-page=Weavers_Wedding_2016_Choreography_Videos
+page=Springtime_for_Haman_2017_Choreography_Videos
 file="`basename "$page"`"
 type=video
 dir=video

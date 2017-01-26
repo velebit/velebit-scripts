@@ -1,6 +1,6 @@
 #!/bin/sh
-#node=197
-page=Springtime_for_Haman_2017_Performer_Materials
+#page=node/271
+page=Haman_Chorus_Practice_MP3s
 file="`basename "$page"`"
 type=mp3
 dir=mp3
