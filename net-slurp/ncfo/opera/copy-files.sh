@@ -1,6 +1,6 @@
 #!/bin/bash
 
-U2P_MP3_ARGS=()
+U2P_MP3_ARGS=(--enumerate)
 U2P_VIDEO_ARGS=(-s video/ -d ../video/)
 
 CF_ARGS=(--no-replace-any-prefix --prefix '')
@@ -38,4 +38,4 @@ inspect() {
 ./urllist2process.pl "${U2P_VIDEO_ARGS[@]}" *.video.urllist | inspect V1 \
     | ./process-files.pl "${PF_ARGS[@]}"
 (d="`pwd`"; cd ../video && "$d"/split-into-subdirs.sh)
-./id3-tags.sh
+./id3-tags.sh -tn

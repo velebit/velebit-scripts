@@ -11,18 +11,19 @@ wipe=
 id3_artist="NCFO practice"
 id3_album_prefix="`/bin/pwd | sed -e 's,.*[\\/],,'`: "
 id3_album_suffix=" practice"
-id3_strip_style=word2
+id3_playlist_strip_style=word2
+id3_track_strip_style=none
 
 update_tags_from_playlist () {
     local playlist="$1"
     local who="`echo "$playlist" | sed -e 's/\..*//'`"
-    case "$id3_strip_style" in
+    case "$id3_playlist_strip_style" in
 	none) ;;
 	word1) who="`echo "$who" | sed -e 's/ .*//'`" ;;
 	word2) who="`echo "$who" | sed -e 's/[^ ]* //;s/ .*//'`" ;;
 	word3) who="`echo "$who" | sed -e 's/[^ ]* //;s/[^ ]* //;s/ .*//'`" ;;
 	paren) who="`echo "$who" | sed -e 's/[^(]*(//;s/)[^)]*//'`" ;;
-	*) echo "Bad strip style '$id3_strip_style' (ignored)" >&2 ;;
+	*) echo "Bad strip style '$id3_playlist_strip_style' (ignored)" >&2 ;;
     esac
     ##local year="`date +'%Y'`"
     # This extracts just the file names from either a M3U or WPL playlist.
@@ -34,6 +35,12 @@ update_tags_from_playlist () {
     while IFS='' read -r file; do
 	track=$(($track + 1))
 	local name="`echo "$file" | sed -e 's,.*/,,' -e 's/\.mp3$//i'`"
+	case "$id3_track_strip_style" in
+	    none) ;;
+	    no_number)
+		name="`echo "$name" | sed -e 's/^[0-9][0-9]*[ _-]\?//'`" ;;
+	    *) echo "Bad strip style '$id3_track_strip_style' (ignored)" >&2 ;;
+	esac
 	echo "Updating tags for $file..."
 	if [ -z "$dryrun" ]; then
 	    if [ -n "$wipe" ]; then
@@ -83,11 +90,13 @@ while true; do
 	-a) id3_artist="$2"; shift; shift ;;
 	-p) id3_album_prefix="$2"; shift; shift ;;
 	-s) id3_album_suffix="$2"; shift; shift ;;
-	-xx) id3_strip_style=none; shift ;;
-	-xw1) id3_strip_style=word1; shift ;;
-	-xw2) id3_strip_style=word2; shift ;;
-	-xw3) id3_strip_style=word3; shift ;;
-	-xp) id3_strip_style=paren; shift ;;
+	-xx) id3_playlist_strip_style=none; shift ;;
+	-xw1) id3_playlist_strip_style=word1; shift ;;
+	-xw2) id3_playlist_strip_style=word2; shift ;;
+	-xw3) id3_playlist_strip_style=word3; shift ;;
+	-xp) id3_playlist_strip_style=paren; shift ;;
+	-tx) id3_track_strip_style=none; shift ;;
+	-tn) id3_track_strip_style=no_number; shift ;;
 	-W) wipe=yes; shift ;;
 	*)  break ;;
     esac
