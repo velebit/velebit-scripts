@@ -10,6 +10,38 @@ DIR=tmplists
 rm -f *.urllist "$DIR"/*.urllist *.tmplist "$DIR"/*.tmplist
 if [ ! -d "$DIR" ]; then mkdir "$DIR"; fi
 
+##### temporary hack
+
+tmplist=big.mp3.tmplist
+echo "... big list (`echo "$tmplist" | sed -e 's/^big\.//;s/\..*//'`)" >&2
+./plinks.pl -hb -t "$INDEX" > "$tmplist"
+
+for i in Soprano Alto Tenor Demo; do
+    j="`echo "$i" | tr '[A-Z]' '[a-z]' | sed -e 's/^ac$/alto_c/'`"
+    case "$j" in demo) or_intro='';; *) or_intro='\|Intro';; esac
+    echo "... $j (tmp hack)" >&2
+    cat "$tmplist" \
+	| sed -e '/\.mp3$/I!d;/^[^	]*	\('"$i$or_intro"'\)/!d' \
+	      -e 's/^[^	]*	//' \
+	      -e 's/^\([^	]*\)	\(.*\)$/\2/' \
+	> "$j".mp3.urllist
+done
+if [ "$INDEX_PDF" = "$INDEX" ]; then
+    tmplist=big.mp3.tmplist
+else
+    tmplist=big.pdf.tmplist
+fi
+if [ ! -e "$tmplist" ]; then
+    echo "... big list (`echo "$tmplist" | sed -e 's/^big\.//;s/\..*//'`)" >&2
+    ./plinks.pl -hb -t "$INDEX_PDF" > "$tmplist"
+fi
+echo "... score" >&2
+./plinks.pl "$INDEX_PDF" \
+    | sed  -e '/\.pdf$/I!d;/^[^	]*score/I!d;/LibrettoBook/d' \
+           -e 's/^[^	]*	//' \
+           -e 's/^[^	]*	//' > score.pdf.urllist
+exit 0
+
 ##### generic prep
 
 reset_sections () {
