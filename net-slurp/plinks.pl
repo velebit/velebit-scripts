@@ -15,7 +15,6 @@ sub Usage () {
 
 our $VERBOSITY = 0;
 our $SHOW_HEADING = 0;
-our $STRONG_IS_HEADING_TOO = 0;
 our $SHOW_STRONG_OR_HEADING = 0;
 our $SHOW_PARENT1_TEXT = 0;
 our $SHOW_SAME_LINE_TEXT = 0;
@@ -26,8 +25,7 @@ GetOptions('verbose|v+' => \$VERBOSITY,
 	   'show-heading|h!' => \$SHOW_HEADING,
 	   'bold-is-heading|b' =>
 	   sub { die("Option --bold-is-heading (-b) is deprecated." .
-		     "  Try --show-bold-or-heading (-hb)?\n\n");
-		 $STRONG_IS_HEADING_TOO = 1;  $SHOW_HEADING = 1 },
+		     "  Try --show-bold-or-heading (-hb)?\n\n"); },
 	   'show-bold-or-heading|hb!' => \$SHOW_STRONG_OR_HEADING,
 	   'show-parent-text|pt!' => \$SHOW_PARENT1_TEXT,
 	   'show-line-text|lt!' => \$SHOW_SAME_LINE_TEXT,
@@ -106,9 +104,13 @@ sub get_markup_headings ( $ ) {
 sub get_display_headings ( $ ) {
   my ($node) = @_;
   return unless $node;
+  my ($left, $right);
   grep(($_->tag ne 'strong'
-	or ($_->parent->tag =~ /^(?:p|dt)$/
-	    and nonempty($_->parent->content_list) == 1)),
+	or ($_->parent->tag =~ /^(?:p|dt|div)$/
+	    and ((($left = (nonempty($_->left))[-1]) ? $left->tag : '')
+		 =~ /^(?:br|hr|)$/)
+	    and ((($right = (nonempty($_->right))[0]) ? $right->tag : '')
+		 =~ /^(?:br|)$/))),
        $node->look_down(_tag => qr/^(?:title|h\d|strong)$/));
 }
 
@@ -172,8 +174,7 @@ if (defined $TABLE_LEVEL) {
 if ($SHOW_HEADING) {
   printf STDERR "    %-67s ", "Extracting headings..." if $VERBOSITY;
   clear_headings_cache;
-  my $get_headings = ($STRONG_IS_HEADING_TOO ?
-		      \&get_display_headings : \&get_markup_headings);
+  my $get_headings = \&get_markup_headings;
   $_->{heading} = find_heading_text($_->{tag}, $get_headings) for @pages;
   push @fields, 'heading';
   print STDERR "done.\n" if $VERBOSITY;
