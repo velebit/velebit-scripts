@@ -230,6 +230,12 @@ cat "$tmplist" \
           -e 's/^[^	]*	//' \
           -e 's/^[^	]*	//' \
     > regular-slow.video.urllist
+cat "$tmplist" \
+    | sed -e '/\.pdf$/I!d' \
+          -e '/sponsorship/Id' \
+          -e 's/^[^	]*	//' \
+          -e 's/^[^	]*	//' \
+    > blocking.video.urllist
 
 ### demo MP3s
 if [ -e .generate-demo ]; then

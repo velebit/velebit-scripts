@@ -9,7 +9,8 @@ top="with-subdirs"
 echo "Removing $top"
 rm -rf "$top"
 
-find . -name "$top" -prune -o -name '*.sh' -o -name '*~' -o -type f -print0 \
+find . -name "$top" -prune -o -name '*.sh' -o -name '*.pdf' -o -name '*~' \
+                           -o -type f -print0 \
 | while read -rd $'\0' path; do
     dir="`echo "$path" | sed -e 's!^\./!!;s!/[^/]*$!!'`"
     file="`echo "$path" | sed -e 's!^.*/!!'`"
