@@ -48,6 +48,13 @@ extract_section () {
 	      -e 's/^\([^	]*\)[’]/\1'\''/' \
 	      -e 's/^\([^	]*\)	\(.*\)$/\2	'"$out_tag:$files_prefix"'\1'"$files_suffix"'/' \
 	      -e 's,^.*/sites/,http://www.familyopera.org/drupal/sites/,' \
+	      -e 's,\xe2\x80\x99,'\'',g' \
+	      -e '/InsideLookinOut2/s/\(:Cit.[^ ]* \)/\1Inside Lookin'\'' Out 2, /' \
+	      -e '/LikeIraqVerse2/s/\(:Cou.[^ ]* \)/\1Second verse, /' \
+	      -e '/LikeIraq/s/\(:Cou.[^ ]* \)/\1Like Iraq, /' \
+	      -e '/AFeastForUs1/s/\(:Cou.[^ ]* \)/\1A Feast for Us 1, /' \
+	      -e '/InsideLookinOut1/s/\(:Cou.[^ ]* \)/\1Inside Lookin'\'' Out 1, /' \
+	      -e '/HowCanITell/s/\(:Cou.[^ ]* \)/\1How Can I, /' \
 	> "$DIR"/"$file".mp3.tmplist
 }
 
@@ -112,29 +119,57 @@ extract_section 'CARSHENA' 'Carshena-cou'
 
 extract_section 'DEMO MP3s' 'demo'
 
-### Katarina (citizens soprano, Harbona)
+### Katarina (citizens soprano, 2mA?, Harbona)
 # MP3s
 cat "$DIR"/citizens-s.mp3.tmplist | sed \
-    -e 's/NEVER_MATCHES//' \
+    -e '/HamansRage.*_Chorus[13B]/d' \
     > Katarina.mp3.urllist
 cat "$DIR"/demo.mp3.tmplist | sed \
     -e '/TheSentence/!d' \
     >> Katarina.mp3.urllist
 
-### Abbe (citizens alto)
+### Abbe (citizens alto, 2mB)
 # MP3s
 cat "$DIR"/citizens-a.mp3.tmplist | sed \
-    -e 's/NEVER_MATCHES//' \
+    -e '/HamansRage.*_Chorus[AB]/,$d' \
+    -e '/HamansRage.*_Chorus[13]/d' \
     > Abbe.mp3.urllist
-#cat "$DIR"/demo.mp3.tmplist | sed \
-#    -e '/TheSentence/!d' \
-#    >> Abbe.mp3.urllist
+cat "$DIR"/citizens-s.mp3.tmplist | sed \
+    -e '/HamansRage.*_ChorusB/!d' \
+    -e 's/CitS/high/' \
+    >> Abbe.mp3.urllist
+cat "$DIR"/citizens-a.mp3.tmplist | sed \
+    -e '/HamansRage.*_ChorusB/!d' \
+    >> Abbe.mp3.urllist
+cat "$DIR"/citizens-a.mp3.tmplist | sed \
+    -e '1,/HamansRage.*_Chorus[AB]/d;/HamansRage.*_Chorus[AB]/d' \
+    >> Abbe.mp3.urllist
 
-### bert (citizens tenor, Azarmik)
+### bert (citizens tenor, 2hA, Azarmik)
 # MP3s
 cat "$DIR"/citizens-t.mp3.tmplist | sed \
-    -e 's/NEVER_MATCHES//' \
+    -e '/KingsGateChorus/,$d' \
     > bert.mp3.urllist
+cat "$DIR"/citizens-t.mp3.tmplist "$DIR"/citizens-b.mp3.tmplist | sed \
+    -e '/KingsGateChorus/!d' \
+    >> bert.mp3.urllist
+cat "$DIR"/citizens-t.mp3.tmplist | sed \
+    -e '1,/KingsGateChorus/d;/HamansRage.*_Chorus[AB]/,$d' \
+    -e '/HamansRage.*_Chorus[13]/d' \
+    >> bert.mp3.urllist
+cat "$DIR"/citizens-b.mp3.tmplist | sed \
+    -e '/HamansRage.*_ChorusA/!d' \
+    -e 's/CitB/low/' \
+    >> bert.mp3.urllist
+cat "$DIR"/citizens-t.mp3.tmplist | sed \
+    -e '/HamansRage.*_ChorusA/!d' \
+    >> bert.mp3.urllist
+cat "$DIR"/citizens-t.mp3.tmplist | sed \
+    -e '1,/HamansRage.*_Chorus[AB]/d;/HamansRage.*_Chorus[AB]/d;/Encore/,$d' \
+    >> bert.mp3.urllist
+cat "$DIR"/citizens-t.mp3.tmplist "$DIR"/citizens-b.mp3.tmplist | sed \
+    -e '/Encore/,$!d' \
+    >> bert.mp3.urllist
 cat "$DIR"/Azarmik-cit3.mp3.tmplist \
     >> bert.mp3.urllist
 
@@ -146,8 +181,16 @@ cat "$DIR"/Mehrdad-hf1.mp3.tmplist \
 
 #### Erin Gast (citizens/Haman's friends alto C + Hadi)
 #### Sara Verrilli (citizens/Haman's friends alto C + Karim)
-cat "$DIR"/citizens-ac.mp3.tmplist \
+# with Alto bits missing from Alto C
+cat "$DIR"/citizens-ac.mp3.tmplist | sed \
+    -e '1,/HamansRage2/!d' \
     > X-ErinGast+SaraVerrilli.mp3.urllist
+cat "$DIR"/citizens-a.mp3.tmplist | sed \
+    -e '1,/HamansRage2/d;/HamansNightmare/,$d' \
+    >> X-ErinGast+SaraVerrilli.mp3.urllist
+cat "$DIR"/citizens-ac.mp3.tmplist | sed \
+    -e '/HamansNightmare/,$!d' \
+    >> X-ErinGast+SaraVerrilli.mp3.urllist
 cat "$DIR"/Hadi-hf2.mp3.tmplist \
     >> X-ErinGast+SaraVerrilli.mp3.urllist
 cat "$DIR"/Karim-hf3.mp3.tmplist \
@@ -160,9 +203,12 @@ cat "$DIR"/Hadi-hf2.mp3.tmplist \
     >> X-RaziYoumans.mp3.urllist
 
 #### Mindy Koyanis (citizens/Haman's friends tenor)
-#### Hope Kelley (citizens/Haman's friends tenor)
+#### Hope Kelley (citizens/Haman's friends AND courtiers/chamberlains tenor)
 cat "$DIR"/citizens-t.mp3.tmplist \
     > X-Xcitizens-t.mp3.urllist
+cat "$DIR"/courtiers-t.mp3.tmplist | sed \
+    -e '/LikeIraqVerse2/d;/FeastForUs1/d;/InsideLookinOut/d' \
+    > X-Xchamberlains-t.mp3.urllist
 
 #### Heather Barney (courtiers/chamberlains tenor + Carshena)
 cat "$DIR"/courtiers-t.mp3.tmplist | sed \
@@ -239,16 +285,8 @@ cat "$tmplist" \
 
 ### demo MP3s
 if [ -e .generate-demo ]; then
-    tmplist=big.mp3.tmplist
-    if [ ! -e "$tmplist" ]; then
-	echo "... big list (`echo "$tmplist" | sed -e 's/^big\.//;s/\..*//'`)" >&2
-	./plinks.pl -hb -t "$INDEX" > "$tmplist"
-    fi
     echo "... demo" >&2
-    cat "$tmplist" \
-	| sed -e '/\.mp3$/I!d;/^[^	]*demo/I!d;/complete	/Id' \
-	      -e 's/^[^	]*	//' \
-	      -e 's/^\([^	]*\)	\(.*\)$/\2	out_file:\1/' \
+    cat tmplists/demo.mp3.tmplist \
 	> demo.mp3.urllist
 fi
 
