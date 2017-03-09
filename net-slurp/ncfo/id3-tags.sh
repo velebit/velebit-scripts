@@ -25,6 +25,9 @@ update_tags_from_playlist () {
 	paren) who="`echo "$who" | sed -e 's/[^(]*(//;s/)[^)]*//'`" ;;
 	*) echo "Bad strip style '$id3_playlist_strip_style' (ignored)" >&2 ;;
     esac
+    case "$who" in
+	X-*) who="`echo "$who" | sed -e 's/^X-X*//'`" ;;
+    esac
     ##local year="`date +'%Y'`"
     # This extracts just the file names from either a M3U or WPL playlist.
     sed -e '/^ *<media src="/{;s|^[^"]*"||;s|".*||;s|&amp;|&|g;}' \
