@@ -28,14 +28,19 @@ inspect() {
 }
 
 ./make-url-lists.sh
-./urllist2process.pl "${U2P_MP3_ARGS[@]}" *.mp3.urllist | inspect M1 \
+
+set -- [^X]*.mp3.urllist
+if [ -e .copy-x ]; then set -- "$@" X*.mp3.urllist; fi
+./urllist2process.pl "${U2P_MP3_ARGS[@]}" "$@" | inspect M1 \
     | ./extras2process.pl mp3-extras.* | inspect M2 \
     | ./gain-cache.pl | inspect M3 \
     | ./canonicalize-filenames.pl "${CF_ARGS[@]}" | inspect M4 \
     | ./globally-uniq.pl --sfdd | inspect M5 \
     | ./playlists-from-process.pl | inspect M6 \
     | ./process-files.pl "${PF_ARGS[@]}"
+
 ./urllist2process.pl "${U2P_VIDEO_ARGS[@]}" *.video.urllist | inspect V1 \
     | ./process-files.pl "${PF_ARGS[@]}"
+
 (d="`pwd`"; cd ../video && "$d"/split-into-subdirs.sh)
 ./id3-tags.sh -tn
