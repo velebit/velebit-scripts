@@ -13,7 +13,7 @@ while true; do
 done
 
 CF_ARGS=(-rf canonical-replacements.txt \
-    --no-replace-any-prefix --fallback-prefix GoSzz_)
+    --no-replace-any-prefix --fallback-prefix SotRzz_)
 
 inspect() {
     rm -f "log-$1.tmp"

@@ -21,9 +21,10 @@ for voice in soprano alto tenor bass; do
 	-e '/^'"$c*Jane$c*Goodall"'/{;/^'"$c*$t$c*$t$c*down"'/!d;}' \
 	"$FULL" > "$LEVEL1"
 
-    for split in '' -low -high; do
+    for split in '' -low -high -all; do
 	LEVEL2="$DIR/raw2-$voice$split.tmplist"
 
+	skip_split=''; skip_harm=''
 	case "$voice$split" in
 	    soprano|alto|tenor-*|bass-*)
 		continue ;;
@@ -37,31 +38,36 @@ for voice in soprano alto tenor bass; do
 	    if [ -n "$skip_harm" ]; then
 		skip="$skip"'\|'"$skip_harm harmony"
 	    fi
-	    skip="$skip"'\|last note F\)'
-	    sed -e '/^'"$c*$t$c*$t$c*$skip"'/d' \
+	    #skip="$skip"'\|last note F'
+	    skip="$skip"'\)'
+	    sed -e '/^'"$c*$t$c*$t$c*$skip"'/Id' \
 		"$LEVEL1" > "$LEVEL2"
 	else
 	    sed -e ':dummy' \
 		"$LEVEL1" > "$LEVEL2"
 	fi
 
-	for age in adults kids; do
+	for age in adults kids all; do
 	    LEVEL3="$DIR/raw3-$voice$split-$age.tmplist"
 
 	    kids_regex='\(kids\|melody\)'
 	    case "$voice-$age" in
-		tenor-kids|bass-kids)
+		tenor-kids|tenor-all|bass-kids|bass-all)
 		    continue ;;
 		*-adults)
 		    sed -e '/^'"$c*$kids_regex$c*$t"'[^1]/{' \
-			-e '/^'"$c*$t$c*$t$c*$kids_regex"'/d' \
+			-e '/^'"$c*$t$c*$t$c*$kids_regex"'/Id' \
 			-e '}' \
 			"$LEVEL2" > "$LEVEL3"
 		    ;;
 		*-kids)
 		    sed -e '/^'"$c*$kids_regex$c*$t"'[^1]/{' \
-			-e '/^'"$c*$t$c*$t$c*$kids_regex"'/!d' \
+			-e '/^'"$c*$t$c*$t$c*$kids_regex"'/I!d' \
 			-e '}' \
+			"$LEVEL2" > "$LEVEL3"
+		    ;;
+		*-all)
+		    cat \
 			"$LEVEL2" > "$LEVEL3"
 		    ;;
 		*)  echo "***ERROR***"; exit 1 ;;
@@ -100,17 +106,20 @@ fi
 
 ### specific URL lists for our family
 
-sed -e '1,/AnnieJumpCannon/!d' \
+sed -e '/NothingForNow/Id' \
     "$DIR"/soprano-high-kids.mp3.urllist > Katarina+Luka.mp3.urllist
-sed -e '/AnnieJumpCannon/!d' \
-    "$DIR"/solo.mp3.urllist >> Katarina+Luka.mp3.urllist
-sed -e '1,/AnnieJumpCannon/d' \
-    "$DIR"/soprano-high-kids.mp3.urllist >> Katarina+Luka.mp3.urllist
+#sed -e '1,/AnnieJumpCannon/!d' \
+#    "$DIR"/soprano-high-kids.mp3.urllist > Katarina+Luka.mp3.urllist
+#sed -e '/AnnieJumpCannon/!d' \
+#    "$DIR"/solo.mp3.urllist >> Katarina+Luka.mp3.urllist
+#sed -e '1,/AnnieJumpCannon/d' \
+#    "$DIR"/soprano-high-kids.mp3.urllist >> Katarina+Luka.mp3.urllist
 
 sed -e '/NothingForNow/Id' \
     "$DIR"/alto-low-adults.mp3.urllist > Abbe.mp3.urllist
 
 sed -e '/NothingForNow/Id' \
+    -e 's/CloudMistFog-bari\./CloudMistFog-bari-rev1./' \
     "$DIR"/tenor-adults.mp3.urllist > bert.mp3.urllist
 sed -e '/NothingForNow/I!d' \
     "$DIR"/bass-adults.mp3.urllist >> bert.mp3.urllist
@@ -123,14 +132,16 @@ ln -s "$DIR"/demo.mp3.urllist demo.mp3.urllist
 # (X-... means don't bother updating the ID3 tags)
 
 other=
+other="$other soprano-all-all"
 #other="$other soprano-high-kids"
-other="$other soprano-high-adults"
+#other="$other soprano-high-adults"
 #other="$other soprano-low-kids"
-other="$other soprano-low-adults"
+#other="$other soprano-low-adults"
+other="$other alto-all-all"
 #other="$other alto-high-kids"
 #other="$other alto-high-adults"
 #other="$other alto-low-kids"
-other="$other alto-low-adults"
+#other="$other alto-low-adults"
 
 for vap in $other; do
     file="$vap".mp3.urllist
