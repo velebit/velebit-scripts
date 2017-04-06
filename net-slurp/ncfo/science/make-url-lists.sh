@@ -3,7 +3,8 @@ INDEX="${1-mp3/index.html}"
 INDEX_PDF="${2-${INDEX}}"
 
 DIR=tmplists
-rm -f *.urllist "$DIR"/*.urllist *.tmplist "$DIR"/*.tmplist
+rm -f *.urllist "$DIR"/*.urllist *.tmplist "$DIR"/*.tmplist \
+     "$DIR"/*.page-lines "$DIR"/*.txt
 if [ ! -d "$DIR" ]; then mkdir "$DIR"; fi
 
 ### generate simple URL lists
@@ -75,6 +76,11 @@ for voice in soprano alto tenor bass; do
 
 	    #for speed in "" "-slow"; do
 
+	    # Keep a list of lines from the HTML file for CD case generation
+	    LINES="$DIR/page_lines.$voice$split-$age.txt"
+	    sed -e 's/'"$t"'.*//' \
+		"$LEVEL3" > "$LINES"
+
 	    # That's all, folks!
 	    URLLIST="$DIR/$voice$split-$age.mp3.urllist"
 	    sed -e 's/^'"$c*$t"'//' \
@@ -88,15 +94,24 @@ done
 sed -e '/^demo.*\.mp3$/I!d' \
     -e 's/^'"$c*$t"'//' -e 's/^'"$c*$t"'//' \
     -e 's/^'"$c*$t"'//' -e 's/^'"$c*$t"'//' "$FULL" > "$DIR"/demo.mp3.urllist
+sed -e '/^demo.*\.mp3$/I!d' \
+    -e 's/^'"$c*$t"'//' \
+    -e 's/'"$t"'.*//' "$FULL" > "$DIR"/page_lines.demo.txt
 
 sed -e '/^soloist.*\.mp3$/I!d' \
     -e 's/^'"$c*$t"'//' -e 's/^'"$c*$t"'//' \
     -e 's/^'"$c*$t"'//' -e 's/^'"$c*$t"'//' "$FULL" > "$DIR"/solo.mp3.urllist
+sed -e '/^soloist.*\.mp3$/I!d' \
+    -e 's/^'"$c*$t"'//' \
+    -e 's/'"$t"'.*//' "$FULL" > "$DIR"/page_lines.solo.txt
 
 sed -e '/^\(piano\|orchestra\).*\.mp3$/I!d' \
     -e 's/^'"$c*$t"'//' -e 's/^'"$c*$t"'//' \
     -e 's/^'"$c*$t"'//' -e 's/^'"$c*$t"'//' "$FULL" \
     > "$DIR"/orchestra.mp3.urllist
+sed -e '/^\(piano\|orchestra\).*\.mp3$/I!d' \
+    -e 's/^'"$c*$t"'//' \
+    -e 's/'"$t"'.*//' "$FULL" > "$DIR"/page_lines.orchestra.txt
 
 #sed -e '/\.pdf$/I!d' \
 #    -e 's/^'"$c*$t"'//' -e 's/^'"$c*$t"'//' \
