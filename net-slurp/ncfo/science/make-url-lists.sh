@@ -18,7 +18,7 @@ for voice in soprano alto tenor bass; do
     LEVEL1="$DIR/raw1-$voice.tmplist"
     sed -e '/^'"$voice"'.*\.mp3$/I!d' \
 	-e 's/^'"$c*$t"'//' \
-	-e '/^'"$c*Jane$c*Goodall"'/{;/^'"$c*$t$c*$t$c*down"'/!d;}' \
+	-e '/^'"$c*Cloud,$c*Mist,$c*Fog"'/{;s/-bari\./-bari-rev1./;}' \
 	"$FULL" > "$LEVEL1"
 
     for split in '' -low -high -all; do
@@ -87,13 +87,16 @@ done
 
 sed -e '/^demo.*\.mp3$/I!d' \
     -e 's/^'"$c*$t"'//' -e 's/^'"$c*$t"'//' \
-    -e '/^2'"$t"'Jane Goodall'"$t"'/d' \
     -e 's/^'"$c*$t"'//' -e 's/^'"$c*$t"'//' "$FULL" > "$DIR"/demo.mp3.urllist
 
 sed -e '/^soloist.*\.mp3$/I!d' \
     -e 's/^'"$c*$t"'//' -e 's/^'"$c*$t"'//' \
-    -e '/^2'"$t"'Jane Goodall'"$t"'/d' \
     -e 's/^'"$c*$t"'//' -e 's/^'"$c*$t"'//' "$FULL" > "$DIR"/solo.mp3.urllist
+
+sed -e '/^\(piano\|orchestra\).*\.mp3$/I!d' \
+    -e 's/^'"$c*$t"'//' -e 's/^'"$c*$t"'//' \
+    -e 's/^'"$c*$t"'//' -e 's/^'"$c*$t"'//' "$FULL" \
+    > "$DIR"/orchestra.mp3.urllist
 
 #sed -e '/\.pdf$/I!d' \
 #    -e 's/^'"$c*$t"'//' -e 's/^'"$c*$t"'//' \
@@ -119,7 +122,6 @@ sed -e '/NothingForNow/Id' \
     "$DIR"/alto-low-adults.mp3.urllist > Abbe.mp3.urllist
 
 sed -e '/NothingForNow/Id' \
-    -e 's/CloudMistFog-bari\./CloudMistFog-bari-rev1./' \
     "$DIR"/tenor-adults.mp3.urllist > bert.mp3.urllist
 sed -e '/NothingForNow/I!d' \
     "$DIR"/bass-adults.mp3.urllist >> bert.mp3.urllist
@@ -142,6 +144,9 @@ other="$other alto-all-all"
 #other="$other alto-high-adults"
 #other="$other alto-low-kids"
 #other="$other alto-low-adults"
+other="$other tenor-adults"
+#other="$other bass-adults"
+other="$other orchestra"
 
 for vap in $other; do
     file="$vap".mp3.urllist
