@@ -136,10 +136,12 @@ sed -e '/NothingForNow/Id' \
 sed -e '/NothingForNow/Id' \
     "$DIR"/alto-low-adults.mp3.urllist > Abbe.mp3.urllist
 
-sed -e '/NothingForNow/Id' \
+sed -e '/Water.*Cycle/I,$d' \
     "$DIR"/tenor-adults.mp3.urllist > bert.mp3.urllist
-sed -e '/NothingForNow/I!d' \
+sed -e '/Water.*Cycle/I!d;/Low/Id' \
     "$DIR"/bass-adults.mp3.urllist >> bert.mp3.urllist
+sed -e '1,/Water.*Cycle/Id' \
+    "$DIR"/tenor-adults.mp3.urllist >> bert.mp3.urllist
 
 
 ln -s "$DIR"/demo.mp3.urllist demo.mp3.urllist
