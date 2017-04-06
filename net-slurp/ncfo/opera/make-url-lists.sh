@@ -167,7 +167,10 @@ cat "$DIR"/citizens-t.mp3.tmplist | sed \
 cat "$DIR"/citizens-t.mp3.tmplist | sed \
     -e '1,/HamansRage.*_Chorus[AB]/d;/HamansRage.*_Chorus[AB]/d;/Encore/,$d' \
     >> bert.mp3.urllist
-cat "$DIR"/citizens-t.mp3.tmplist "$DIR"/citizens-b.mp3.tmplist | sed \
+cat "$DIR"/citizens-t.mp3.tmplist | sed \
+    -e '/Encore/,$!d' \
+    >> bert.mp3.urllist
+cat "$DIR"/citizens-b.mp3.tmplist | sed \
     -e '/Encore/,$!d' \
     >> bert.mp3.urllist
 cat "$DIR"/Azarmik-cit3.mp3.tmplist \
