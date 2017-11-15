@@ -79,7 +79,7 @@ extract_satb_sections () {
 #extract_satb_sections '' ' MP3s' 'courtiers' 'Cou' ''
 #extract_section 'AZARMIK' 'Azarmik-cit3'
 
-extract_satb_sections '' '' 'all'
+extract_satb_sections '' '	' 'all'
 
 extract_section 'DEMO MP3s' 'demo'
 
