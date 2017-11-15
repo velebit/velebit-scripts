@@ -15,7 +15,7 @@
 ^(?=.*Global.*Shuffle) => SotR10_
 ^(?=.*Gospel.*Climate) => SotR11_
 ^(?=.*How.*Beautiful) => SotR12_
-^(?=.*Hurricanes.*) => SotR13_
+^(?=.*Hurricane.*) => SotR13_
 ^(?=.*Phytoplankton) => SotR14_
 ^(?=.*Pilgrim.*Problem) => SotR15_
 ^(?=.*Joe.*Svanti.*Charlie) => SotR16_
