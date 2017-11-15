@@ -36,8 +36,12 @@ if [ $# -lt 1 ]; then
 fi
 
 case "$1" in
-    chorus) subdir=science ;;
-    *)      subdir="$1" ;;
+    chorus)
+	subdir=science ;;
+    auditions)
+	subdir=audition ;;
+    *)
+	subdir="$1" ;;
 esac
 
 if [ -z "$subdir" -o ! \( "$subdir" = "-" -o -d "$TOP/$subdir" \) ]; then
@@ -52,7 +56,16 @@ fi
 find_top_level_symlinks -print0 | xargs -0 -r rm -f
 
 # Recreate symlinks.
-ln -s "$TOP"/*.*[^~] .
-[ "$subdir" != "-" ] && \
+if [ "$subdir" != "-" ]; then
+    # link everything from the subdirectory, if any
     ln -s "$TOP"/"$subdir"/*.*[^~] .
-ln -s /home/bert/scripts/net-slurp/plinks.pl .
+fi
+if [ "$subdir" != "audition" ]; then
+    # in most cases, link everything from the top level
+    ln -s "$TOP"/*.*[^~] .
+    # ...plus plinks from one level up.
+    ln -s /home/bert/scripts/net-slurp/plinks.pl .
+else
+    # fallback: link at least this script from the top level!
+    ln -s "$TOP"/"`basename "$0"`" .
+fi
