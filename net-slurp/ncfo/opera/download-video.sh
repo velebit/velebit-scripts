@@ -1,5 +1,5 @@
 #!/bin/sh
-page=Springtime_for_Haman_2017_Choreography_Videos
+page=Weedpatch_2018_Choreography_Videos
 file="`basename "$page"`"
 type=video
 dir=video

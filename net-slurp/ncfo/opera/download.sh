@@ -1,6 +1,6 @@
 #!/bin/sh
 #page=node/271
-page=Haman_Chorus_Practice_MP3s
+page=Weedpatch_2018_Practice_Materials
 file="`basename "$page"`"
 type=mp3
 dir=mp3
