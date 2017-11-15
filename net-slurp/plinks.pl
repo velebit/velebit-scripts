@@ -13,10 +13,14 @@ sub Usage () {
   exit 1;
 }
 
+our $WHITESPACE_MAX_IGNORED = 1;
+our $WHITESPACE_DELTA_IGNORED = 0;
+
 our $VERBOSITY = 0;
 our $SHOW_HEADING = 0;
 our $SHOW_STRONG_OR_HEADING = 0;
 our $SHOW_PARENT1_TEXT = 0;
+our $SHOW_PRECEDING_LESS_INDENTED_TEXT = 0;
 our $SHOW_SAME_LINE_TEXT = 0;
 our $SHOW_SAME_LINE_NUM_LINKS = 0;
 our $SHOW_TEXT = 0;
@@ -28,6 +32,7 @@ GetOptions('verbose|v+' => \$VERBOSITY,
 		     "  Try --show-bold-or-heading (-hb)?\n\n"); },
 	   'show-bold-or-heading|hb!' => \$SHOW_STRONG_OR_HEADING,
 	   'show-parent-text|pt!' => \$SHOW_PARENT1_TEXT,
+	   'show-less-indented|li:999' => \$SHOW_PRECEDING_LESS_INDENTED_TEXT,
 	   'show-line-text|lt!' => \$SHOW_SAME_LINE_TEXT,
 	   'show-line-links|ll!' => \$SHOW_SAME_LINE_NUM_LINKS,
 	   'show-text|t!' => \$SHOW_TEXT,
@@ -44,12 +49,19 @@ $tree->objectify_text();
 print STDERR "done.\n" if $VERBOSITY;
 
 
-sub get_text ( @ ) {
+sub get_raw_text ( @ ) {
   my (@nodes) = @_;
   @nodes = grep defined, @nodes;
   return '' unless @nodes;
   @nodes = map $_->clone, @nodes;
   my $text = join '', map(($_->deobjectify_text() || $_->as_text), @nodes);
+  $text;
+}
+
+
+sub get_text ( @ ) {
+  my (@nodes) = @_;
+  my $text = get_raw_text(@nodes);
   # 0xA0 is a non-breaking space in Latin-1 and Unicode.
   # 0xC2 0xA0 is the UTF-8 representation of U+00A0; this is a horrible hack.
   $text =~ s/[\s\xA0\xC2]+/ /sg;
@@ -65,9 +77,19 @@ sub get_num_links ( @ ) {
 }
 
 
+sub get_leading_whitespace_amount ( @ ) {
+  my (@nodes) = @_;
+  my $text = join '', map get_raw_text($_), grep defined, @nodes;
+  s/\t/    /g;  # HACK: treat each tab like 4 spaces
+  $text =~ s/\xA0/ /g;  $text =~ s/\xC2//g;
+  my $whitespace = (($text =~ /^( +)/) ? length $1 : 0);
+  ($whitespace > $WHITESPACE_MAX_IGNORED) ? $whitespace : 0;
+}
+
+
 sub get_same_line_siblings ( $ ) {
   my ($node) = @_;
-  return '' unless $node;
+  return () unless $node;
   my @list = ($node);
   {
     my $prev = $node;
@@ -87,6 +109,57 @@ sub get_same_line_siblings ( $ ) {
   }
   # TODO: go to parent if list has only 1 node?
   @list;
+}
+
+
+sub get_previous_line_siblings ( $ ) {
+  my ($node) = @_;
+  return () unless $node;
+  {
+    while (1) {
+      $node->look_down(_tag => qr/^(?:br|hr)$/) and last;
+      $node = $node->left or return ();
+    }
+  }
+  my @list = ($node);
+  {
+    my $prev = $node;
+    while (1) {
+      $prev = $prev->left or last;
+      $prev->look_down(_tag => qr/^(?:br|hr)$/) and last;
+      unshift @list, $prev;
+    }
+  }
+  @list;
+}
+
+
+sub get_preceding_less_indented_lines_text ( $;$ ) {
+  my ($node, $max_lines) = @_;
+  return '' unless $node;
+  my $indent = 0;
+  {
+    my @current = get_same_line_siblings($node);
+    $indent = get_leading_whitespace_amount(@current);
+    $node = $current[0] if @current;
+  }
+  my @lines;
+  {
+  LINE:
+    while ($node and $indent > $WHITESPACE_DELTA_IGNORED) {
+      my @previous = get_previous_line_siblings($node)
+	or last LINE;
+      my $previous_indent = get_leading_whitespace_amount(@previous);
+      $node = $previous[0];
+      if ($previous_indent < ($indent - $WHITESPACE_DELTA_IGNORED)) {
+	unshift @lines, get_text(@previous);
+	$indent = $previous_indent;
+	defined $max_lines and @lines == $max_lines and last LINE;
+      }
+    }
+  }
+  my $separator = ' // ';
+  join $separator, @lines;
 }
 
 
@@ -193,6 +266,16 @@ if ($SHOW_PARENT1_TEXT) {
   printf STDERR "    %-67s ", "Extracting parent text..." if $VERBOSITY;
   $_->{parent1_text} = get_text($_->{tag}->parent) for @pages;
   push @fields, 'parent1_text';
+  print STDERR "done.\n" if $VERBOSITY;
+}
+
+if ($SHOW_PRECEDING_LESS_INDENTED_TEXT > 0) {
+  printf STDERR "    %-67s ", "Extracting text on the less indented line(s) in parent..." if $VERBOSITY;
+  $_->{preceding_less_indented_text} =
+    get_preceding_less_indented_lines_text(
+      $_->{tag}, $SHOW_PRECEDING_LESS_INDENTED_TEXT)
+      for @pages;
+  push @fields, 'preceding_less_indented_text';
   print STDERR "done.\n" if $VERBOSITY;
 }
 
