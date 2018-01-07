@@ -54,6 +54,8 @@ extract_section () {
 	      -e 's/^\([^	]*\)[’]/\1'\''/' \
 	      -e 's/^\([^	]*\)[’]/\1'\''/' \
 	      -e 's/   */ /g' -e 's/^  *//' -e 's/  *	/	/g' \
+	      -e 's/\(Scene 1\) 1/\1/' -e 's/\(Scene 2\) 2/\1/' \
+	      -e 's/\(Scene [1-9][a-z]\?\) /\1 - /' -e 's/ - - / - /' \
 	      -e 's/^\([^	]*\)	\(.*\)$/\2	'"$out_tag:$files_prefix"'\1'"$files_suffix"'/' \
 	      -e 's,^.*/sites/,http://www.familyopera.org/drupal/sites/,' \
 	      -e 's,\xe2\x80\x99,'\'',g' \
@@ -81,6 +83,9 @@ extract_satb_sections () {
 
 extract_satb_sections '' '	' 'all'
 
+cat "$DIR"/all-{s,a,ac,t,b}.mp3.tmplist \
+    > X-all-voices.mp3.urllist
+
 extract_section 'DEMO MP3s' 'demo'
 
 ### Katarina (soprano 1)
@@ -96,15 +101,15 @@ cat "$DIR"/all-a.mp3.tmplist | sed \
     -e '/placeholder/d' \
     > Abbe+Luka.mp3.urllist
 
-### bert (tenor, I guess?)
+### bert (tenor)
 # MP3s
 cat "$DIR"/all-t.mp3.tmplist | sed \
     -e '/placeholder/d' \
     > bert.mp3.urllist
-cat "$DIR"/all-b.mp3.tmplist | sed \
-    -e '/low split/Id' \
-    -e '/low bass/Id' \
-    >> bert.mp3.urllist
+#cat "$DIR"/all-b.mp3.tmplist | sed \
+#    -e '/low split/Id' \
+#    -e '/low bass/Id' \
+#    >> bert.mp3.urllist
 
 #####  video
 if [ "$INDEX_VIDEO" = "$INDEX" ]; then
