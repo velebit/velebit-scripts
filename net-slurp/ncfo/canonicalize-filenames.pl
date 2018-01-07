@@ -82,6 +82,22 @@ GetOptions('print-short-name|short-name|ps!' => \$PRINT_SHORT_NAME,
 		       [ qr/^KC44_?(?=.*Story.*End)/i, 'KC44.3_' ],
 		      ) unless @EXTRA_REPLACEMENTS;
 
+# ----------------------------------------------------------------------
+
+sub slurp ( $ ) {
+  my ($file) = @_;
+  my @lines;
+  from_file($file, sub { push @lines, $_[0]; });
+  @lines;
+}
+
+sub slurp_line ( $ ) {
+  my ($file) = @_;
+  my @lines = slurp($file);
+  @lines == 1 or die "Expected one line in $file";
+  $lines[0];
+}
+
 my $short_name_suffix = '';
 my @wd_elements = split(m!/!, getcwd);
 while (@wd_elements) {
@@ -91,13 +107,20 @@ while (@wd_elements) {
     and pop(@wd_elements), $short_name_suffix = "_aud$short_name_suffix", next;
   last;
 }
-my $short_name = $wd_elements[-1];
-$short_name =~ s/[\[\]]+//g;
-$short_name =~ s/(?<!\S)(\w[A-Z0-9]*)/[$1]/g;
-$short_name =~ s/^/\]/;
-$short_name =~ s/$/\[/;
-$short_name =~ s/\].*?\[//g;
-$short_name =~ /[\[\]]/ and die "bad short name generated: '$short_name'\n ";
+my $Wd_override_file = join('/', @wd_elements, '.short');
+my $short_name;
+if (-e $Wd_override_file) {
+  $short_name = slurp_line $Wd_override_file;
+} else {
+  $short_name = $wd_elements[-1];
+  $short_name =~ s/[\[\]]+//g;
+  $short_name =~ s/(?<!\S)(\w[A-Z0-9]*)/[$1]/g;
+  $short_name =~ s/^(\[[0-9]*)(\])/$1 $2/;
+  $short_name =~ s/^/\]/;
+  $short_name =~ s/$/\[/;
+  $short_name =~ s/\].*?\[//g;
+  $short_name =~ /[\[\]]/ and die "bad short name generated: '$short_name'\n ";
+}
 $short_name .= $short_name_suffix;
 
 if ($PRINT_SHORT_NAME) {
