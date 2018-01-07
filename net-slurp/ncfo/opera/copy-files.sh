@@ -7,10 +7,13 @@ CF_ARGS=(--no-replace-any-prefix --prefix '')
 
 PF_ARGS=()
 
+GAIN_CACHE=./gain-cache.pl
+
 while true; do
     case "$1" in
 	-f|--fast)
-	    PF_ARGS=("${PF_ARGS[@]}" --no-gain --no-wipe); shift ;;
+	    PF_ARGS=("${PF_ARGS[@]}" --no-gain --no-wipe)
+	    GAIN_CACHE=cat; shift ;;
 	-*)
 	    echo "Unknown flag '$1'!" >&2 ; exit 1 ;;
 	*)
@@ -33,7 +36,7 @@ set -- [^X]*.mp3.urllist
 if [ -e .copy-x ]; then set -- "$@" X*.mp3.urllist; fi
 ./urllist2process.pl "${U2P_MP3_ARGS[@]}" "$@" | inspect M1 \
     | ./extras2process.pl mp3-extras.* | inspect M2 \
-    | ./gain-cache.pl | inspect M3 \
+    | "$GAIN_CACHE" | inspect M3 \
     | ./canonicalize-filenames.pl "${CF_ARGS[@]}" | inspect M4 \
     | ./globally-uniq.pl --sfdd | inspect M5 \
     | ./playlists-from-process.pl | inspect M6 \
@@ -43,4 +46,6 @@ if [ -e .copy-x ]; then set -- "$@" X*.mp3.urllist; fi
     | ./process-files.pl "${PF_ARGS[@]}"
 
 (d="`pwd`"; cd ../video && "$d"/split-into-subdirs.sh)
-./id3-tags.sh -tn
+
+word_idx="`(./canonicalize-filenames.pl --print-short;echo and_add_1) | wc -w`"
+./id3-tags.sh -p "`./canonicalize-filenames.pl -ps` " -tn -xw"$word_idx"
