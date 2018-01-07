@@ -83,33 +83,83 @@ extract_satb_sections () {
 
 extract_satb_sections '' '	' 'all'
 
-cat "$DIR"/all-{s,a,ac,t,b}.mp3.tmplist \
+cat "$DIR"/all-{s,a,ac,t,b}.mp3.tmplist | sed \
+    -e '/KCCC/d' \
     > X-all-voices.mp3.urllist
 
 extract_section 'DEMO MP3s' 'demo'
 
-### Katarina (soprano 1)
+### Katarina (soprano 1 with some alto)
 # MP3s
 cat "$DIR"/all-s.mp3.tmplist | sed \
-    -e '/soprano 2/Id' \
-    -e '/low split/Id' \
+    -e '/Act I Scene 1e/,$d' \
+    -e '/soprano 2/Id;/\(low\|middle\) split/Id' \
+    -e '/KCCC/d;/Townie/d' \
     > Katarina.mp3.urllist
+cat "$DIR"/all-a.mp3.tmplist | sed \
+    -e '/Act I Scene 1e/!d' \
+    -e '/KCCC/d;/Townie/d' \
+    >> Katarina.mp3.urllist
+cat "$DIR"/all-s.mp3.tmplist | sed \
+    -e '1,/Act I Scene 1e/d;/Act I Scene 1e/d' \
+    -e '/Act I Scene 5/,$d' \
+    -e '/soprano 2/Id;/\(low\|middle\) split/Id' \
+    -e '/KCCC/d;/Townie/d' \
+    >> Katarina.mp3.urllist
+cat "$DIR"/all-a.mp3.tmplist | sed \
+    -e '/Act I Scene 5/!d' \
+    -e '/KCCC/d;/Townie/d' \
+    >> Katarina.mp3.urllist
+cat "$DIR"/all-s.mp3.tmplist | sed \
+    -e '1,/Act I Scene 5/d;/Act I Scene 5/d' \
+    -e '/Act II Scene 5/,$d' \
+    -e '/soprano 2/Id;/\(low\|middle\) split/Id' \
+    -e '/KCCC/d;/Townie/d' \
+    >> Katarina.mp3.urllist
+cat "$DIR"/all-a.mp3.tmplist | sed \
+    -e '/Act II Scene 5/!d' \
+    -e '/KCCC/d;/Townie/d' \
+    >> Katarina.mp3.urllist
 
-### Abbe and Luka (alto)
+### Abbe and Luka (alto with some tenor)
 # MP3s
 cat "$DIR"/all-a.mp3.tmplist | sed \
-    -e '/placeholder/d' \
+    -e '/Act I Scene 1e/,$d' \
+    -e '/KCCC/d;/Townie/d' \
     > Abbe+Luka.mp3.urllist
+cat "$DIR"/all-t.mp3.tmplist "$DIR"/all-a.mp3.tmplist | sed \
+    -e '/Act I Scene 1e/!d' \
+    -e '/tenor 2/Id' \
+    -e '/KCCC/d;/Townie/d' \
+    >> Abbe+Luka.mp3.urllist
+cat "$DIR"/all-a.mp3.tmplist | sed \
+    -e '1,/Act I Scene 1e/d;/Act I Scene 1e/d' \
+    -e '/Act I Scene 5/,$d' \
+    -e '/KCCC/d;/Townie/d' \
+    >> Abbe+Luka.mp3.urllist
+cat "$DIR"/all-t.mp3.tmplist "$DIR"/all-a.mp3.tmplist | sed \
+    -e '/Act I Scene 5/!d' \
+    -e '/tenor 2/Id' \
+    -e '/KCCC/d;/Townie/d' \
+    >> Abbe+Luka.mp3.urllist
+cat "$DIR"/all-a.mp3.tmplist | sed \
+    -e '1,/Act I Scene 5/d;/Act I Scene 5/d' \
+    -e '/Act II Scene 5/,$d' \
+    -e '/if I had a dime.*alto 1_OR_2/d;/on the radio.*middle_OR_low split/d' \
+    -e '/KCCC/d;/Townie/d' \
+    >> Abbe+Luka.mp3.urllist
+cat "$DIR"/all-t.mp3.tmplist "$DIR"/all-a.mp3.tmplist | sed \
+    -e '/Act II Scene 5/!d' \
+    -e '/tenor 2/Id' \
+    -e '/KCCC/d;/Townie/d' \
+    >> Abbe+Luka.mp3.urllist
 
 ### bert (tenor)
 # MP3s
 cat "$DIR"/all-t.mp3.tmplist | sed \
-    -e '/placeholder/d' \
+    -e '/tenor 2/Id' \
+    -e '/KCCC/d;/Camper/d' \
     > bert.mp3.urllist
-#cat "$DIR"/all-b.mp3.tmplist | sed \
-#    -e '/low split/Id' \
-#    -e '/low bass/Id' \
-#    >> bert.mp3.urllist
 
 #####  video
 if [ "$INDEX_VIDEO" = "$INDEX" ]; then
