@@ -21,11 +21,23 @@
 
 use warnings;
 use strict;
+use POSIX qw( ENOENT );
 
 my $SORTED = 0;
 my (@match_before_entries, @match_after_entries);
 
 sub file ( $ ) { my ($f) = @_;  $f =~ s,.*/,,;  $f; }
+
+sub get_dir_contents ( $ ) {
+  my ($d) = @_;
+  my $DH;
+  if (! opendir $DH, $d) {
+    return if $! == ENOENT;
+    die "opendir($d): $!";
+  }
+  my @f = map "$d/$_", grep ! /^\.\.?$/, readdir $DH;
+  @f;
+}
 
 while (@ARGV) {
   my $dir = shift @ARGV;
@@ -34,33 +46,33 @@ while (@ARGV) {
   $dir =~ /-gain$/ and next;  # skip gain cache directories
   my $dest = $dir;  $dest =~ s,.*/,,;  $dest =~ s,.*\.,,;
   {
-    my @files = sort grep -f, glob "$dir/first/*";
+    my @files = sort grep -f, get_dir_contents "$dir/first";
     push @match_before_entries, [qr!=\.\./\Q$dest\E/!,
 				 [map "$_=../$dest/" . file($_), @files]]
       if @files;
   }
-  for my $d (sort grep -d, glob "$dir/before.*") {
+  for my $d (sort grep -d && m,/before\.,, get_dir_contents $dir) {
     my $re = join '.*', split /\+/, ((split /\./, file($d), 2)[1]);
-    my @files = sort grep -f, glob "$d/*";
+    my @files = sort grep -f, get_dir_contents $d;
     push @match_before_entries, [qr!=\.\./\Q$dest\E/.*$re!,
 				 [map "$_=../$dest/" . file($_), @files]]
       if @files;
   }
-  for my $d (sort grep -d, glob "$dir/after.*") {
+  for my $d (sort grep -d && m,/after\.,, get_dir_contents $dir) {
     my $re = join '.*', split /\+/, ((split /\./, file($d), 2)[1]);
-    my @files = sort grep -f, glob "$d/*";
+    my @files = sort grep -f, get_dir_contents $d;
     push @match_after_entries, [qr!=\.\./\Q$dest\E/.*$re!,
 				 [map "$_=../$dest/" . file($_), @files]]
       if @files;
   }
   {
-    my @files = sort grep -f, glob "$dir/last/*";
+    my @files = sort grep -f, get_dir_contents "$dir/last";
     push @match_after_entries, [qr!=\.\./\Q$dest\E/!,
 				[map "$_=../$dest/" . file($_), @files]]
       if @files;
   }
   {
-    my @files = sort grep -f, glob "$dir/*";
+    my @files = sort grep -f, get_dir_contents $dir;
     push @match_after_entries, [qr!=\.\./\Q$dest\E/!,
 				[map "$_=../$dest/" . file($_), @files]]
       if @files;
@@ -93,8 +105,15 @@ sub add_matches_before ( $$ ) {
 
 sub add_matches_after ( $$ ) {
   my ($entries, $match_entries) = @_;
-  reverse add_matches_before [reverse @$entries],
+  my $reverse_entries =
     [ map [$_->[0], [reverse @{$_->[1]}]], reverse @$match_entries ];
+  my @entries =
+    reverse add_matches_before [reverse @$entries], $reverse_entries;
+  # update used status
+  defined $reverse_entries->[$_][0]
+    or $match_entries->[$#$reverse_entries - $_][0] = undef
+      for 0..$#$reverse_entries;
+  @entries;
 }
 
 
