@@ -68,7 +68,7 @@ for in_list in "$@"; do
     case "$in_list" in
 	-)
 	    echo "Working: stdin -> stdout" >&2
-	    convert_m3u
+	    convert_m3u .
 	    ;;
 	*.m3u)
 	    out_list="cd_`basename "$in_list"`"
