@@ -1,6 +1,6 @@
 #!/bin/bash
 
-U2P_MP3_ARGS=(--enumerate)
+U2P_MP3_ARGS=()
 U2P_VIDEO_ARGS=(-s video/ -d ../video/)
 
 CF_ARGS=(--no-replace-any-prefix --prefix '')
@@ -36,6 +36,7 @@ set -- [^X]*.mp3.urllist
 if [ -e .copy-x ]; then set -- "$@" X*.mp3.urllist; fi
 ./urllist2process.pl "${U2P_MP3_ARGS[@]}" "$@" | inspect M1 \
     | ./extras2process.pl mp3-extras.* | inspect M2 \
+    | ./enumerate.pl | inspect M2e \
     | "$GAIN_CACHE" | inspect M3 \
     | ./canonicalize-filenames.pl "${CF_ARGS[@]}" | inspect M4 \
     | ./globally-uniq.pl --sfdd | inspect M5 \
