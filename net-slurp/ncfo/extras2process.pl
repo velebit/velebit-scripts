@@ -34,33 +34,33 @@ while (@ARGV) {
   $dir =~ /-gain$/ and next;  # skip gain cache directories
   my $dest = $dir;  $dest =~ s,.*/,,;  $dest =~ s,.*\.,,;
   {
-    my @files = grep -f, glob "$dir/first/*";
+    my @files = sort grep -f, glob "$dir/first/*";
     push @match_before_entries, [qr!=\.\./\Q$dest\E/!,
 				 [map "$_=../$dest/" . file($_), @files]]
       if @files;
   }
-  for my $d (grep -d, glob "$dir/before.*") {
+  for my $d (sort grep -d, glob "$dir/before.*") {
     my $re = join '.*', split /\+/, ((split /\./, file($d), 2)[1]);
-    my @files = grep -f, glob "$d/*";
+    my @files = sort grep -f, glob "$d/*";
     push @match_before_entries, [qr!=\.\./\Q$dest\E/.*$re!,
 				 [map "$_=../$dest/" . file($_), @files]]
       if @files;
   }
-  for my $d (grep -d, glob "$dir/after.*") {
+  for my $d (sort grep -d, glob "$dir/after.*") {
     my $re = join '.*', split /\+/, ((split /\./, file($d), 2)[1]);
-    my @files = grep -f, glob "$d/*";
+    my @files = sort grep -f, glob "$d/*";
     push @match_after_entries, [qr!=\.\./\Q$dest\E/.*$re!,
 				 [map "$_=../$dest/" . file($_), @files]]
       if @files;
   }
   {
-    my @files = grep -f, glob "$dir/last/*";
+    my @files = sort grep -f, glob "$dir/last/*";
     push @match_after_entries, [qr!=\.\./\Q$dest\E/!,
 				[map "$_=../$dest/" . file($_), @files]]
       if @files;
   }
   {
-    my @files = grep -f, glob "$dir/*";
+    my @files = sort grep -f, glob "$dir/*";
     push @match_after_entries, [qr!=\.\./\Q$dest\E/!,
 				[map "$_=../$dest/" . file($_), @files]]
       if @files;
@@ -93,7 +93,8 @@ sub add_matches_before ( $$ ) {
 
 sub add_matches_after ( $$ ) {
   my ($entries, $match_entries) = @_;
-  reverse add_matches_before [reverse @$entries], $match_entries;
+  reverse add_matches_before [reverse @$entries],
+    [ map [$_->[0], [reverse @{$_->[1]}]], reverse @$match_entries ];
 }
 
 
