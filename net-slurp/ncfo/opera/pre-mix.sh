@@ -12,8 +12,8 @@ sed -e 's/.*	out_file://;s/^[SATB] //' \
     "$source" \
     | sort | uniq \
     | while read track; do
-	  pattern=$(echo "$track" \
-	      | sed -e 's/ \(bars \)/.* \1/I' )
+          pattern=$(echo "$track" \
+              | sed -e 's/ \(bars \)/.* \1/I' )
           ./urllist2process.pl X-all-voices.mp3.urllist \
               | grep -i "$pattern" \
               | sed -e 's@=.*/@=mix-sources/'"$track"'/@'
