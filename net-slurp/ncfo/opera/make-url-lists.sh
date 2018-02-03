@@ -129,6 +129,7 @@ cat "$DIR"/all-a.mp3.tmplist | sed \
     > Abbe+Luka.mp3.urllist
 cat "$DIR"/all-t.mp3.tmplist "$DIR"/all-a.mp3.tmplist | sed \
     -e '/Act I Scene 1e/!d' \
+    -e '/A Act I Scene 1e.*Bars 47-62/Id' \
     -e '/tenor 2/Id' \
     -e '/KCCC/d;/Townie/d' \
     >> Abbe+Luka.mp3.urllist
@@ -140,12 +141,17 @@ cat "$DIR"/all-a.mp3.tmplist | sed \
 cat "$DIR"/all-t.mp3.tmplist "$DIR"/all-a.mp3.tmplist | sed \
     -e '/Act I Scene 5/!d' \
     -e '/tenor 2/Id' \
-    -e '/KCCC/d;/Townie/d' \
+    -e '/KCCC/d;/Townie/d;/countermelody/d' \
     >> Abbe+Luka.mp3.urllist
 cat "$DIR"/all-a.mp3.tmplist | sed \
     -e '1,/Act I Scene 5/d;/Act I Scene 5/d' \
-    -e '/Act II Scene 5/,$d' \
-    -e '/if I had a dime.*alto 1_OR_2/d;/on the radio.*middle_OR_low split/d' \
+    -e '/Act II Scene 4/,$d' \
+    -e '/if I had a dime.*alto 2/Id' \
+    -e '/KCCC/d;/Townie/d' \
+    >> Abbe+Luka.mp3.urllist
+cat "$DIR"/all-t.mp3.tmplist "$DIR"/all-a.mp3.tmplist | sed \
+    -e '/Act II Scene 4/!d' \
+    -e '/middle split/d' \
     -e '/KCCC/d;/Townie/d' \
     >> Abbe+Luka.mp3.urllist
 cat "$DIR"/all-t.mp3.tmplist "$DIR"/all-a.mp3.tmplist | sed \
@@ -158,7 +164,7 @@ cat "$DIR"/all-t.mp3.tmplist "$DIR"/all-a.mp3.tmplist | sed \
 # MP3s
 cat "$DIR"/all-t.mp3.tmplist | sed \
     -e '/tenor 2/Id' \
-    -e '/KCCC/d;/Camper/d' \
+    -e '/KCCC/d;/Townie/d' \
     > bert.mp3.urllist
 
 #####  video
