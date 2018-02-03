@@ -12,8 +12,10 @@ while true; do
     esac
 done
 
+prefix=(`./canonicalize-filenames.pl --print-short \
+         | sed -e 's/^20[0-9][0-9] //'`)
 CF_ARGS=(-rf canonical-replacements.txt \
-    --no-replace-any-prefix --fallback-prefix SotRzz_)
+    --no-replace-any-prefix --fallback-prefix "${prefix[0]}"zz_)
 
 inspect() {
     rm -f "log-$1.tmp"
@@ -31,7 +33,7 @@ set -- [^X]*.mp3.urllist
 if [ -e .copy-x ]; then set -- "$@" X*.mp3.urllist; fi
 ./urllist2process.pl "$@" | inspect M1 \
     | ./extras2process.pl mp3-extras.* | inspect M2 \
-    | ./gain-cache.pl | inspect M3 \
+    | ./gain-cache.pl -q | inspect M3 \
     | ./canonicalize-filenames.pl "${CF_ARGS[@]}" | inspect M4 \
     | ./globally-uniq.pl --sfdd | inspect M5 \
     | ./playlists-from-process.pl | inspect M6 \

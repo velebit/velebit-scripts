@@ -1,5 +1,5 @@
 #!/bin/sh
-page=2017_singin_of_the_rain_Practice_Page
+page=2018_Web_of_Life_Practice_Page
 file="`basename "$page"`"
 type=pdf
 dir=pdf
@@ -10,7 +10,7 @@ cp -p "$dir/$file" "$dir/$file".orig
 wget --load-cookies cookies.txt \
     -nd -P "$dir" -N --restrict-file-names=windows \
     -A .pdf,.PDF,"$file" -r -l 1 \
-    -R 2017SponsorshipBrochure\*.pdf,2017SponsorshipBrochure\*-booklet.pdf \
+    -R \*SponsorshipBrochure\*.pdf,\*SponsorshipBrochure\*-booklet.pdf \
     --progress=bar:force \
     http://www.familyopera.org/drupal/"$page" \
   2>&1 | tee "$log"

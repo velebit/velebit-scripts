@@ -1,5 +1,5 @@
 #!/bin/sh
-page=2017_singin_of_the_rain_Practice_Page
+page=2018_Web_of_Life_Practice_Page
 file="`basename "$page"`"
 type=mp3
 dir=mp3

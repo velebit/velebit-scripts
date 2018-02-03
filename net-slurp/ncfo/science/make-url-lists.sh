@@ -136,12 +136,8 @@ sed -e '/NothingForNow/Id' \
 sed -e '/NothingForNow/Id' \
     "$DIR"/alto-low-adults.mp3.urllist > Abbe.mp3.urllist
 
-sed -e '/Water.*Cycle/I,$d' \
+sed -e '/NothingForNow/Id' \
     "$DIR"/tenor-adults.mp3.urllist > bert.mp3.urllist
-sed -e '/Water.*Cycle/I!d;/Low/Id' \
-    "$DIR"/bass-adults.mp3.urllist >> bert.mp3.urllist
-sed -e '1,/Water.*Cycle/Id' \
-    "$DIR"/tenor-adults.mp3.urllist >> bert.mp3.urllist
 
 
 ln -s "$DIR"/demo.mp3.urllist demo.mp3.urllist
@@ -151,17 +147,17 @@ ln -s "$DIR"/demo.mp3.urllist demo.mp3.urllist
 # (X-... means don't bother updating the ID3 tags)
 
 other=
-other="$other soprano-all-all"
+#other="$other soprano-all-all"
 #other="$other soprano-high-kids"
 #other="$other soprano-high-adults"
 #other="$other soprano-low-kids"
 #other="$other soprano-low-adults"
-other="$other alto-all-all"
+#other="$other alto-all-all"
 #other="$other alto-high-kids"
 #other="$other alto-high-adults"
 #other="$other alto-low-kids"
 #other="$other alto-low-adults"
-other="$other tenor-adults"
+#other="$other tenor-adults"
 #other="$other bass-adults"
 other="$other orchestra"
 
