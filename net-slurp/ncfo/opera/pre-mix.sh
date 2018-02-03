@@ -19,3 +19,20 @@ sed -e 's/.*	out_file://;s/^[SATB] //' \
               | sed -e 's@=.*/@=mix-sources/'"$track"'/@'
       done \
     | ./process-files.pl
+
+for d in mix-sources/*; do
+    if [ -d "$d" -a ! -e "$d/mp3wav" ]; then
+	echo "->- $d/mp3wav"
+	cat <<'EOF' > "$d/mp3wav" && chmod a+rx "$d/mp3wav"
+#!/bin/sh
+ffmpeg=ffmpeg
+for i in *.mp3; do
+    if [ -f "$i" ]; then
+        # run all ffmpeg processes in parallel...
+        $ffmpeg -i "$i" "`basename "$i" .mp3`.wav" &
+    fi
+done
+wait
+EOF
+    fi
+done
