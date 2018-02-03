@@ -27,6 +27,7 @@ my $SORTED = 0;
 my (@match_before_entries, @match_after_entries);
 
 sub file ( $ ) { my ($f) = @_;  $f =~ s,.*/,,;  $f; }
+sub canon_out ( $ ) { my ($o) = file $_[0];  $o =~ s,^seq\d+[. ],,;  $o; }
 
 sub get_dir_contents ( $ ) {
   my ($d) = @_;
@@ -48,33 +49,33 @@ while (@ARGV) {
   {
     my @files = sort grep -f, get_dir_contents "$dir/first";
     push @match_before_entries, [qr!=\.\./\Q$dest\E/!,
-				 [map "$_=../$dest/" . file($_), @files]]
+				 [map "$_=../$dest/" . canon_out($_), @files]]
       if @files;
   }
   for my $d (sort grep -d && m,/before\.,, get_dir_contents $dir) {
     my $re = join '.*', split /\+/, ((split /\./, file($d), 2)[1]);
     my @files = sort grep -f, get_dir_contents $d;
     push @match_before_entries, [qr!=\.\./\Q$dest\E/.*$re!,
-				 [map "$_=../$dest/" . file($_), @files]]
+				 [map "$_=../$dest/" . canon_out($_), @files]]
       if @files;
   }
   for my $d (sort grep -d && m,/after\.,, get_dir_contents $dir) {
     my $re = join '.*', split /\+/, ((split /\./, file($d), 2)[1]);
     my @files = sort grep -f, get_dir_contents $d;
     push @match_after_entries, [qr!=\.\./\Q$dest\E/.*$re!,
-				 [map "$_=../$dest/" . file($_), @files]]
+				 [map "$_=../$dest/" . canon_out($_), @files]]
       if @files;
   }
   {
     my @files = sort grep -f, get_dir_contents "$dir/last";
     push @match_after_entries, [qr!=\.\./\Q$dest\E/!,
-				[map "$_=../$dest/" . file($_), @files]]
+				[map "$_=../$dest/" . canon_out($_), @files]]
       if @files;
   }
   {
     my @files = sort grep -f, get_dir_contents $dir;
     push @match_after_entries, [qr!=\.\./\Q$dest\E/!,
-				[map "$_=../$dest/" . file($_), @files]]
+				[map "$_=../$dest/" . canon_out($_), @files]]
       if @files;
   }
 }
