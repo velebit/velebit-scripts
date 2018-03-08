@@ -18,10 +18,11 @@ BEGIN {
 
 my $script = $0;  $script =~ s,.*[/\\],,;
 
-my ($PREFIX, $SUFFIX);
+my ($PREFIX, $SUFFIX, $SORTED_ALPHA);
 
 GetOptions('prefix|p=s' => \$PREFIX,
 	   'suffix|s=s' => \$SUFFIX,
+	   'sorted!' => \$SORTED_ALPHA,
           ) or die "Usage: $script [-p PREFIX] [-s SUFFIX] [FILES...]\n";
 
 if (! defined $PREFIX) {
@@ -106,6 +107,7 @@ for my $dir_path (sort keys %lists) {
 
   my $base_name = $PREFIX . $dir . $SUFFIX;
   my @files = map "$dir/$_", @{$lists{$dir_path}};
+  @files = sort @files if $SORTED_ALPHA;
 
   write_m3u8 "$top_path$base_name.m3u", $base_name, @files;
   write_wpl "$top_path$base_name.wpl", $base_name, @files;

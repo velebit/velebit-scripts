@@ -36,7 +36,7 @@ if [ -e .copy-x ]; then set -- "$@" X*.mp3.urllist; fi
     | ./gain-cache.pl -q | inspect M3 \
     | ./canonicalize-filenames.pl "${CF_ARGS[@]}" | inspect M4 \
     | ./globally-uniq.pl --sfdd | inspect M5 \
-    | ./playlists-from-process.pl | inspect M6 \
+    | ./playlists-from-process.pl --sorted | inspect M6 \
     | ./process-files.pl "${PF_ARGS[@]}"
 
 word_idx="`(./canonicalize-filenames.pl --print-short;echo and_add_1) | wc -w`"
