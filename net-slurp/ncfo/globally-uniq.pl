@@ -48,9 +48,11 @@ while (<>) {
   1 while $dst_dir =~ s,/\./,/,;
   $dst_dir =~ s,//+,/,g;
 
-  $LINES and $seen_lines{$_}++ and next;
-  $DST_FILES and $seen_df{$dst}++ and next;
-  $SRC_FILES_PER_DEST_DIR and $seen_dd_sf{$dst_dir}{$src}++ and next;
+  my $skip;
+  $LINES and $seen_lines{$_}++ and $skip=1;
+  $DST_FILES and $seen_df{$dst}++ and $skip=1;
+  $SRC_FILES_PER_DEST_DIR and $seen_dd_sf{$dst_dir}{$src}++ and $skip=1;
+  $skip and next;
 
   print $orig;
 }
