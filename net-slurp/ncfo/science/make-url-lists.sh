@@ -19,7 +19,6 @@ for voice in soprano alto tenor bass; do
     LEVEL1="$DIR/raw1-$voice.tmplist"
     sed -e '/^'"$voice"'.*\.mp3$/I!d' \
 	-e 's/^'"$c*$t"'//' \
-	-e '/^'"$c*Cloud,$c*Mist,$c*Fog"'/{;s/-bari\./-bari-rev1./;}' \
 	"$FULL" > "$LEVEL1"
 
     for split in '' -low -high -all; do
@@ -136,8 +135,10 @@ sed -e '/NothingForNow/Id' \
 sed -e '/NothingForNow/Id' \
     "$DIR"/alto-low-adults.mp3.urllist > Abbe.mp3.urllist
 
-sed -e '/NothingForNow/Id' \
+sed -e '/Water.*Bear/I,$d' \
     "$DIR"/tenor-adults.mp3.urllist > bert.mp3.urllist
+sed -e '/Water.*Bear.*high/I!d' \
+    "$DIR"/bass-adults.mp3.urllist >> bert.mp3.urllist
 
 
 ln -s "$DIR"/demo.mp3.urllist demo.mp3.urllist
