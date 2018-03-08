@@ -4,6 +4,7 @@
 ^(?=.*Dandy.*s.*Song) => WoL02b_
 ^(?=.*Gardener.*Worm) => WoL02c_
 ^(?=.*Amazon.*Layers) => WoL02d_
+^(?=.*All.*About.*Plants) => WoL03_
 ^(?=.*E.*O.*Wilson) => WoL05_
 ^(?=.*Extremophiles) => WoL06_
 ^(?=.*Flying.*Creatures) => WoL07_
