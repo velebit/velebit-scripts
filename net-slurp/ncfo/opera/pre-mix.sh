@@ -4,7 +4,7 @@
 
 source=X-all-voices.mp3.urllist
 
-sed -e 's/.*	out_file://;s/^[SATB] //' \
+sed -e 's/.*	out_file://;s/^[SATB] //;s,/,_,g' \
     -e 's/ \?- rev .* \(bars \)/ \1/I;s/ \?- rev .*//I' \
     -e 's/,\? \(high \|low \)\?\(soprano\|alto\|tenor\|bass\)\( [12]\)\?//I' \
     -e 's/,\? \(hi\(gh\)\? \|middle \|low \)\?split//I' \
@@ -12,8 +12,10 @@ sed -e 's/.*	out_file://;s/^[SATB] //' \
     "$source" \
     | sort | uniq \
     | while read track; do
+          ## echo "T> '$track'" >&2
           pattern=$(echo "$track" \
               | sed -e 's/ \(bars \)/.* \1/I' )
+          ## echo "P> '$pattern'" >&2
           ./urllist2process.pl X-all-voices.mp3.urllist \
               | grep -i "$pattern" \
               | sed -e 's@=.*/@=mix-sources/'"$track"'/@'
