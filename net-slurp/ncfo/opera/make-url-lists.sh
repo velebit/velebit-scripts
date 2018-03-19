@@ -50,6 +50,9 @@ extract_section () {
 	      -e 's/^\([^	]*\)[:\*\?"<>|]/\1/' \
 	      -e 's/^\([^	]*\)[:\*\?"<>|]/\1/' \
 	      -e 's/^\([^	]*\)[:\*\?"<>|]/\1/' \
+	      -e 's/^\([^	]*\)[:\*\?"<>|]/\1/' \
+	      -e 's/^\([^	]*\)[:\*\?"<>|]/\1/' \
+	      -e 's/^\([^	]*\)[:\*\?"<>|]/\1/' \
 	      -e 's/^\([^	]*\)[’]/\1'\''/' \
 	      -e 's/^\([^	]*\)[’]/\1'\''/' \
 	      -e 's/^\([^	]*\)[’]/\1'\''/' \
@@ -88,6 +91,7 @@ cat "$DIR"/all-{s,a,ac,t,b}.mp3.tmplist | sed \
     > X-all-voices.mp3.urllist
 
 extract_section 'DEMO MP3s' 'demo'
+extract_section 'ORCHESTRA MP3s' 'orchestra'
 
 ### Katarina (soprano 1 with some alto)
 # MP3s
@@ -218,18 +222,8 @@ fi
 
 ### orchestra-only MP3s
 if [ -e .generate-orchestra ]; then
-    tmplist=big.mp3.tmplist
-    if [ ! -e "$tmplist" ]; then
-	echo "... big list (`echo "$tmplist" | sed -e 's/^big\.//;s/\..*//'`)" >&2
-	./plinks.pl -hb -li -lt -t "$INDEX" > "$tmplist"
-    fi
     echo "... orchestra" >&2
-    cat "$tmplist" \
-	| sed -e '/\.mp3$/I!d;/^[^	]*orchestra/I!d;/complete	/Id' \
-	      -e 's/^[^	]*	//' \
-	      -e 's/^[^	]*	//' \
-	      -e 's/^[^	]*	//' \
-	      -e 's/^\([^	]*\)	\(.*\)$/\2	out_file:\1/' \
+    cat tmplists/orchestra.mp3.tmplist \
 	> orchestra.mp3.urllist
 fi
 
