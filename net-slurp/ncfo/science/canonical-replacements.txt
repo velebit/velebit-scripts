@@ -5,11 +5,13 @@
 ^(?=.*Gardener.*Worm) => WoL02c_
 ^(?=.*Amazon.*Layers) => WoL02d_
 ^(?=.*All.*About.*Plants) => WoL03_
+^(?=.*Coral.*Chorale) => WoL04_
 ^(?=.*E.*O.*Wilson) => WoL05_
 ^(?=.*Extremophiles) => WoL06_
 ^(?=.*Flying.*Creatures) => WoL07_
 ^(?=.*Four.*Billion.*Years) => WoL08_
 ^(?=.*Fungi) => WoL09_
+^(?=.*Slime.*Mou?l?d) => WoL10_
 ^(?=.*Lake) => WoL11_
 ^(?=.*LUCA) => WoL12_
 ^(?=.*Mutate) => WoL14_
