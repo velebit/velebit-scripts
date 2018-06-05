@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 PATH="/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:$PATH"
 
@@ -33,12 +33,14 @@ status_ok () {
     echo "-- ${COLOR_DATE}[$date]${COLOR_NONE} -- ${COLOR_GOOD}$*${COLOR_NONE}"
 }
 
-backup=/backup
-full_backup="home shared scratch"
+backup=/media/bert/backup
+full_backup="common/home common/shared common/scratch"
 tar_backup="root boot"
-ignored="proc sys dev tmp var/lib/nfs"
+check_ignore="proc sys dev run media common/backups"
+check_ignore_only=""
+check_expand="common"
 tar_type=".tar.gz"
-last_backup=/scratch/backups
+last_backup=/common/backups
 
 dryrun=
 
@@ -86,6 +88,7 @@ disk_used_kb () {
     df -k "$backup" | awk '($1~/^\/dev\//){print $3}'
 }
 disk_free_kb () {
+    if [ ! -d "$backup" ]; then echo 0; return; fi
     # NB: we don't use df's "free" number ($4), since that number is
     #   calibrated to hit zero when you get to 95% disk usage (100%
     #   minus the "reserved" 5%!)
@@ -160,6 +163,7 @@ run_backup () {
 	    else
 		Run mkdir -p "$dst" || fail "couldn't create directory $dst"
 		# For some reason, rsync is *slower* for the initial copy.
+		# (Or at least was on Cavanaugh...)
 		(TimeRun tar -C "$src" --one-file-system -cf - . \
 		    | Run tar -C "$dst" -xpf -) \
 		    || fail "The initial copying went kaboom."
@@ -196,7 +200,8 @@ partition_path () {
     if [ "$1" = "root" ]; then echo "/"; else echo "/$1"; fi
 }
 backup_path () {
-    echo "$backup/$1"
+    #echo "$backup/`echo "$1" | sed -e 's,/,_,g'`"
+    echo "$backup/`basename "$1"`"
 }
 partition_name () {
     echo "$1" | sed -e 's,^/,,' -e 's/^$/root/'
@@ -239,15 +244,39 @@ mark_last_backup () {
     fi
 }
 
-check_partitions () {
-    header='Mounted partitions NOT configured for full backups:'
-    mountpoints="`mount | awk '{print $3}'`"
+expand_for_check () {
+    while read dev; do
+	exp=
+	case " $check_expand " in
+	    *" `partition_name "$dev"` "*)
+		for d in "$dev"/..?* "$dev"/.[^.]* "$dev"/*; do
+		    if [ -d "$d" ]; then
+			echo "$d"
+			exp=yes
+		    fi
+		done | expand_for_check
+		;;
+	esac
+	if [ -z "$exp" ]; then echo "$dev"; fi
+    done
+}
+
+check_partition_coverage () {
+    header='Mounted partitions/subdirs NOT configured for full backups:'
+    mountpoints="`mount | awk '{print $3}' | expand_for_check`"
     for path in $mountpoints; do
 	name="`partition_name "$path"`"
-	for i in $full_backup $tar_backup $ignored backup; do
+	for i in $full_backup $tar_backup $check_ignore; do
 	    case "$name" in
 		"$i")    continue 2 ;;
 		"$i"/*)  continue 2 ;;
+		lost+found)    continue 2 ;;
+		*/lost+found)  continue 2 ;;
+	    esac
+	done
+	for i in $check_ignore_only $check_expand; do
+	    case "$name" in
+		"$i")    continue 2 ;;
 	    esac
 	done
 	if [ -n "$header" ]; then
@@ -310,7 +339,7 @@ dump_disk_setup () {
 }
 
 if [ -n "$partition_check" ]; then
-    check_partitions
+    check_partition_coverage
     exit 0
 fi
 
