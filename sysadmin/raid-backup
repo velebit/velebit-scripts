@@ -261,6 +261,47 @@ expand_for_check () {
     done
 }
 
+check_partition_list () {
+    header='Backed up partitions MISSING:'
+    for i in $full_backup $tar_backup; do
+	if [ ! -d "/$i" ]; then
+	    if [ -n "$header" ]; then
+		echo "${COLOR_FAIL}$header${COLOR_NONE}"; header=''
+	    fi
+	    echo "    $i"
+	fi
+    done
+    if false && [ -n "$header" ]; then
+	echo "${COLOR_GOOD}All backed partitions exist.${COLOR_NONE}"
+    fi
+
+    header='Expanded directories MISSING:'
+    for i in $check_expand; do
+	if [ ! -d "/$i" ]; then
+	    if [ -n "$header" ]; then
+		echo "${COLOR_FAIL}$header${COLOR_NONE}"; header=''
+	    fi
+	    echo "    $i"
+	fi
+    done
+    if false && [ -n "$header" ]; then
+	echo "${COLOR_GOOD}All expanded directories exist.${COLOR_NONE}"
+    fi
+
+    header='Ignored partitions missing:'
+    for i in $check_ignore $check_ignore_only; do
+	if [ ! -d "/$i" ]; then
+	    if [ -n "$header" ]; then
+		echo "${COLOR_STAT}$header${COLOR_NONE}"; header=''
+	    fi
+	    echo "    $i"
+	fi
+    done
+    if false && [ -n "$header" ]; then
+	echo "${COLOR_GOOD}All ignored partitions exist.${COLOR_NONE}"
+    fi
+}
+
 check_partition_coverage () {
     header='Mounted partitions/subdirs NOT configured for full backups:'
     mountpoints="`mount | awk '{print $3}' | expand_for_check`"
@@ -340,6 +381,7 @@ dump_disk_setup () {
 
 if [ -n "$partition_check" ]; then
     check_partition_coverage
+    check_partition_list
     exit 0
 fi
 
