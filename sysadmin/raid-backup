@@ -36,11 +36,13 @@ status_ok () {
 backup=/media/bert/backup
 full_backup="common/home common/shared common/scratch"
 tar_backup="root boot"
-check_ignore="proc sys dev run media common/backups"
+ignore="proc sys dev run media common/backups"
 check_ignore_only=""
-check_expand="common"
 tar_type=".tar.gz"
 last_backup=/common/backups
+
+# ignore cache directories (to back up while logged in and to reduce size)
+ignore="$ignore var/cache home/bert/.cache home/abbe/.cache"
 
 dryrun=
 
@@ -109,6 +111,34 @@ max_backup_size=0
 # If /backup isn't mounted, this will be incorrect but we can live with that.
 min_disk_free="`disk_free_kb`"
 
+list_excludes () {
+    local dir="$1"
+    local prefix="$2"
+    local suffix="$3"
+
+    local dir_slash="${dir%%/}/"
+    for i in $full_backup $tar_backup $ignore; do
+	path="`partition_path $i`"
+	case "$path" in
+	    "$dir_slash"?*)
+		relative="${path#$dir_slash}"
+		echo "$prefix$relative$suffix"
+		;;
+	esac
+    done
+}
+
+excludes_for_tar () {
+    local dir="$1"
+    echo "--anchored"
+    list_excludes "$dir" "--exclude ./" "" | sort
+}
+
+excludes_for_rsync () {
+    local dir="$1"
+    list_excludes "$dir" "--exclude /" "" | sort
+}
+
 run_backup () {
     local src="$1"
     local dst_base="$2"
@@ -139,32 +169,44 @@ run_backup () {
     status "Backing up $src to $dst..."
     case "$dst" in
 	*.tar.gz)
-	    TimeRun tar -C "$src" --one-file-system -czf "$dst" . \
+	    TimeRun tar -C "$src" \
+		        --one-file-system $(excludes_for_tar "$src") \
+			-czf "$dst" . \
 		|| fail "The tarballing went kaboom."
 	    ;;
 	*.tar.bz2)
-	    TimeRun tar -C "$src" --one-file-system -cjf "$dst" . \
+	    TimeRun tar -C "$src" \
+		        --one-file-system $(excludes_for_tar "$src") \
+		        -cjf "$dst" . \
 		|| fail "The tarballing went kaboom."
 #	    local tmp="$dst.tar"
-#	    (TimeRun tar -C "$src" --one-file-system -cf "$tmp" . \
+#	    (TimeRun tar -C "$src" \
+#		         --one-file-system $(excludes_for_tar "$src") \
+#		         . \
 #		&& TimeRun bzip2 -c < "$tmp" > "$dst" \
 #		&& rm -f "$tmp") \
 #		|| fail "The tarballing went kaboom."
 	    ;;
 	*.tar)
-	    TimeRun tar -C "$src" --one-file-system -cf "$dst" . \
+	    TimeRun tar -C "$src" \
+		        --one-file-system $(excludes_for_tar "$src") \
+			-cf "$dst" . \
 		|| fail "The tarballing went kaboom."
 	    ;;
 	*)
 	    if [ -d "$dst" ]; then
-		TimeRun rsync -h --one-file-system --archive --delete \
-		    "$src/." "$dst" || fail "The updating went kaboom."
+		TimeRun rsync -h --archive --delete \
+			      --one-file-system $(excludes_for_rsync "$src") \
+			      "$src/." "$dst" \
+		    || fail "The updating went kaboom."
 #		    --inplace --hard-links --sparse \
 	    else
 		Run mkdir -p "$dst" || fail "couldn't create directory $dst"
 		# For some reason, rsync is *slower* for the initial copy.
 		# (Or at least was on Cavanaugh...)
-		(TimeRun tar -C "$src" --one-file-system -cf - . \
+		(TimeRun tar -C "$src" \
+		             --one-file-system $(excludes_for_tar "$src") \
+			     -cf - . \
 		    | Run tar -C "$dst" -xpf -) \
 		    || fail "The initial copying went kaboom."
 		# If we just copied in the tree for the first time, we
@@ -244,25 +286,8 @@ mark_last_backup () {
     fi
 }
 
-expand_for_check () {
-    while read dev; do
-	exp=
-	case " $check_expand " in
-	    *" `partition_name "$dev"` "*)
-		for d in "$dev"/..?* "$dev"/.[^.]* "$dev"/*; do
-		    if [ -d "$d" ]; then
-			echo "$d"
-			exp=yes
-		    fi
-		done | expand_for_check
-		;;
-	esac
-	if [ -z "$exp" ]; then echo "$dev"; fi
-    done
-}
-
 check_partition_list () {
-    header='Backed up partitions MISSING:'
+    header='Backed up partitions/subdirs MISSING:'
     for i in $full_backup $tar_backup; do
 	if [ ! -d "/$i" ]; then
 	    if [ -n "$header" ]; then
@@ -272,24 +297,11 @@ check_partition_list () {
 	fi
     done
     if false && [ -n "$header" ]; then
-	echo "${COLOR_GOOD}All backed partitions exist.${COLOR_NONE}"
+	echo "${COLOR_GOOD}All backed up directories exist.${COLOR_NONE}"
     fi
 
-    header='Expanded directories MISSING:'
-    for i in $check_expand; do
-	if [ ! -d "/$i" ]; then
-	    if [ -n "$header" ]; then
-		echo "${COLOR_FAIL}$header${COLOR_NONE}"; header=''
-	    fi
-	    echo "    $i"
-	fi
-    done
-    if false && [ -n "$header" ]; then
-	echo "${COLOR_GOOD}All expanded directories exist.${COLOR_NONE}"
-    fi
-
-    header='Ignored partitions missing:'
-    for i in $check_ignore $check_ignore_only; do
+    header='Ignored partitions/subdirs missing:'
+    for i in $ignore $check_ignore_only; do
 	if [ ! -d "/$i" ]; then
 	    if [ -n "$header" ]; then
 		echo "${COLOR_STAT}$header${COLOR_NONE}"; header=''
@@ -298,16 +310,16 @@ check_partition_list () {
 	fi
     done
     if false && [ -n "$header" ]; then
-	echo "${COLOR_GOOD}All ignored partitions exist.${COLOR_NONE}"
+	echo "${COLOR_GOOD}All ignored directories exist.${COLOR_NONE}"
     fi
 }
 
 check_partition_coverage () {
     header='Mounted partitions/subdirs NOT configured for full backups:'
-    mountpoints="`mount | awk '{print $3}' | expand_for_check`"
+    mountpoints="`mount | awk '{print $3}'`"
     for path in $mountpoints; do
 	name="`partition_name "$path"`"
-	for i in $full_backup $tar_backup $check_ignore; do
+	for i in $full_backup $tar_backup $ignore; do
 	    case "$name" in
 		"$i")    continue 2 ;;
 		"$i"/*)  continue 2 ;;
@@ -315,7 +327,7 @@ check_partition_coverage () {
 		*/lost+found)  continue 2 ;;
 	    esac
 	done
-	for i in $check_ignore_only $check_expand; do
+	for i in $check_ignore_only; do
 	    case "$name" in
 		"$i")    continue 2 ;;
 	    esac
