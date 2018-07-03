@@ -334,6 +334,24 @@ check_partition_coverage () {
 dump_disk_setup () {
     echo "--------------------- BASIC DISK INFORMATION ---------------------" \
 	| sed -ne 's/-/*/g;h;s/./*/g;p;x;p;x;p;s/.*//;p'
+    for d in /dev/nvme[0-9]; do
+	if [ -e "$d" ]; then
+	    echo "--------------------------- $d ---------------------------" \
+		| sed -ne 'h;s/./-/g;p;x;p'
+	    echo "# smartctl -i $d"
+	    smartctl -i "$d"
+	    for n in "$d"n[0-9]; do
+		echo "# parted $n unit s p"
+		parted "$n" unit s p
+		for p in "$n"p[0-9]*; do
+		    if [ -e "$p" ]; then
+			echo "# mdadm -Q $p"
+			mdadm -Q "$p"
+		    fi
+		done
+	    done
+	fi
+    done
     for d in /dev/[hs]d[a-z]; do
 	if [ -e "$d" ]; then
 	    echo "--------------------------- $d ---------------------------" \
@@ -369,6 +387,18 @@ dump_disk_setup () {
 
     echo "---------------- DETAILED S.M.A.R.T. INFORMATION ----------------" \
 	| sed -ne 'x;p;p;x;s/-/*/g;h;s/./*/g;p;x;p;x;p;s/.*//;p'
+    for d in /dev/nvme[0-9]; do
+	if [ -e "$d" ]; then
+	    echo "--------------------------- $d ---------------------------" \
+		| sed -ne 'h;s/./-/g;p;x;p'
+	    echo "# nvme smart-log $d"
+	    nvme smart-log "$d"
+	    #echo "# nvme smart-log-add $d"
+	    #nvme smart-log-add "$d"
+	    echo "# smartctl -x $d"
+	    smartctl -x "$d"
+	fi
+    done
     for d in /dev/[hs]d[a-z]; do
 	if [ -e "$d" ]; then
 	    echo "--------------------------- $d ---------------------------" \
