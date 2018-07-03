@@ -34,8 +34,8 @@ status_ok () {
 }
 
 backup=/media/bert/backup
-full_backup="common/home common/shared common/scratch"
-tar_backup="root boot"
+full_backup="common/users common/shared common/scratch home"
+tar_backup="root boot common"
 ignore="proc sys dev run media common/backups"
 check_ignore_only=""
 tar_type=".tar.gz"
