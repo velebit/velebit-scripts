@@ -33,7 +33,10 @@ status_ok () {
     echo "-- ${COLOR_DATE}[$date]${COLOR_NONE} -- ${COLOR_GOOD}$*${COLOR_NONE}"
 }
 
-backup=/media/bert/backup
+backup_ext=/media/bert/backup
+backup_int=/media/bert/int_backup
+backup="$backup_ext"
+
 full_backup="common/users common/shared common/scratch home"
 tar_backup="root boot common"
 ignore="proc sys dev run media common/backups"
@@ -51,6 +54,10 @@ while [ "$#" -gt 0 ]; do
        -n)  dryrun=yes ;;
        -c)  partition_check=yes ;;
        -d)  show_disk_setup=yes ;;
+       -i|--internal)
+	    backup="$backup_int" ;;
+       -e|--external)
+	    backup="$backup_ext" ;;
        -*)  fail "Unknown flag '$1'" ;;
         *)  fail "Unexpected argument '$1'" ;;
     esac
