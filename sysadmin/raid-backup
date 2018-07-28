@@ -195,11 +195,11 @@ run_backup () {
 	    ;;
 	*)
 	    if [ -d "$dst" ]; then
-		TimeRun rsync -h --archive --delete \
+		TimeRun rsync -h --archive --hard-links --sparse \
+			      --delete --checksum \
 			      --one-file-system $(excludes_for_rsync "$src") \
 			      "$src/." "$dst" \
 		    || fail "The updating went kaboom."
-#		    --inplace --hard-links --sparse \
 	    else
 		Run mkdir -p "$dst" || fail "couldn't create directory $dst"
 		# For some reason, rsync is *slower* for the initial copy.
