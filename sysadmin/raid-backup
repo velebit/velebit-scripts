@@ -17,8 +17,7 @@ no_colors () {
 }
 if [ ! -t 1 ]; then no_colors; fi
 
-fail () {
-    if [ "$#" -eq 0 ]; then set -- "Something has gone very wrong!"; fi
+arg_fail () {
     echo "${COLOR_FAIL}$*${COLOR_NONE}" >&2
     exit 1
 }
@@ -33,9 +32,19 @@ status_ok () {
     echo "-- ${COLOR_DATE}[$date]${COLOR_NONE} -- ${COLOR_GOOD}$*${COLOR_NONE}"
 }
 
+status_fail () {
+    date="`date +'%Y-%m-%d %H:%M:%S'`"
+    echo "-- ${COLOR_DATE}[$date]${COLOR_NONE} -- ${COLOR_FAIL}$*${COLOR_NONE}"
+}
+
+fail () {
+    status_fail "$@"
+    exit 1
+}
+
 backup_ext=/media/bert/backup
 backup_int=/media/bert/int_backup
-backup="$backup_ext"
+backup=
 
 full_backup="common/users common/shared common/scratch home"
 tar_backup="root boot common"
@@ -45,7 +54,11 @@ tar_type=".tar.gz"
 last_backup=/common/backups
 
 # ignore cache directories (to back up while logged in and to reduce size)
-ignore="$ignore var/cache home/bert/.cache home/abbe/.cache"
+for i in /var/cache /root/.cache /home/*/.cache; do
+    if [ -d "$i" ]; then
+        ignore="$ignore ${i#/}"
+    fi
+done
 
 dryrun=
 
@@ -54,15 +67,32 @@ while [ "$#" -gt 0 ]; do
        -n)  dryrun=yes ;;
        -c)  partition_check=yes ;;
        -d)  show_disk_setup=yes ;;
-       -i|--internal)
-	    backup="$backup_int" ;;
        -e|--external)
-	    backup="$backup_ext" ;;
-       -*)  fail "Unknown flag '$1'" ;;
-        *)  fail "Unexpected argument '$1'" ;;
+            [ -n "$backup" -a "$backup" != "$backup_ext" ] \
+                && arg_fail "You may only specify one of -e and -i."
+            backup="$backup_ext" ;;
+       -i|--internal)
+            [ -n "$backup" -a "$backup" != "$backup_int" ] \
+                && arg_fail "You may only specify one of -e and -i."
+            backup="$backup_int" ;;
+       -?|-h)
+            cat <<EOF
+Usage: $(basename "$0") [-n] [-c] [-d] [-e|-i]
+Options:
+  -n    Dry run; print commands but don't run them.  Does not require root.
+  -c    Check backup configuration, print unconfigured or missing dirs.
+  -d    Print detailed information about all NVME and SATA disks.
+  -e    Make a backup on an external disk, to be taken offsite. [default]
+  -i    Make a backup on a "live" internal partition.
+  -? -h Print this help message.
+EOF
+            exit 0 ;;
+       -*)  arg_fail "Unknown flag '$1'" ;;
+        *)  arg_fail "Unexpected argument '$1'" ;;
     esac
     shift
 done
+[ -z "$backup" ] && backup="$backup_ext"
 
 Run () {
     if [ -n "$dryrun" ]; then
@@ -176,53 +206,90 @@ run_backup () {
     status "Backing up $src to $dst..."
     case "$dst" in
 	*.tar.gz)
-	    TimeRun tar -C "$src" \
+	    for ((i=5; i >= 0; i--)); do
+		if TimeRun tar -C "$src" \
 		        --one-file-system $(excludes_for_tar "$src") \
-			-czf "$dst" . \
-		|| fail "The tarballing went kaboom."
+                        -czf "$dst" .; then
+		    break
+		else
+		    if [ "$i" -gt 0 ]; then
+			status_fail "The tarballing went kaboom; retrying."
+		    else
+			fail "The tarballing went kaboom; giving up."
+		    fi
+		fi
+	    done
 	    ;;
 	*.tar.bz2)
-	    TimeRun tar -C "$src" \
+	    for ((i=5; i >= 0; i--)); do
+		if TimeRun tar -C "$src" \
 		        --one-file-system $(excludes_for_tar "$src") \
-		        -cjf "$dst" . \
-		|| fail "The tarballing went kaboom."
-#	    local tmp="$dst.tar"
-#	    (TimeRun tar -C "$src" \
-#		         --one-file-system $(excludes_for_tar "$src") \
-#		         . \
-#		&& TimeRun bzip2 -c < "$tmp" > "$dst" \
-#		&& rm -f "$tmp") \
-#		|| fail "The tarballing went kaboom."
+                        -cjf "$dst" .; then
+		    break
+		else
+		    if [ "$i" -gt 0 ]; then
+			status_fail "The tarballing went kaboom; retrying."
+		    else
+			fail "The tarballing went kaboom; giving up."
+		    fi
+		fi
+	    done
 	    ;;
 	*.tar)
-	    TimeRun tar -C "$src" \
+	    for ((i=5; i >= 0; i--)); do
+		if TimeRun tar -C "$src" \
 		        --one-file-system $(excludes_for_tar "$src") \
-			-cf "$dst" . \
-		|| fail "The tarballing went kaboom."
+                        -cf "$dst" .; then
+		    break
+		else
+		    if [ "$i" -gt 0 ]; then
+			status_fail "The tarballing went kaboom; retrying."
+		    else
+			fail "The tarballing went kaboom; giving up."
+		    fi
+		fi
+	    done
 	    ;;
 	*)
-	    if [ -d "$dst" ]; then
-		TimeRun rsync -h --archive --hard-links --sparse \
-			      --delete --checksum \
-			      --one-file-system $(excludes_for_rsync "$src") \
-			      "$src/." "$dst" \
-		    || fail "The updating went kaboom."
-	    else
-		Run mkdir -p "$dst" || fail "couldn't create directory $dst"
-		# For some reason, rsync is *slower* for the initial copy.
-		# (Or at least was on Cavanaugh...)
-		(TimeRun tar -C "$src" \
-		             --one-file-system $(excludes_for_tar "$src") \
-			     -cf - . \
-		    | Run tar -C "$dst" -xpf -) \
-		    || fail "The initial copying went kaboom."
-		# If we just copied in the tree for the first time, we
-		# can't rely on the backup size; the tree is not going
-		# to grow by that much during sync.  (Note this is not
-		# true for tarballing, just syncing!)  Guesstimate the
-		# growth as 0, for now.
-		free_before="`disk_free_kb`"
-	    fi
+	    for ((i=5; i >= 0; i--)); do
+		if [ -d "$dst" ]; then
+		    if TimeRun rsync -h --archive --hard-links --sparse \
+			       --delete --checksum \
+			       --one-file-system $(excludes_for_rsync "$src") \
+                               "$src/." "$dst"; then
+			break
+		    else
+			if [ "$i" -gt 0 ]; then
+			    status_fail "The updating went kaboom; retrying."
+			else
+			    fail "The updating went kaboom; giving up."
+			fi
+		    fi
+		else
+		    Run mkdir -p "$dst" \
+			|| fail "couldn't create directory $dst"
+		    # For some reason, rsync is *slower* for the initial copy.
+		    # (Or at least was on Cavanaugh...)
+		    if (TimeRun tar -C "$src" \
+				--one-file-system $(excludes_for_tar "$src") \
+				-cf - . \
+			       | Run tar -C "$dst" -xpf -); then
+			break
+		    else
+			if [ "$i" -gt 0 ]; then
+			    status_fail "The first copy went kaboom; retrying."
+			else
+			    fail "The first copy went kaboom; giving up."
+			fi
+		    fi
+		    # If we just copied in the tree for the first time, we
+		    # can't rely on the backup size; the tree is not going
+		    # to grow by that much during sync.  (Note this is not
+		    # true for tarballing, just syncing!)  Guesstimate the
+		    # growth as 0, for now.
+		    free_before="`disk_free_kb`"
+		fi
+	    done
 	    ;;
     esac
     status_ok "...done."
@@ -455,7 +522,7 @@ if [ -t 1 ]; then
 	    done
 	fi
     fi
-    setup="`echo "$log" | sed -e 's/^log\.//;s/^/setup./'`"
+    setup="setup.${log#log.}"
     if [ -z "$dryrun" ]; then
 	status "Will write log to $backup/$log"
 	run_all_backups 2>&1 | tee "$backup/$log"
