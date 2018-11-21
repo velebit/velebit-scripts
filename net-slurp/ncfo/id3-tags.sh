@@ -1,9 +1,9 @@
-#!/bin/sh
+#!/bin/bash
 
 cd ..
 
 PATH="${PATH}:${HOME}/perl-lib/bin"
-mp3info2='mp3info2'
+eyeD3='eyeD3'
 verbose=
 dryrun=
 wipe=
@@ -45,16 +45,16 @@ update_tags_from_playlist () {
 	    *) echo "Bad strip style '$id3_track_strip_style' (ignored)" >&2 ;;
 	esac
 	echo "Updating tags for $file..."
-	if [ -z "$dryrun" ]; then
-	    if [ -n "$wipe" ]; then
-		$mp3info2 -d ID3v1,ID3v2 -p "" "$file"
-	    fi
-	    $mp3info2 -t "$name" -a "$id3_artist" \
-		-l "$id3_album_prefix$who$id3_album_suffix" \
-		-n "$track/$num_tracks" -p "" "$file"
+	if [ -n "$wipe" -a -z "$dryrun" ]; then
+	    $eyeD3 --remove-all -Q "$file" >/dev/null 2>&1
 	fi
+	local cmd=($eyeD3 -t "$name" -a "$id3_artist" \
+			  -A "$id3_album_prefix$who$id3_album_suffix" \
+			  -n "$track" -N "$num_tracks" -Q "$file")
 	if [ -n "$verbose" ]; then
-	    $mp3info2 -D "$file"
+	    "${cmd[@]}"
+	else
+	    "${cmd[@]}" >/dev/null 2>&1
 	fi
     done < tracks.tmp
     rm -f tracks.tmp
@@ -88,7 +88,7 @@ process_playlist_lines () {
 while true; do
     case "$1" in
 	-N) dryrun=yes; shift ;;
-	-n) mp3info2='mp3info2 -D'; shift ;;
+	-n) eyeD3='echo "WOULD run: eyeD3"'; shift ;;
 	-v) verbose=yes; shift ;;
 	-a) id3_artist="$2"; shift; shift ;;
 	-p) id3_album_prefix="$2"; shift; shift ;;
