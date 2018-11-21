@@ -3,6 +3,9 @@ use warnings;
 use strict;
 use Getopt::Long;
 
+use utf8;
+use open qw(:std :utf8);
+
 our @IGNORED = ( 'index.html' );
 GetOptions('ignore|i=s' => \@IGNORED,
           ) or die "Usage: $0 [-i IGNORE] LOG_FILE\n";
@@ -21,11 +24,10 @@ my @added;
 open my $LOG, '<', $log or die "open($log): $!";
 while (<$LOG>) {
   s/[\r\n]+//g;
-  if (/^(?:Saving to:|Server file no newer than local file) /) {
-    #print ":$_\n";
-    my ($file) = /\`(.+)\'\s*(?:$|--\s)/
+  if (/^(?:Saving to: |Server file no newer than local file |File .* not modified on server)/) {
+    my ($file) = /[`‘](.+)['’]/
       or die "Format error: no file name found in\n    $_\n ";
-    #print "F $file\n";
+    #print STDERR "F $file\n";
     if ($file !~ $ignored_re) {
       push @referenced, $file;
       push @added, $file if /^Saving to: /;
@@ -33,9 +35,8 @@ while (<$LOG>) {
 
   } elsif (/^\d{4}-\d{2}-\d{2} /) {
     # Don't complain about `...' in date lines; just skip them.
-    #print "\@$_\n";
 
-  } elsif (/\`[^\`\']*\'/) {
+  } elsif (/[`‘][^`'‘’]*['’]/) {
     warn "Unexpected quoted name seen in\n    $_\n ";
   }
 }
