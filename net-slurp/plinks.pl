@@ -5,11 +5,13 @@ use strict;
 
 use Getopt::Long;
 use HTML::TreeBuilder;
+use URI;
 
 $| = 1;
 
 sub Usage () {
-  die "Usage: $0 [-v] [-h] [-hb] [-pt] [-lt] [-t] [--table-level LEVEL] FILE\n";
+  die "Usage: $0 [-v] [-h] [-hb] [-pt] [-lt] [-t] [--table-level LEVEL]" .
+      " [--base BASE] FILE\n";
   exit 1;
 }
 
@@ -25,6 +27,7 @@ our $SHOW_SAME_LINE_TEXT = 0;
 our $SHOW_SAME_LINE_NUM_LINKS = 0;
 our $SHOW_TEXT = 0;
 our $TABLE_LEVEL;
+our $BASE_URI;
 GetOptions('verbose|v+' => \$VERBOSITY,
 	   'show-heading|h!' => \$SHOW_HEADING,
 	   'bold-is-heading|b' =>
@@ -38,6 +41,7 @@ GetOptions('verbose|v+' => \$VERBOSITY,
 	   'show-text|t!' => \$SHOW_TEXT,
 	   'table-level|tl=i' => \$TABLE_LEVEL,
 	   'not-in-table' => sub { $TABLE_LEVEL = 0 },
+	   'base=s' => \$BASE_URI,
           ) or Usage;
 @ARGV == 1 or Usage;
 
@@ -230,6 +234,12 @@ sub get_table_level ( $ ) {
   scalar(@{[$node->look_up(_tag => 'table')]});
 }
 
+sub absolute_uri ( $;$ ) {
+    my ($uri, $base) = @_;
+    $uri = URI->new_abs($uri, $base) unless $uri =~ /^#/;
+    "$uri";
+}
+
 
 # only look at <a ...> tags
 printf STDERR "    %-67s ", "Traversing <a> tags..." if $VERBOSITY;
@@ -300,7 +310,12 @@ if ($SHOW_TEXT) {
   print STDERR "done.\n" if $VERBOSITY;
 }
 
-push @fields, 'href';
+if ($BASE_URI) {
+    $_->{href_abs} = absolute_uri($_->{href}, $BASE_URI) for @pages;
+    push @fields, 'href_abs';
+} else {
+    push @fields, 'href';
+}
 
 printf STDERR "    %-67s ", "Producing output..." if $VERBOSITY;
 print join("\t", @$_{@fields}) . "\n" for @pages;
