@@ -2,9 +2,7 @@
 # *Utterly erase* ID3 tags from a file
 use warnings;
 use strict;
-use encoding 'UTF8';
 
-use MP3::Tag;
 use Getopt::Long;
 
 our $BACKUP = 1;
@@ -23,7 +21,9 @@ foreach my $file (@ARGV) {
 	  exit 1;
   }
 
-  my $tag = MP3::Tag->new($file);
-  $tag->delete_tag('ID3v1');
-  $tag->delete_tag('ID3v2');
+  # '-Q' isn't actually very quiet.
+  open STDOUT, '>', '/dev/null';
+  open STDERR, '>', '/dev/null';
+
+  system 'eyeD3', '-Q', '--remove-all', $file;
 }
