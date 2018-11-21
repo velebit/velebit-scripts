@@ -6,10 +6,12 @@ use Getopt::Long;
 use utf8;
 use open qw(:std :utf8);
 
-our @IGNORED = ( 'index.html' );
+our @IGNORED = ( 'html/' );
+our @DIRS = ();
 GetOptions('ignore|i=s' => \@IGNORED,
-          ) or die "Usage: $0 [-i IGNORE] LOG_FILE\n";
-@ARGV > 1  and die "Usage: $0 [-i IGNORE] LOG_FILE\n";
+	   'directory|d=s' => \@DIRS,
+          ) or die "Usage: $0 [-d DIR] [-i IGNORE] LOG_FILE\n";
+@ARGV > 1  and die "Usage: $0 [-d DIR] [-i IGNORE] LOG_FILE\n";
 
 my $log = @ARGV ? shift @ARGV : 'download.log';
 
@@ -41,7 +43,7 @@ while (<$LOG>) {
   }
 }
 
-my %ref_dir;
+my %ref_dir = map +($_ => 1), @DIRS;
 m,^(.+)/, and $1 ne '.' and ++$ref_dir{$1} foreach @referenced;
 my @ref_dir = sort { $ref_dir{$b} <=> $ref_dir{$a} } keys %ref_dir;
 

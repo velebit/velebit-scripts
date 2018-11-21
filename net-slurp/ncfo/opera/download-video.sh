@@ -1,31 +1,44 @@
-#!/bin/sh
-page=Weedpatch_2018_Choreography_Videos
-file="`basename "$page"`"
+#!/bin/bash
+
+source "$(dirname "$0")/_uri.sh"
+
 type=video
-dir=video
+file_dir="$video_dir"
 log=download-"$type".log
-if [ -f "$dir"/index.html ]; then
-    rm -f "$dir/$file"; mv "$dir"/index.html "$dir/$file"; fi
-cp -p "$dir/$file" "$dir/$file".orig
+
+all_uris=("$video_uri")
+
+for file in "${all_uris[@]##*/}"; do
+    if [ -f "$html_dir/$file.html" ]; then
+        rm -f "$html_dir/$file"
+        mv "$html_dir/$file.html" "$html_dir/$file"
+    fi
+    cp -p "$html_dir/$file" "$html_dir/$file".orig
+done
 if ! wget --load-cookies cookies.txt \
-    -nd -P "$dir" -N --restrict-file-names=windows \
+    -nd -P "$html_dir" -N --restrict-file-names=windows \
     --progress=bar:force \
-    http://www.familyopera.org/drupal/"$page" \
+    "${all_uris[@]}" \
   > download-index.log 2>&1; then
     cat download-index.log
-    rm -f "$dir"/index.html; mv "$dir/$file".orig "$dir"/index.html
+    for file in "${all_uris[@]##*/}"; do
+        rm -f "$html_dir/$file"
+        mv "$html_dir/$file".orig "$html_dir/$file.html"
+    done
     exit 1
 fi
 cat download-index.log
-rm -f "$dir/$file".orig
+for file in "${all_uris[@]##*/}"; do
+    rm -f "$html_dir/$file".orig
+    rm -f "$html_dir/$file.html"; mv "$html_dir/$file" "$html_dir/$file.html"
+done
 
-rm -f "$dir"/index.html; mv "$dir/$file" "$dir"/index.html
-./make-url-lists.sh '' '' "$dir"/index.html
+./make-url-lists.sh --video "$html_dir/${video_uri##*/}.html"
 sed -e 's/	.*//' *."$type".urllist | sort | uniq \
     > "$type"-master.urllist
 wget --load-cookies cookies.txt -i "$type"-master.urllist \
-    -nd -P "$dir" -N --restrict-file-names=windows \
+    -nd -P "$file_dir" -N --restrict-file-names=windows \
     --progress=bar:force \
   2>&1 | tee "$log"
 rm -f "$type"-master.urllist
-./clean-up.pl "$log"
+./clean-up.pl -d "$file_dir" "$log"

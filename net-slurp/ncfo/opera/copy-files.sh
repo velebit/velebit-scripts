@@ -11,26 +11,34 @@ GAIN_CACHE=(./gain-cache.pl -q -d mp3-gain)
 
 while true; do
     case "$1" in
-	-f|--fast)
-	    PF_ARGS=("${PF_ARGS[@]}" --no-gain --no-wipe)
-	    GAIN_CACHE=(cat); shift ;;
-	-*)
-	    echo "Unknown flag '$1'!" >&2 ; exit 1 ;;
-	*)
-	    break ;;
+        -f|--fast)
+            PF_ARGS=("${PF_ARGS[@]}" --no-gain --no-wipe)
+            GAIN_CACHE=(cat); shift ;;
+        -*)
+            echo "Unknown flag '$1'!" >&2 ; exit 1 ;;
+        *)
+            break ;;
     esac
 done
 
 inspect() {
     rm -f "log-$1.tmp"
     if [ -e .inspect ]; then
-	tee "log-$1.tmp"
+        tee "log-$1.tmp"
     else
-	cat
+        cat
     fi
 }
 
-./make-url-lists.sh
+source "$(dirname "$0")/_uri.sh"
+html_dir=html
+./make-url-lists.sh --wipe \
+                    --rebels "$html_dir/${rebels_uri##*/}.html" \
+                    --empire "$html_dir/${empire_uri##*/}.html" \
+                    --solo "$html_dir/${solo_uri##*/}.html" \
+                    --demo "$html_dir/${demo_uri##*/}.html" \
+                    --orch "$html_dir/${demo_uri##*/}.html" \
+                    --pdf "$html_dir/${pdf_uri##*/}.html"
 
 set -- [^X]*.mp3.urllist
 if [ -e .copy-x ]; then set -- "$@" X*.mp3.urllist; fi

@@ -1,14 +1,36 @@
-#!/bin/sh
-INDEX="$1"; shift
-INDEX_PDF="$1"; shift
-INDEX_VIDEO="$1"; shift
-[ -z "$INDEX" ] && INDEX="mp3/index.html"
-[ -z "$INDEX_PDF" ] && INDEX_PDF="${INDEX}"
-[ -z "$INDEX_VIDEO" ] && INDEX_VIDEO="video/index.html"
+#!/bin/bash
+
+DO_WIPE=
+INDEX_REBELS=
+INDEX_EMPIRE=
+INDEX_SOLO=
+INDEX_DEMO=
+INDEX_ORCH=
+INDEX_PDF=
+INDEX_VIDEO=
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --wipe)     DO_WIPE=yes; shift ;;
+        #--mp3)      INDEX_MP3="$2"; shift; shift ;;
+        --rebels)   INDEX_REBELS="$2"; shift; shift ;;
+        --empire)   INDEX_EMPIRE="$2"; shift; shift ;;
+        --solo)     INDEX_SOLO="$2"; shift; shift ;;
+        --demo)     INDEX_DEMO="$2"; shift; shift ;;
+        --orch)     INDEX_ORCH="$2"; shift; shift ;;
+        --pdf)      INDEX_PDF="$2"; shift; shift ;;
+        --video)    INDEX_VIDEO="$2"; shift; shift ;;
+        *)
+            echo "Unknown argument: '$1'" >&2; exit 1 ;;
+    esac
+done
 
 DIR=tmplists
-rm -f *.urllist "$DIR"/*.urllist *.tmplist "$DIR"/*.tmplist
+rm -f *.tmplist "$DIR"/*.tmplist
+if [ -n "$DO_WIPE" ]; then rm -f *.urllist "$DIR"/*.urllist; fi
 if [ ! -d "$DIR" ]; then mkdir "$DIR"; fi
+
+base_uri=http://www.familyopera.org/drupal/DUMMY/
 
 ##### generic prep
 
@@ -17,13 +39,18 @@ if [ ! -d "$DIR" ]; then mkdir "$DIR"; fi
 # into a table, a different kind of solution based on
 # extract-column-links will be needed; see e.g. Weaver's Wedding 2016.
 
-tmplist=big.mp3.tmplist
-if [ ! -e "$tmplist" ]; then
-    echo "... big list (`echo "$tmplist" | sed -e 's/^big\.//;s/\..*//'`)" >&2
-    ./plinks.pl -hb -li -lt -t "$INDEX" > "$tmplist"
-fi
+blist () {
+    local index="$1"; shift
+    local biglist="${index##*/}"; biglist="$DIR/${biglist%%.html}.tmplist"
+    if [ ! -e "$biglist" ]; then
+        echo "... $biglist" >&2
+        ./plinks.pl -hb -li -lt -t --base "$base_uri" "$index" > "$biglist"
+    fi
+    echo "$biglist"
+}
 
 extract_section () {
+    local biglist="$1"; shift
     local section="$1"; shift
     local file="$1"; shift
     local files_prefix="$1"; shift
@@ -33,39 +60,82 @@ extract_section () {
     #local text_style=prepend
     local out_tag=out_file
     if [ "$text_style" = prepend ]; then
-	out_tag=out_file_prefix
-	files_suffix="$files_suffix "
+        out_tag=out_file_prefix
+        files_suffix="$files_suffix "
     fi
 
-    cat "$tmplist" \
-	| sed -e '/\.mp3$/I!d;/^'"$section"'/I!d' \
-	      -e 's/^[^	]*	//' \
-	      -e 's,^\([^	]*\) // ,\1 ,' \
-	      -e 's,^\([^	]*\) // ,\1 ,' \
-	      -e 's,^\([^	]*\) // ,\1 ,' \
-	      -e 's/^\([^	]*\)	/\1 /' \
-	      -e 's/^\([^()	]*	\)[^	]*	/\1	/' \
-	      -e 's/^\([^()	]*\) *([^()	]*)/\1/' \
-	      -e 's/^\([^	]*\)	/\1 /' \
-	      -e 's/^\([^	]*\)[:\*\?"<>|]/\1/' \
-	      -e 's/^\([^	]*\)[:\*\?"<>|]/\1/' \
-	      -e 's/^\([^	]*\)[:\*\?"<>|]/\1/' \
-	      -e 's/^\([^	]*\)[:\*\?"<>|]/\1/' \
-	      -e 's/^\([^	]*\)[:\*\?"<>|]/\1/' \
-	      -e 's/^\([^	]*\)[:\*\?"<>|]/\1/' \
-	      -e 's/^\([^	]*\)[’]/\1'\''/' \
-	      -e 's/^\([^	]*\)[’]/\1'\''/' \
-	      -e 's/^\([^	]*\)[’]/\1'\''/' \
-	      -e 's/   */ /g' -e 's/^  *//' -e 's/  *	/	/g' \
-	      -e 's/\(Scene 1\) 1/\1/' -e 's/\(Scene 2\) 2/\1/' \
-	      -e 's/\(Scene [1-9][a-z]\?\) /\1 - /' -e 's/ - - / - /' \
-	      -e 's/^\([^	]*\)	\(.*\)$/\2	'"$out_tag:$files_prefix"'\1'"$files_suffix"'/' \
-	      -e 's,^.*/sites/,http://www.familyopera.org/drupal/sites/,' \
-	      -e 's,\xe2\x80\x99,'\'',g' \
-	> "$DIR"/"$file".mp3.tmplist
+    cat "$biglist" \
+        | sed -e '/\.mp3$/I!d;/^'"$section"'/I!d' \
+              -e 's/^[^	]*	//' \
+              -e 's,^\([^	]*\) // ,\1 ,' \
+              -e 's,^\([^	]*\) // ,\1 ,' \
+              -e 's,^\([^	]*\) // ,\1 ,' \
+              -e 's/^\([^	]*\)	/\1 /' \
+              -e 's/^\([^()	]*	\)[^	]*	/\1	/' \
+              -e 's/^\([^()	]*\) *([^()	]*)/\1/' \
+              -e 's/^\([^	]*\)	/\1 /' \
+              -e 's/^\([^	]*\)[:\*\?"<>|]/\1/' \
+              -e 's/^\([^	]*\)[:\*\?"<>|]/\1/' \
+              -e 's/^\([^	]*\)[:\*\?"<>|]/\1/' \
+              -e 's/^\([^	]*\)[:\*\?"<>|]/\1/' \
+              -e 's/^\([^	]*\)[:\*\?"<>|]/\1/' \
+              -e 's/^\([^	]*\)[:\*\?"<>|]/\1/' \
+              -e 's/^\([^	]*\)[’]/\1'\''/' \
+              -e 's/^\([^	]*\)[’]/\1'\''/' \
+              -e 's/^\([^	]*\)[’]/\1'\''/' \
+              -e 's/   */ /g' -e 's/^  *//' -e 's/  *	/	/g' \
+              -e 's/\(Scene 1\) 1/\1/' -e 's/\(Scene 2\) 2/\1/' \
+              -e 's/\(Scene [1-9][a-z]\?\) /\1 - /' -e 's/ - - / - /' \
+              -e 's/^\([^	]*\)	\(.*\)$/\2	'"$out_tag:$files_prefix"'\1'"$files_suffix"'/' \
+              -e 's,\xe2\x80\x99,'\'',g' \
+        > "$DIR"/"$file".mp3.tmplist
+}
+
+extract_link_text () {
+    local biglist="$1"; shift
+    local link_text="$1"; shift
+    local file="$1"; shift
+    local files_prefix="$1"; shift
+    local files_suffix="$1"; shift
+
+    local text_style=replace
+    #local text_style=prepend
+    local out_tag=out_file
+    if [ "$text_style" = prepend ]; then
+        out_tag=out_file_prefix
+        files_suffix="$files_suffix "
+    fi
+
+    cat "$biglist" \
+        | sed -e '/\.mp3$/I!d' \
+              -e '/^[^	]*	[^	]*	[^	]*	\('"$link_text"'\)	/I!d' \
+              -e 's/^[^	]*	//' \
+              -e 's,^\([^	]*\) // ,\1 ,' \
+              -e 's,^\([^	]*\) // ,\1 ,' \
+              -e 's,^\([^	]*\) // ,\1 ,' \
+              -e 's/^\([^	]*\)	/\1 /' \
+              -e 's/^\([^()	]*	\)[^	]*	/\1	/' \
+              -e 's/^\([^()	]*\) *([^()	]*)/\1/' \
+              -e 's/^\([^	]*\)	/\1 /' \
+              -e 's/^\([^	]*\)[:\*\?"<>|]/\1/' \
+              -e 's/^\([^	]*\)[:\*\?"<>|]/\1/' \
+              -e 's/^\([^	]*\)[:\*\?"<>|]/\1/' \
+              -e 's/^\([^	]*\)[:\*\?"<>|]/\1/' \
+              -e 's/^\([^	]*\)[:\*\?"<>|]/\1/' \
+              -e 's/^\([^	]*\)[:\*\?"<>|]/\1/' \
+              -e 's/^\([^	]*\)[’]/\1'\''/' \
+              -e 's/^\([^	]*\)[’]/\1'\''/' \
+              -e 's/^\([^	]*\)[’]/\1'\''/' \
+              -e 's/   */ /g' -e 's/^  *//' -e 's/  *	/	/g' \
+              -e 's/\(Scene 1\) 1/\1/' -e 's/\(Scene 2\) 2/\1/' \
+              -e 's/\(Scene [1-9][a-z]\?\) /\1 - /' -e 's/ - - / - /' \
+              -e 's/^\([^	]*\)	\(.*\)$/\2	'"$out_tag:$files_prefix"'\1'"$files_suffix"'/' \
+              -e 's,\xe2\x80\x99,'\'',g' \
+        > "$DIR"/"$file".mp3.tmplist
 }
 
 extract_satb_sections () {
+    local biglist="$1"; shift
     local sec_prefix="$1"; shift
     local sec_suffix="$1"; shift
     local base="$1"; shift
@@ -73,25 +143,44 @@ extract_satb_sections () {
     local files_suffix="$1"; shift
 
     for voice in 'SOPRANO' 'ALTO' 'ALTO C' 'TENOR' 'BASS'; do
-	short="`echo "$voice" | sed -e 's/^\(.\)[^ ]* \?/\1/;y/SATBC/satbc/'`"
-	full_voice="$voice"
-	extract_section "$sec_prefix$full_voice$sec_suffix" "$base-$short" \
-	    "$files_prefix`echo "$short" | sed -e 'y/satb/SATB/'` " \
-	    "$files_suffix"
+        short="`echo "$voice" | sed -e 's/^\(.\)[^ ]* \?/\1/;y/SATBC/satbc/'`"
+        full_voice="$voice"
+        extract_section "$biglist" \
+            "$sec_prefix$full_voice$sec_suffix" "$base-$short" \
+            "$files_prefix`echo "$short" | sed -e 'y/satb/SATB/'` " \
+            "$files_suffix"
     done
 }
 
-#extract_satb_sections '' ' MP3s' 'courtiers' 'Cou' ''
-#extract_section 'AZARMIK' 'Azarmik-cit3'
+#extract_satb_sections "$biglist" '' ' MP3s' 'courtiers' 'Cou' ''
+#extract_section "$biglist" 'AZARMIK' 'Azarmik-cit3'
 
-extract_satb_sections '' '	' 'all'
+if [ -n "$INDEX_REBELS" ]; then
+    extract_satb_sections "$(blist "$INDEX_REBELS")" '' ' MP3s' 'rebels'
+fi
+if [ -n "$INDEX_EMPIRE" ]; then
+    extract_satb_sections "$(blist "$INDEX_EMPIRE")" '' ' MP3s' 'empire'
+fi
+if [ -n "$INDEX_SOLO" ]; then
+    extract_section "$(blist "$INDEX_SOLO")" 'HAN SOLO' 'han'
+fi
+if [ -n "$INDEX_DEMO" ]; then
+    extract_link_text "$(blist "$INDEX_DEMO")" 'Demo' 'demo'
+fi
+if [ -n "$INDEX_ORCH" ]; then
+    extract_link_text "$(blist "$INDEX_ORCH")" \
+                      'Overture\|Orchestra.*' 'orchestra'
+fi
 
-cat "$DIR"/all-{s,a,ac,t,b}.mp3.tmplist | sed \
+
+cat "$DIR"/*-{s,a,ac,t,b}.mp3.tmplist | sed \
     -e '/KCCC/d' \
     > X-all-voices.mp3.urllist
 
-extract_section 'DEMO MP3s' 'demo'
-extract_section 'ORCHESTRA MP3s' 'orchestra'
+cp "$DIR"/han.mp3.tmplist test-han.mp3.urllist
+cp "$DIR"/rebels-t.mp3.tmplist test-rebels-t.mp3.urllist
+
+if false; then   ##### TODO ##### no voice part assignments are available yet
 
 ### Katarina (soprano 1 with some alto)
 # MP3s
@@ -171,65 +260,68 @@ cat "$DIR"/all-t.mp3.tmplist | sed \
     -e '/KCCC/d;/Townie/d' \
     > bert.mp3.urllist
 
+fi   ##### TODO #####
+
+if false; then   ##### TODO ##### no videos are available yet
+
 #####  video
-if [ "$INDEX_VIDEO" = "$INDEX" ]; then
-    tmplist=big.mp3.tmplist
-else
-    tmplist=big.video.tmplist
-fi
-if [ ! -e "$tmplist" ]; then
-    echo "... big list (`echo "$tmplist" | sed -e 's/^big\.//;s/\..*//'`)" >&2
-    ./plinks.pl -hb -li -lt -t "$INDEX_VIDEO" > "$tmplist"
-fi
 echo "... video" >&2
-cat "$tmplist" \
+biglist="$(blist "$INDEX_VIDEO")"
+cat "$biglist" \
     | sed -e '/\.mp4$/I!d' \
           -e '/MIRROR/I!d;/SLOW/Id' \
           -e 's/^[^	]*	//' -e 's/^[^	]*	//' \
           -e 's/^[^	]*	//' -e 's/^[^	]*	//' \
     > mirror-fullsp.video.urllist
-cat "$tmplist" \
+cat "$biglist" \
     | sed -e '/\.mp4$/I!d' \
           -e '/MIRROR/Id;/SLOW/Id' \
           -e 's/^[^	]*	//' -e 's/^[^	]*	//' \
           -e 's/^[^	]*	//' -e 's/^[^	]*	//' \
     > regular-fullsp.video.urllist
-cat "$tmplist" \
+cat "$biglist" \
     | sed -e '/\.mp4$/I!d' \
           -e '/MIRROR/I!d;/SLOW/I!d' \
           -e 's/^[^	]*	//' -e 's/^[^	]*	//' \
           -e 's/^[^	]*	//' -e 's/^[^	]*	//' \
     > mirror-slow.video.urllist
-cat "$tmplist" \
+cat "$biglist" \
     | sed -e '/\.mp4$/I!d' \
           -e '/MIRROR/Id;/SLOW/I!d' \
           -e 's/^[^	]*	//' -e 's/^[^	]*	//' \
           -e 's/^[^	]*	//' -e 's/^[^	]*	//' \
     > regular-slow.video.urllist
-cat "$tmplist" \
+cat "$biglist" \
     | sed -e '/\.pdf$/I!d' \
           -e '/sponsorship/Id' \
           -e 's/^[^	]*	//' -e 's/^[^	]*	//' \
           -e 's/^[^	]*	//' -e 's/^[^	]*	//' \
     > blocking.video.urllist
 
+fi   ##### TODO #####
+
 ### demo MP3s
-if [ -e .generate-demo ]; then
+if [ -e .generate-demo -a -e tmplists/demo.mp3.tmplist ]; then
     echo "... demo" >&2
     cat tmplists/demo.mp3.tmplist \
-	> demo.mp3.urllist
+        > demo.mp3.urllist
 fi
 
 ### orchestra-only MP3s
-if [ -e .generate-orchestra ]; then
+if [ -e .generate-orchestra -a -e tmplists/orchestra.mp3.tmplist ]; then
     echo "... orchestra" >&2
     cat tmplists/orchestra.mp3.tmplist \
-	> orchestra.mp3.urllist
+        > orchestra.mp3.urllist
 fi
 
 ### score PDFs
-echo "... score" >&2
-./plinks.pl "$INDEX_PDF" \
-    | sed  -e '/\.pdf$/I!d;/^[^	]*score/I!d;/LibrettoBook/d;/OPERA-PARTY/d' \
-           -e 's/^[^	]*	//' \
-           -e 's/^[^	]*	//' > score.pdf.urllist
+
+if [ -n "$INDEX_PDF" ]; then
+    echo "... score" >&2
+
+    ./plinks.pl --base "$base_uri" "$INDEX_PDF" \
+        | sed  -e '/\.pdf$/I!d' \
+               -e '/^[^	]*score/I!d;/LibrettoBook/d;/OPERA-PARTY/d' \
+               -e 's/^[^	]*	//' \
+               -e 's/^[^	]*	//' > score.pdf.urllist
+fi
