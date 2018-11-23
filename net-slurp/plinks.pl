@@ -10,8 +10,8 @@ use URI;
 $| = 1;
 
 sub Usage () {
-  die "Usage: $0 [-v] [-h] [-hb] [-pt] [-lt] [-t] [--table-level LEVEL]" .
-      " [--base BASE] FILE\n";
+  die("Usage: $0 [-v] [-h] [-hb] [-pt] [-li [NUM]] [-lt] [-ll]" .
+      " [-lb] [-la] [-t] [--table-level LEVEL] [--base BASE] FILE\n");
   exit 1;
 }
 
@@ -25,23 +25,27 @@ our $SHOW_PARENT1_TEXT = 0;
 our $SHOW_PRECEDING_LESS_INDENTED_TEXT = 0;
 our $SHOW_SAME_LINE_TEXT = 0;
 our $SHOW_SAME_LINE_NUM_LINKS = 0;
+our $SHOW_SAME_LINE_BEFORE_LINK = 0;
+our $SHOW_SAME_LINE_AFTER_LINK = 0;
 our $SHOW_TEXT = 0;
 our $TABLE_LEVEL;
 our $BASE_URI;
 GetOptions('verbose|v+' => \$VERBOSITY,
-	   'show-heading|h!' => \$SHOW_HEADING,
-	   'bold-is-heading|b' =>
-	   sub { die("Option --bold-is-heading (-b) is deprecated." .
-		     "  Try --show-bold-or-heading (-hb)?\n\n"); },
-	   'show-bold-or-heading|hb!' => \$SHOW_STRONG_OR_HEADING,
-	   'show-parent-text|pt!' => \$SHOW_PARENT1_TEXT,
-	   'show-less-indented|li:999' => \$SHOW_PRECEDING_LESS_INDENTED_TEXT,
-	   'show-line-text|lt!' => \$SHOW_SAME_LINE_TEXT,
-	   'show-line-links|ll!' => \$SHOW_SAME_LINE_NUM_LINKS,
-	   'show-text|t!' => \$SHOW_TEXT,
-	   'table-level|tl=i' => \$TABLE_LEVEL,
-	   'not-in-table' => sub { $TABLE_LEVEL = 0 },
-	   'base=s' => \$BASE_URI,
+           'show-heading|h!' => \$SHOW_HEADING,
+           'bold-is-heading|b' =>
+           sub { die("Option --bold-is-heading (-b) is deprecated." .
+                     "  Try --show-bold-or-heading (-hb)?\n\n"); },
+           'show-bold-or-heading|hb!' => \$SHOW_STRONG_OR_HEADING,
+           'show-parent-text|pt!' => \$SHOW_PARENT1_TEXT,
+           'show-less-indented|li:999' => \$SHOW_PRECEDING_LESS_INDENTED_TEXT,
+           'show-line-text|lt!' => \$SHOW_SAME_LINE_TEXT,
+           'show-line-links|ll!' => \$SHOW_SAME_LINE_NUM_LINKS,
+           'show-line-before-link|lb!' => \$SHOW_SAME_LINE_BEFORE_LINK,
+           'show-line-after-link|la!' => \$SHOW_SAME_LINE_AFTER_LINK,
+           'show-text|t!' => \$SHOW_TEXT,
+           'table-level|tl=i' => \$TABLE_LEVEL,
+           'not-in-table' => sub { $TABLE_LEVEL = 0 },
+           'base=s' => \$BASE_URI,
           ) or Usage;
 @ARGV == 1 or Usage;
 
@@ -91,50 +95,117 @@ sub get_leading_whitespace_amount ( @ ) {
 }
 
 
+sub get_in_between_nodes ( $$ ) {
+  my ($from, $to) = @_;
+  my @fparents = ($from, $from->lineage);
+  my @tparents = ($to, $to->lineage);
+  $fparents[-1] == $tparents[-1] or return ();  # not same root -> span is ()
+  pop(@fparents), pop(@tparents)
+    while @fparents and @tparents and $fparents[-1] == $tparents[-1];
+  my $ftop = pop(@fparents);
+  my $ttop = pop(@tparents);
+  $ftop or $ttop or return ();  # same node -> span is ()
+  $ftop and $ttop and $ftop->pindex >= $ttop->pindex
+    and return ();  # nodes are in reverse order -> span is ()
+  my @span;
+  push @span, $_->right for @fparents;
+  if (! $ftop) {
+    push @span, $ttop->left;
+  } elsif (! $ttop) {
+    push @span, $ftop->right;
+  } else {
+    $ftop->parent == $ttop->parent or die;
+    push @span,
+      @{$ftop->parent->content}[($ftop->pindex+1)..($ttop->pindex-1)];
+  }
+  push @span, $_->left for reverse @tparents;
+  return @span;
+}
+
+
+sub next_leftward ( $ ) {
+  my ($node) = @_;
+  my $left;
+  while (1) {
+    $left = $node->left and return $left;
+    $node = $node->parent or return;
+  }
+}
+
+sub next_rightward ( $ ) {
+  my ($node) = @_;
+  my $right;
+  while (1) {
+    $right = $node->right and return $right;
+    $node = $node->parent or return;
+  }
+}
+
+
+sub look_leftward_down ( $@ ) {
+  my ($node, @terms) = @_;
+  while (1) {
+    $node = next_leftward($node) or return;
+    my @matches = $node->look_down(@terms);
+    return $matches[-1] if @matches;
+  }
+}
+
+sub look_rightward_down ( $@ ) {
+  my ($node, @terms) = @_;
+  while (1) {
+    $node = next_rightward($node) or return;
+    my @matches = $node->look_down(@terms);
+    return $matches[0] if @matches;
+  }
+}
+
+
+sub look_leftward_siblings_down ( $@ ) {
+  my ($node, @terms) = @_;
+  while (1) {
+    $node = $node->left or return;
+    my @matches = $node->look_down(@terms);
+    return $matches[-1] if @matches;
+  }
+}
+
+sub look_rightward_siblings_down ( $@ ) {
+  my ($node, @terms) = @_;
+  while (1) {
+    $node = $node->right or return;
+    my @matches = $node->look_down(@terms);
+    return $matches[0] if @matches;
+  }
+}
+
+
 sub get_same_line_siblings ( $ ) {
   my ($node) = @_;
   return () unless $node;
-  my @list = ($node);
-  {
-    my $prev = $node;
-    while (1) {
-      $prev = $prev->left or last;
-      $prev->look_down(_tag => qr/^(?:br|hr)$/) and last;
-      unshift @list, $prev;
-    }
+  my $start = look_leftward_siblings_down($node, _tag => qr/^(?:br|hr)$/);
+  my $end = look_rightward_siblings_down($node, _tag => qr/^(?:br|hr)$/);
+  if ($start and $end) {
+    # NB: $start and $end can't be the same node
+    return (get_in_between_nodes($start, $end), $end);   # exclude $start
+  } elsif ($start) {
+    return (get_in_between_nodes($start, $node->parent));    # exclude $start
+  } elsif ($end) {
+    return (get_in_between_nodes($node->parent, $end), $end);
+  } else {
+    return $node->parent->content_list;
   }
-  {
-    my $next = $node;
-    while (1) {
-      $next = $next->right or last;
-      $next->look_down(_tag => qr/^(?:br|hr)$/) and last;
-      push @list, $next;
-    }
-  }
-  # TODO: go to parent if list has only 1 node?
-  @list;
 }
 
 
 sub get_previous_line_siblings ( $ ) {
   my ($node) = @_;
   return () unless $node;
-  {
-    while (1) {
-      $node->look_down(_tag => qr/^(?:br|hr)$/) and last;
-      $node = $node->left or return ();
-    }
-  }
-  my @list = ($node);
-  {
-    my $prev = $node;
-    while (1) {
-      $prev = $prev->left or last;
-      $prev->look_down(_tag => qr/^(?:br|hr)$/) and last;
-      unshift @list, $prev;
-    }
-  }
-  @list;
+  my $end = look_leftward_siblings_down($node, _tag => qr/^(?:br|hr)$/)
+    or return ();
+  my $start = look_leftward_siblings_down($end, _tag => qr/^(?:br|hr)$/);
+  # NB: $start and $end can't be the same node
+  return (get_in_between_nodes($start || $node->parent, $end), $end);
 }
 
 
@@ -152,18 +223,47 @@ sub get_preceding_less_indented_lines_text ( $;$ ) {
   LINE:
     while ($node and $indent > $WHITESPACE_DELTA_IGNORED) {
       my @previous = get_previous_line_siblings($node)
-	or last LINE;
+        or last LINE;
       my $previous_indent = get_leading_whitespace_amount(@previous);
       $node = $previous[0];
       if ($previous_indent < ($indent - $WHITESPACE_DELTA_IGNORED)) {
-	unshift @lines, get_text(@previous);
-	$indent = $previous_indent;
-	defined $max_lines and @lines == $max_lines and last LINE;
+        unshift @lines, get_text(@previous);
+        $indent = $previous_indent;
+        defined $max_lines and @lines == $max_lines and last LINE;
       }
     }
   }
   my $separator = ' // ';
   join $separator, @lines;
+}
+
+
+sub get_same_line_before_link ( $ ) {
+  my ($node) = @_;
+  my @fragment;
+  for my $n (get_same_line_siblings($node)) {
+    my @matches = $n->look_down(_tag => 'a');
+    if (@matches) {
+      push @fragment, get_in_between_nodes($n, $matches[0]);
+      last;
+    }
+    push @fragment, $n;
+  }
+  return @fragment;
+}
+
+sub get_same_line_after_link ( $ ) {
+  my ($node) = @_;
+  my @fragment;
+  for my $n (reverse get_same_line_siblings($node)) {
+    my @matches = $n->look_down(_tag => 'a');
+    if (@matches) {
+      unshift @fragment, get_in_between_nodes($matches[-1], $n);
+      last;
+    }
+    unshift @fragment, $n;
+  }
+  return @fragment;
 }
 
 
@@ -183,11 +283,11 @@ sub get_display_headings ( $ ) {
   return unless $node;
   my ($left, $right);
   grep(($_->tag ne 'strong'
-	or ($_->parent->tag =~ /^(?:p|dt|div)$/
-	    and ((($left = (nonempty($_->left))[-1]) ? $left->tag : '')
-		 =~ /^(?:br|hr|)$/)
-	    and ((($right = (nonempty($_->right))[0]) ? $right->tag : '')
-		 =~ /^(?:br|)$/))),
+        or ($_->parent->tag =~ /^(?:p|dt|div)$/
+            and ((($left = (nonempty($_->left))[-1]) ? $left->tag : '')
+                 =~ /^(?:br|hr|)$/)
+            and ((($right = (nonempty($_->right))[0]) ? $right->tag : '')
+                 =~ /^(?:br|)$/))),
        $node->look_down(_tag => qr/^(?:title|h\d|strong)$/));
 }
 
@@ -300,6 +400,20 @@ if ($SHOW_SAME_LINE_NUM_LINKS) {
   printf STDERR "    %-67s ", "Extracting # links on the same line..." if $VERBOSITY;
   $_->{same_line_num_links} = get_num_links(get_same_line_siblings($_->{tag})) for @pages;
   push @fields, 'same_line_num_links';
+  print STDERR "done.\n" if $VERBOSITY;
+}
+
+if ($SHOW_SAME_LINE_BEFORE_LINK) {
+  printf STDERR "    %-67s ", "Extracting text before link..." if $VERBOSITY;
+  $_->{same_line_before} = get_text(get_same_line_before_link($_->{tag})) for @pages;
+  push @fields, 'same_line_before';
+  print STDERR "done.\n" if $VERBOSITY;
+}
+
+if ($SHOW_SAME_LINE_AFTER_LINK) {
+  printf STDERR "    %-67s ", "Extracting text after link..." if $VERBOSITY;
+  $_->{same_line_after} = get_text(get_same_line_after_link($_->{tag})) for @pages;
+  push @fields, 'same_line_after';
   print STDERR "done.\n" if $VERBOSITY;
 }
 
