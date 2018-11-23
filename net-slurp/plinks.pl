@@ -15,34 +15,68 @@ sub Usage () {
   exit 1;
 }
 
+
+use constant HEADING => 'heading';
+use constant STRONG_OR_HEADING => 'str_head';
+use constant PARENT1_TEXT => 'parent1_text';
+use constant PRECEDING_LESS_INDENTED_TEXT => 'preceding_less_indented_text';
+use constant SAME_LINE_TEXT => 'same_line_text';
+use constant SAME_LINE_NUM_LINKS => 'same_line_num_links';
+use constant SAME_LINE_BEFORE_LINK => 'same_line_before';
+use constant SAME_LINE_AFTER_LINK => 'same_line_after';
+use constant TEXT => 'text';
+
+
+our @fields;
+
+sub add_rm_field ( $$ ) {
+  my ($name, $add) = @_;
+  if ($add) {
+    push @fields, $name;
+  } else {
+    @fields = grep $_ ne $name, @fields;
+  }
+}
+
+sub has_field ( $ ) {
+  my ($name) = @_;
+  scalar grep $_ eq $name, @fields;
+}
+
+
 our $WHITESPACE_MAX_IGNORED = 1;
 our $WHITESPACE_DELTA_IGNORED = 0;
 
+our $PRECEDING_LESS_INDENTED_TEXT_MAX_LINES = 999;
+
 our $VERBOSITY = 0;
-our $SHOW_HEADING = 0;
-our $SHOW_STRONG_OR_HEADING = 0;
-our $SHOW_PARENT1_TEXT = 0;
-our $SHOW_PRECEDING_LESS_INDENTED_TEXT = 0;
-our $SHOW_SAME_LINE_TEXT = 0;
-our $SHOW_SAME_LINE_NUM_LINKS = 0;
-our $SHOW_SAME_LINE_BEFORE_LINK = 0;
-our $SHOW_SAME_LINE_AFTER_LINK = 0;
-our $SHOW_TEXT = 0;
 our $TABLE_LEVEL;
 our $BASE_URI;
 GetOptions('verbose|v+' => \$VERBOSITY,
-           'show-heading|h!' => \$SHOW_HEADING,
+           'show-heading|h!' =>
+           sub { add_rm_field HEADING, $_[1] },
            'bold-is-heading|b' =>
            sub { die("Option --bold-is-heading (-b) is deprecated." .
                      "  Try --show-bold-or-heading (-hb)?\n\n"); },
-           'show-bold-or-heading|hb!' => \$SHOW_STRONG_OR_HEADING,
-           'show-parent-text|pt!' => \$SHOW_PARENT1_TEXT,
-           'show-less-indented|li:999' => \$SHOW_PRECEDING_LESS_INDENTED_TEXT,
-           'show-line-text|lt!' => \$SHOW_SAME_LINE_TEXT,
-           'show-line-links|ll!' => \$SHOW_SAME_LINE_NUM_LINKS,
-           'show-line-before-link|lb!' => \$SHOW_SAME_LINE_BEFORE_LINK,
-           'show-line-after-link|la!' => \$SHOW_SAME_LINE_AFTER_LINK,
-           'show-text|t!' => \$SHOW_TEXT,
+           'show-bold-or-heading|hb!' =>
+           sub { add_rm_field STRONG_OR_HEADING, $_[1] },
+           'show-parent-text|pt!' =>
+           sub { add_rm_field PARENT1_TEXT, $_[1] },
+           'show-less-indented|li:999' =>
+           sub {
+             add_rm_field PRECEDING_LESS_INDENTED_TEXT, ($_[1] > 0);
+             $PRECEDING_LESS_INDENTED_TEXT_MAX_LINES = $_[1];
+           },
+           'show-line-text|lt!' =>
+           sub { add_rm_field SAME_LINE_TEXT, $_[1] },
+           'show-line-links|ll!' =>
+           sub { add_rm_field SAME_LINE_NUM_LINKS, $_[1] },
+           'show-line-before-link|lb!' =>
+           sub { add_rm_field SAME_LINE_BEFORE_LINK, $_[1] },
+           'show-line-after-link|la!' =>
+           sub { add_rm_field SAME_LINE_AFTER_LINK, $_[1] },
+           'show-text|t!' =>
+           sub { add_rm_field TEXT, $_[1] },
            'table-level|tl=i' => \$TABLE_LEVEL,
            'not-in-table' => sub { $TABLE_LEVEL = 0 },
            'base=s' => \$BASE_URI,
@@ -343,7 +377,6 @@ sub absolute_uri ( $;$ ) {
 
 # only look at <a ...> tags
 printf STDERR "    %-67s ", "Traversing <a> tags..." if $VERBOSITY;
-my @fields = ();
 my @pages = grep defined $_->{href},
   map +{ tag => $_, href => $_->attr('href') }, $tree->look_down(_tag => 'a');
 print STDERR "done.\n" if $VERBOSITY;
@@ -354,73 +387,64 @@ if (defined $TABLE_LEVEL) {
   print STDERR "done.\n" if $VERBOSITY;
 }
 
-if ($SHOW_HEADING) {
+if (has_field HEADING) {
   printf STDERR "    %-67s ", "Extracting headings..." if $VERBOSITY;
   clear_headings_cache;
   my $get_headings = \&get_markup_headings;
-  $_->{heading} = find_heading_text($_->{tag}, $get_headings) for @pages;
-  push @fields, 'heading';
+  $_->{+HEADING} = find_heading_text($_->{tag}, $get_headings) for @pages;
   print STDERR "done.\n" if $VERBOSITY;
 }
 
-if ($SHOW_STRONG_OR_HEADING) {
+if (has_field STRONG_OR_HEADING) {
   printf STDERR "    %-67s ", "Extracting heading/strongs..." if $VERBOSITY;
   clear_headings_cache;
   my $get_headings = \&get_display_headings;
-  $_->{str_head} = find_heading_text($_->{tag}, $get_headings) for @pages;
-  push @fields, 'str_head';
+  $_->{+STRONG_OR_HEADING} = find_heading_text($_->{tag}, $get_headings) for @pages;
   print STDERR "done.\n" if $VERBOSITY;
 }
 
-if ($SHOW_PARENT1_TEXT) {
+if (has_field PARENT1_TEXT) {
   printf STDERR "    %-67s ", "Extracting parent text..." if $VERBOSITY;
-  $_->{parent1_text} = get_text($_->{tag}->parent) for @pages;
-  push @fields, 'parent1_text';
+  $_->{+PARENT1_TEXT} = get_text($_->{tag}->parent) for @pages;
   print STDERR "done.\n" if $VERBOSITY;
 }
 
-if ($SHOW_PRECEDING_LESS_INDENTED_TEXT > 0) {
+if (has_field PRECEDING_LESS_INDENTED_TEXT) {
   printf STDERR "    %-67s ", "Extracting text on the less indented line(s) in parent..." if $VERBOSITY;
-  $_->{preceding_less_indented_text} =
+  $_->{+PRECEDING_LESS_INDENTED_TEXT} =
     get_preceding_less_indented_lines_text(
-      $_->{tag}, $SHOW_PRECEDING_LESS_INDENTED_TEXT)
-      for @pages;
-  push @fields, 'preceding_less_indented_text';
+      $_->{tag}, $PRECEDING_LESS_INDENTED_TEXT_MAX_LINES)
+    for @pages;
   print STDERR "done.\n" if $VERBOSITY;
 }
 
-if ($SHOW_SAME_LINE_TEXT) {
+if (has_field SAME_LINE_TEXT) {
   printf STDERR "    %-67s ", "Extracting text on the same line..." if $VERBOSITY;
-  $_->{same_line_text} = get_text(get_same_line_siblings($_->{tag})) for @pages;
-  push @fields, 'same_line_text';
+  $_->{+SAME_LINE_TEXT} = get_text(get_same_line_siblings($_->{tag})) for @pages;
   print STDERR "done.\n" if $VERBOSITY;
 }
 
-if ($SHOW_SAME_LINE_NUM_LINKS) {
+if (has_field SAME_LINE_NUM_LINKS) {
   printf STDERR "    %-67s ", "Extracting # links on the same line..." if $VERBOSITY;
-  $_->{same_line_num_links} = get_num_links(get_same_line_siblings($_->{tag})) for @pages;
-  push @fields, 'same_line_num_links';
+  $_->{+SAME_LINE_NUM_LINKS} = get_num_links(get_same_line_siblings($_->{tag})) for @pages;
   print STDERR "done.\n" if $VERBOSITY;
 }
 
-if ($SHOW_SAME_LINE_BEFORE_LINK) {
+if (has_field SAME_LINE_BEFORE_LINK) {
   printf STDERR "    %-67s ", "Extracting text before link..." if $VERBOSITY;
-  $_->{same_line_before} = get_text(get_same_line_before_link($_->{tag})) for @pages;
-  push @fields, 'same_line_before';
+  $_->{+SAME_LINE_BEFORE_LINK} = get_text(get_same_line_before_link($_->{tag})) for @pages;
   print STDERR "done.\n" if $VERBOSITY;
 }
 
-if ($SHOW_SAME_LINE_AFTER_LINK) {
+if (has_field SAME_LINE_AFTER_LINK) {
   printf STDERR "    %-67s ", "Extracting text after link..." if $VERBOSITY;
-  $_->{same_line_after} = get_text(get_same_line_after_link($_->{tag})) for @pages;
-  push @fields, 'same_line_after';
+  $_->{+SAME_LINE_AFTER_LINK} = get_text(get_same_line_after_link($_->{tag})) for @pages;
   print STDERR "done.\n" if $VERBOSITY;
 }
 
-if ($SHOW_TEXT) {
+if (has_field TEXT) {
   printf STDERR "    %-67s ", "Extracting tag text..." if $VERBOSITY;
-  $_->{text} = get_text($_->{tag}) for @pages;
-  push @fields, 'text';
+  $_->{+TEXT} = get_text($_->{tag}) for @pages;
   print STDERR "done.\n" if $VERBOSITY;
 }
 
