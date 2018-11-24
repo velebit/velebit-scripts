@@ -6,7 +6,7 @@ use File::Basename qw( dirname );
 
 # ----------------------------------------------------------------------
 
-# '--gain': do attempt to level the track gains using mp3gain.
+# '--gain': do attempt to level the track gains using replaygain.
 our $adjust_gain = 0;
 # '--no-wipe': don't clear all ID3 tags from MP3 files (e.g. "Track 01" title).
 our $wipe_id3    = 1;
@@ -52,8 +52,8 @@ sub process_file ( $$ ) {
     if (/\.mp3$/i) {
       $wipe_id3 and (system("$ENV{HOME}/scripts/music/id3wipe", '-f', $out)
 		     and warn "id3wipe failed.\n");
-      $adjust_gain and (system('mp3gain', '-r', '-k', '-s', 's', '-q', $out)
-			and warn "mp3gain failed.\n");
+      $adjust_gain and (system('replaygain', '-f', $out)
+			and warn "replaygain failed.\n");
       $already_processed{$in} = $out;
     }
   }

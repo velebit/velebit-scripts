@@ -7,6 +7,11 @@ use File::Basename qw( dirname );
 
 # ----------------------------------------------------------------------
 
+open my $OUTPUT, '>&', \*STDOUT or die "Cannot dup STDOUT: $!";
+open my $MESSAGES, '>&', \*STDERR or die "Cannot dup STDERR: $!";
+open STDERR, '>&', $MESSAGES or die "Cannot dup STDERR to STDERR: $!";
+open STDOUT, '>&', $MESSAGES or die "Cannot dup STDERR to STDOUT: $!";
+
 our $QUIET;
 our $DIR_PATH;
 our $DIR_NAME;
@@ -52,8 +57,15 @@ sub fixed_gain ( $ ) {
     create_dir dirname $out;
     -f $out and (unlink $out or warn "unlink($out): $!");
     system('cp', '--', $in, $out) and warn "cp failed.\n";
-    -f $out and (system('mp3gain', '-r', '-k', '-s', 's', '-q', $out)
-		 and warn "mp3gain ($out) failed.\n");
+    open STDOUT, '>', '/dev/null' or die "Cannot dup null to STDOUT: $!"
+	if $QUIET;
+    open STDERR, '>', '/dev/null' or die "Cannot dup null to STDERR: $!"
+	if $QUIET;
+    -f $out and system('eyeD3', '-Q', '--to-v2.3', $out);
+    open STDERR, '>&', $MESSAGES or die "Cannot dup STDERR to STDERR: $!";
+    -f $out and (system('replaygain', '-f', $out)
+		 and print $MESSAGES "replaygain ($out) failed.\n");
+    open STDOUT, '>&', $MESSAGES or die "Cannot dup STDERR to STDOUT: $!";
   } else {
     print STDERR "$out: keeping.\n" unless $QUIET;
   }
@@ -61,9 +73,6 @@ sub fixed_gain ( $ ) {
 }
 
 # ----------------------------------------------------------------------
-
-open my $OUTPUT, '>&', \*STDOUT or die "Cannot dup STDOUT: $!";
-open STDOUT, '>&', \*STDERR or die "Cannot dup STDERR to STDOUT: $!";
 
 GetOptions('quiet|q!' => \$QUIET,
 	   'output-path|path|p=s' => \$DIR_PATH,
