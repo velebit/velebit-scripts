@@ -44,7 +44,8 @@ blist () {
     local biglist="${index##*/}"; biglist="$DIR/${biglist%%.html}.tmplist"
     if [ ! -e "$biglist" ]; then
         echo "... $biglist" >&2
-        ./plinks.pl -hb -li -lt -t --base "$base_uri" "$index" > "$biglist"
+        ./plinks.pl -hb -li -plt -lt -lb -t -la \
+		    --base "$base_uri" "$index" > "$biglist"
     fi
     echo "$biglist"
 }
@@ -67,71 +68,86 @@ extract_section () {
     cat "$biglist" \
         | sed -e '/\.mp3$/I!d;/^'"$section"'/I!d' \
               -e 's/^[^	]*	//' \
-              -e 's,^\([^	]*\) // ,\1 ,' \
-              -e 's,^\([^	]*\) // ,\1 ,' \
-              -e 's,^\([^	]*\) // ,\1 ,' \
+              -e 's/^ACT ONE/Act I/' \
+              -e 's/^ACT TWO/Act II/' \
+              -e 's/^ACT /Act /' \
+              -e 's/^Act \([^ 	]*\),/Act \1/' \
+              -e 's,^\([^	]*\)SCENE ONE,\1Scene 1,' \
+              -e 's,^\([^	]*\)SCENE TWO,\1Scene 2,' \
+              -e 's,^\([^	]*\)SCENE THREE,\1Scene 3,' \
+              -e 's,^\([^	]*\)SCENE FOUR,\1Scene 4,' \
+              -e 's,^\([^	]*\)SCENE FIVE,\1Scene 5,' \
+              -e 's,^\([^	]*\)SCENE ,\1Scene ,' \
+              -e 's,^\([^	]*Scene [^ :	]*\)[^	]*	,\1	,' \
+              -e 's,^\([^	]*	\)[^	]*	,\1,' \
+              -e 's,^\([^	]*	\)[^	]*	,\1,' \
               -e 's/^\([^	]*\)	/\1 /' \
-              -e 's/^\([^()	]*	\)[^	]*	/\1	/' \
-              -e 's/^\([^()	]*\) *([^()	]*)/\1/' \
+              -e 's/^\([^	]*\)	/\1 /' \
               -e 's/^\([^	]*\)	/\1 /' \
               -e 's/^\([^	]*\)[:\*\?"<>|]/\1/' \
               -e 's/^\([^	]*\)[:\*\?"<>|]/\1/' \
               -e 's/^\([^	]*\)[:\*\?"<>|]/\1/' \
               -e 's/^\([^	]*\)[:\*\?"<>|]/\1/' \
               -e 's/^\([^	]*\)[:\*\?"<>|]/\1/' \
-              -e 's/^\([^	]*\)[:\*\?"<>|]/\1/' \
               -e 's/^\([^	]*\)[’]/\1'\''/' \
               -e 's/^\([^	]*\)[’]/\1'\''/' \
               -e 's/^\([^	]*\)[’]/\1'\''/' \
+              -e 's/^\([^	]*\)(  */\1(/' \
+              -e 's/^\([^	]*\)  *)/\1)/' \
               -e 's/   */ /g' -e 's/^  *//' -e 's/  *	/	/g' \
-              -e 's/\(Scene 1\) 1/\1/' -e 's/\(Scene 2\) 2/\1/' \
-              -e 's/\(Scene [1-9][a-z]\?\) /\1 - /' -e 's/ - - / - /' \
               -e 's/^\([^	]*\)	\(.*\)$/\2	'"$out_tag:$files_prefix"'\1'"$files_suffix"'/' \
               -e 's,\xe2\x80\x99,'\'',g' \
         > "$DIR"/"$file".mp3.tmplist
 }
 
-extract_link_text () {
+extract_demorch () {
     local biglist="$1"; shift
-    local link_text="$1"; shift
+    local section="$1"; shift
     local file="$1"; shift
     local files_prefix="$1"; shift
     local files_suffix="$1"; shift
 
-    local text_style=replace
-    #local text_style=prepend
+#              -e 's,^\([^	]*	\)[^	]*	,\1	,' \
     local out_tag=out_file
-    if [ "$text_style" = prepend ]; then
-        out_tag=out_file_prefix
-        files_suffix="$files_suffix "
-    fi
-
     cat "$biglist" \
         | sed -e '/\.mp3$/I!d' \
-              -e '/^[^	]*	[^	]*	[^	]*	\('"$link_text"'\)	/I!d' \
-              -e 's/^[^	]*	//' \
-              -e 's,^\([^	]*\) // ,\1 ,' \
-              -e 's,^\([^	]*\) // ,\1 ,' \
-              -e 's,^\([^	]*\) // ,\1 ,' \
+              -e 's/^ACT ONE/Act I/' \
+              -e 's/^ACT TWO/Act II/' \
+              -e 's/^ACT /Act /' \
+              -e 's/^Act \([^ 	]*\),/Act \1/' \
+              -e 's,^\([^	]*\)SCENE ONE,\1Scene 1,' \
+              -e 's,^\([^	]*\)SCENE TWO,\1Scene 2,' \
+              -e 's,^\([^	]*\)SCENE THREE,\1Scene 3,' \
+              -e 's,^\([^	]*\)SCENE FOUR,\1Scene 4,' \
+              -e 's,^\([^	]*\)SCENE FIVE,\1Scene 5,' \
+              -e 's,^\([^	]*\)SCENE ,\1Scene ,' \
+              -e 's,^\([^	]*Scene [^ :	]*\)[^	]*	,\1	,' \
+              -e 's/^\([^	]*	\)[^	]*	/\1/' \
+              -e 's/^\([^	]*	\)[^	]*\(	[0-9]*\.\)/\1\2/' \
+              -e 's,^\([^	]*	\)[0-9]*\.  *,\1,' \
+              -e 's,^\([^	]*	[^	]*\)([^()	]*),\1,' \
+              -e 's,^\([^	]*	[^	]*\)([^()	]*),\1,' \
               -e 's/^\([^	]*\)	/\1 /' \
-              -e 's/^\([^()	]*	\)[^	]*	/\1	/' \
-              -e 's/^\([^()	]*\) *([^()	]*)/\1/' \
+              -e 's/^\([^	]*	\)[^	]*	/\1/' \
+              -e 's,^\([^	]*	\)[0-9]*\.  *,\1,' \
+              -e 's/^\([^	]*\)	/\1 /' \
+              -e '/^[^	]*	'"$section"'/I!d' \
+              -e 's/^\([^	]*\)	/\1 /' \
               -e 's/^\([^	]*\)	/\1 /' \
               -e 's/^\([^	]*\)[:\*\?"<>|]/\1/' \
               -e 's/^\([^	]*\)[:\*\?"<>|]/\1/' \
               -e 's/^\([^	]*\)[:\*\?"<>|]/\1/' \
               -e 's/^\([^	]*\)[:\*\?"<>|]/\1/' \
               -e 's/^\([^	]*\)[:\*\?"<>|]/\1/' \
-              -e 's/^\([^	]*\)[:\*\?"<>|]/\1/' \
               -e 's/^\([^	]*\)[’]/\1'\''/' \
               -e 's/^\([^	]*\)[’]/\1'\''/' \
               -e 's/^\([^	]*\)[’]/\1'\''/' \
+              -e 's/^\([^	]*\)(  */\1(/' \
+              -e 's/^\([^	]*\)  *)/\1)/' \
               -e 's/   */ /g' -e 's/^  *//' -e 's/  *	/	/g' \
-              -e 's/\(Scene 1\) 1/\1/' -e 's/\(Scene 2\) 2/\1/' \
-              -e 's/\(Scene [1-9][a-z]\?\) /\1 - /' -e 's/ - - / - /' \
               -e 's/^\([^	]*\)	\(.*\)$/\2	'"$out_tag:$files_prefix"'\1'"$files_suffix"'/' \
               -e 's,\xe2\x80\x99,'\'',g' \
-        > "$DIR"/"$file".mp3.tmplist
+              > "$DIR"/"$file".mp3.tmplist
 }
 
 extract_satb_sections () {
@@ -165,11 +181,11 @@ if [ -n "$INDEX_SOLO" ]; then
     extract_section "$(blist "$INDEX_SOLO")" 'HAN SOLO' 'han'
 fi
 if [ -n "$INDEX_DEMO" ]; then
-    extract_link_text "$(blist "$INDEX_DEMO")" 'Demo' 'demo'
+    extract_demorch "$(blist "$INDEX_DEMO")" 'Demo' 'demo'
 fi
 if [ -n "$INDEX_ORCH" ]; then
-    extract_link_text "$(blist "$INDEX_ORCH")" \
-                      'Overture\|Orchestra.*' 'orchestra'
+    extract_demorch "$(blist "$INDEX_ORCH")" \
+                    'Overture\|Orchestra.*' 'orchestra'
 fi
 
 
@@ -178,7 +194,8 @@ cat "$DIR"/*-{s,a,ac,t,b}.mp3.tmplist | sed \
     > X-all-voices.mp3.urllist
 
 cp "$DIR"/han.mp3.tmplist test-han.mp3.urllist
-cp "$DIR"/rebels-t.mp3.tmplist test-rebels-t.mp3.urllist
+cp "$DIR"/rebels-t.mp3.tmplist rebels-t.mp3.urllist
+cp "$DIR"/empire-t.mp3.tmplist empire-t.mp3.urllist
 
 if false; then   ##### TODO ##### no voice part assignments are available yet
 

@@ -20,6 +20,7 @@ use constant HEADING => 'heading';
 use constant STRONG_OR_HEADING => 'str_head';
 use constant PARENT1_TEXT => 'parent1_text';
 use constant PRECEDING_LESS_INDENTED_TEXT => 'preceding_less_indented_text';
+use constant PREVIOUS_LINE_TEXT => 'prev_line_text';
 use constant SAME_LINE_TEXT => 'same_line_text';
 use constant SAME_LINE_NUM_LINKS => 'same_line_num_links';
 use constant SAME_LINE_BEFORE_LINK => 'same_line_before';
@@ -67,6 +68,8 @@ GetOptions('verbose|v+' => \$VERBOSITY,
              add_rm_field PRECEDING_LESS_INDENTED_TEXT, ($_[1] > 0);
              $PRECEDING_LESS_INDENTED_TEXT_MAX_LINES = $_[1];
            },
+           'show-previous-line-text|plt!' =>
+           sub { add_rm_field PREVIOUS_LINE_TEXT, $_[1] },
            'show-line-text|lt!' =>
            sub { add_rm_field SAME_LINE_TEXT, $_[1] },
            'show-line-links|ll!' =>
@@ -415,6 +418,12 @@ if (has_field PRECEDING_LESS_INDENTED_TEXT) {
     get_preceding_less_indented_lines_text(
       $_->{tag}, $PRECEDING_LESS_INDENTED_TEXT_MAX_LINES)
     for @pages;
+  print STDERR "done.\n" if $VERBOSITY;
+}
+
+if (has_field PREVIOUS_LINE_TEXT) {
+  printf STDERR "    %-67s ", "Extracting text on the previous line..." if $VERBOSITY;
+  $_->{+PREVIOUS_LINE_TEXT} = get_text(get_previous_line_siblings($_->{tag})) for @pages;
   print STDERR "done.\n" if $VERBOSITY;
 }
 
