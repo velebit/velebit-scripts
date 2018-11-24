@@ -7,7 +7,7 @@ for top_dir in 'NCFO practice' 'North Cambridge Family Opera' \
   if [ -d "$top_dir" ]; then
       seen=yes
       echo "Working: $top_dir -> $lo_fi_dir ..."
-      "$lo_fi_dir"/reduce-bitrate.sh -P6 -v "$top_dir"/*
+      "$lo_fi_dir"/reduce-bitrate.sh -P6 -v "$top_dir"/*/
   fi
 done
 if [ -z "$seen" ]; then
