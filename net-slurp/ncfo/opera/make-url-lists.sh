@@ -178,7 +178,17 @@ if [ -n "$INDEX_EMPIRE" ]; then
     extract_satb_sections "$(blist "$INDEX_EMPIRE")" '' ' MP3s' 'empire'
 fi
 if [ -n "$INDEX_SOLO" ]; then
-    extract_section "$(blist "$INDEX_SOLO")" 'HAN SOLO' 'han'
+    # Hack: Luke gets identified as "PRINCIPAL SOLOISTS" instead, not fixing.
+    extract_section "$(blist "$INDEX_SOLO")" "PRINCIPAL SOLOISTS" "luke"
+    extract_section "$(blist "$INDEX_SOLO")" "HAN SOLO" "han"
+    extract_section "$(blist "$INDEX_SOLO")" "PRINCESS LEIA" "leia"
+    extract_section "$(blist "$INDEX_SOLO")" "OBI-WAN KENOBI" "obiwan"
+    extract_section "$(blist "$INDEX_SOLO")" "DARTH VADER" "darth"
+    extract_section "$(blist "$INDEX_SOLO")" "C-3PO" "c3po"
+    extract_section "$(blist "$INDEX_SOLO")" "R2-D2" "r2d2"
+    extract_section "$(blist "$INDEX_SOLO")" "CHEWBACCA" "chewie"
+    extract_section "$(blist "$INDEX_SOLO")" "JABBA THE HUTT" "jabba"
+    extract_section "$(blist "$INDEX_SOLO")" "UNCLE OWEN" "owen"
 fi
 if [ -n "$INDEX_DEMO" ]; then
     extract_demorch "$(blist "$INDEX_DEMO")" 'Demo' 'demo'
@@ -193,43 +203,25 @@ cat "$DIR"/*-{s,a,ac,t,b}.mp3.tmplist | sed \
     -e '/KCCC/d' \
     > X-all-voices.mp3.urllist
 
-cp "$DIR"/han.mp3.tmplist test-han.mp3.urllist
-cp "$DIR"/rebels-t.mp3.tmplist rebels-t.mp3.urllist
-cp "$DIR"/empire-t.mp3.tmplist empire-t.mp3.urllist
+for ch in rebels empire; do
+    for vp in s a t b; do
+	cp "$DIR"/"$ch"-"$vp".mp3.tmplist "$ch"-"$vp".mp3.urllist
+    done
+done
+
+### Katarina (Luke!!!)
+# MP3s
+cat "$DIR"/luke.mp3.tmplist | sed \
+    -e '/NOOP/d' \
+    > Katarina.mp3.urllist
+
+### bert (Chewie!!!)
+# MP3s
+cat "$DIR"/chewie.mp3.tmplist | sed \
+    -e '/NOOP/d' \
+    > bert.mp3.urllist
 
 if false; then   ##### TODO ##### no voice part assignments are available yet
-
-### Katarina (soprano 1 with some alto)
-# MP3s
-cat "$DIR"/all-s.mp3.tmplist | sed \
-    -e '/Act I Scene 1e/,$d' \
-    -e '/soprano 2/Id;/\(low\|middle\) split/Id' \
-    -e '/KCCC/d;/Townie/d' \
-    > Katarina.mp3.urllist
-cat "$DIR"/all-a.mp3.tmplist | sed \
-    -e '/Act I Scene 1e/!d' \
-    -e '/KCCC/d;/Townie/d' \
-    >> Katarina.mp3.urllist
-cat "$DIR"/all-s.mp3.tmplist | sed \
-    -e '1,/Act I Scene 1e/d;/Act I Scene 1e/d' \
-    -e '/Act I Scene 5/,$d' \
-    -e '/soprano 2/Id;/\(low\|middle\) split/Id' \
-    -e '/KCCC/d;/Townie/d' \
-    >> Katarina.mp3.urllist
-cat "$DIR"/all-a.mp3.tmplist | sed \
-    -e '/Act I Scene 5/!d' \
-    -e '/KCCC/d;/Townie/d' \
-    >> Katarina.mp3.urllist
-cat "$DIR"/all-s.mp3.tmplist | sed \
-    -e '1,/Act I Scene 5/d;/Act I Scene 5/d' \
-    -e '/Act II Scene 5/,$d' \
-    -e '/soprano 2/Id;/\(low\|middle\) split/Id' \
-    -e '/KCCC/d;/Townie/d' \
-    >> Katarina.mp3.urllist
-cat "$DIR"/all-a.mp3.tmplist | sed \
-    -e '/Act II Scene 5/!d' \
-    -e '/KCCC/d;/Townie/d' \
-    >> Katarina.mp3.urllist
 
 ### Abbe and Luka (alto with some tenor)
 # MP3s
@@ -269,13 +261,6 @@ cat "$DIR"/all-t.mp3.tmplist "$DIR"/all-a.mp3.tmplist | sed \
     -e '/tenor 2/Id' \
     -e '/KCCC/d;/Townie/d' \
     >> Abbe+Luka.mp3.urllist
-
-### bert (tenor)
-# MP3s
-cat "$DIR"/all-t.mp3.tmplist | sed \
-    -e '/tenor 2/Id' \
-    -e '/KCCC/d;/Townie/d' \
-    > bert.mp3.urllist
 
 fi   ##### TODO #####
 
