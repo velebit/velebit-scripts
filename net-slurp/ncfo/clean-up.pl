@@ -68,20 +68,28 @@ $found{$_}++      foreach @found;
 my @all = sort keys %{ +{ %referenced, %found } };
 #printf "%4d files combined\n", scalar @all;
 
-my ($rm_ok, $rm_fail);
+my ($ignored, $rm_ok, $rm_fail, $missing);
 for my $f (@all) {
   if ($found{$f} and !$referenced{$f}) {
-    $f =~ $ignored_re
-      and print("'$f' was ignored.\n"), next;
-    unlink $f
-      or warn("remove($f): $!"), next;
-    print "'$f' is old, removed.\n";
+    if ($f =~ $ignored_re) {
+      print("'$f' was ignored.\n");
+      ++$ignored;
+    } elsif (! unlink $f) {
+      warn "remove($f): $!";
+      ++$rm_fail;
+    } else {
+      print "'$f' is old, removed.\n";
+      ++$rm_ok;
+    }
 
   } elsif ($referenced{$f} and !$found{$f}) {
     print "'$f' downloaded but not found.\n";
+    ++$missing;
   }
 }
 
+printf "%4d new files missing\n", $missing if $missing;
+printf "%4d old files ignored\n", $ignored if $ignored;
 printf "%4d old files removed\n", $rm_ok if $rm_ok;
 printf "%4d removals failed\n", $rm_fail if $rm_fail;
-print  "Nothing needed to be done\n"     if !($rm_ok || $rm_fail);
+print  "Nothing needed to be removed\n" if !($rm_ok || $rm_fail);
