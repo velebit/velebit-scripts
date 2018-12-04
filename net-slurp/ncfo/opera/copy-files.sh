@@ -38,6 +38,7 @@ html_dir=html
                     --solo "$html_dir/${solo_uri##*/}.html" \
                     --demo "$html_dir/${demo_uri##*/}.html" \
                     --orch "$html_dir/${demo_uri##*/}.html" \
+                    --video "$html_dir/${video_uri##*/}.html" \
                     --pdf "$html_dir/${pdf_uri##*/}.html"
 
 set -- [^X]*.mp3.urllist

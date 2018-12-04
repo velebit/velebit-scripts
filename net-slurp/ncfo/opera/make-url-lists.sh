@@ -45,7 +45,7 @@ blist () {
     if [ ! -e "$biglist" ]; then
         echo "... $biglist" >&2
         ./plinks.pl -hb -li -plt -lt -lb -t -la \
-		    --base "$base_uri" "$index" > "$biglist"
+                    --base "$base_uri" "$index" > "$biglist"
     fi
     echo "$biglist"
 }
@@ -199,108 +199,123 @@ if [ -n "$INDEX_ORCH" ]; then
 fi
 
 
-cat "$DIR"/*-{s,a,ac,t,b}.mp3.tmplist | sed \
-    -e '/KCCC/d' \
-    > X-all-voices.mp3.urllist
+if [ -n "$INDEX_REBELS" -a -n "$INDEX_EMPIRE" ]; then
+    cat "$DIR"/*-{s,a,ac,t,b}.mp3.tmplist | sed \
+        -e '/NOOP/d' \
+        > X-all-voices.mp3.urllist
+fi
 
-for ch in rebels empire; do
+set --
+if [ -n "$INDEX_REBELS" ]; then set -- "$@" rebels; fi
+if [ -n "$INDEX_EMPIRE" ]; then set -- "$@" empire; fi
+for ch in "$@"; do
     for vp in s a t b; do
-	cp "$DIR"/"$ch"-"$vp".mp3.tmplist "$ch"-"$vp".mp3.urllist
+        cp "$DIR"/"$ch"-"$vp".mp3.tmplist "$ch"-"$vp".mp3.urllist
     done
 done
 
 ### Katarina (Luke!!!)
 # MP3s
-cat "$DIR"/luke.mp3.tmplist | sed \
-    -e '/NOOP/d' \
-    > Katarina.mp3.urllist
+if [ -n "$INDEX_SOLO" ]; then
+    cat "$DIR"/luke.mp3.tmplist | sed \
+        -e '/NOOP/d' \
+        > Katarina.mp3.urllist
+fi
 
 ### bert (Chewie!!!)
 # MP3s
-cat "$DIR"/chewie.mp3.tmplist | sed \
-    -e '/NOOP/d' \
-    > bert.mp3.urllist
+if [ -n "$INDEX_SOLO" ]; then
+    cat "$DIR"/chewie.mp3.tmplist | sed \
+        -e '/NOOP/d' \
+        > bert.mp3.urllist
+fi
 
-if false; then   ##### TODO ##### no voice part assignments are available yet
-
-### Abbe and Luka (alto with some tenor)
+### Abbe and Luka (???)
 # MP3s
-cat "$DIR"/all-a.mp3.tmplist | sed \
-    -e '/Act I Scene 1e/,$d' \
-    -e '/KCCC/d;/Townie/d' \
-    > Abbe+Luka.mp3.urllist
-cat "$DIR"/all-t.mp3.tmplist "$DIR"/all-a.mp3.tmplist | sed \
-    -e '/Act I Scene 1e/!d' \
-    -e '/A Act I Scene 1e.*Bars 47-62/Id' \
-    -e '/tenor 2/Id' \
-    -e '/KCCC/d;/Townie/d' \
-    >> Abbe+Luka.mp3.urllist
-cat "$DIR"/all-a.mp3.tmplist | sed \
-    -e '1,/Act I Scene 1e/d;/Act I Scene 1e/d' \
-    -e '/Act I Scene 5/,$d' \
-    -e '/KCCC/d;/Townie/d' \
-    >> Abbe+Luka.mp3.urllist
-cat "$DIR"/all-t.mp3.tmplist "$DIR"/all-a.mp3.tmplist | sed \
-    -e '/Act I Scene 5/!d' \
-    -e '/tenor 2/Id' \
-    -e '/KCCC/d;/Townie/d;/countermelody/d' \
-    >> Abbe+Luka.mp3.urllist
-cat "$DIR"/all-a.mp3.tmplist | sed \
-    -e '1,/Act I Scene 5/d;/Act I Scene 5/d' \
-    -e '/Act II Scene 4/,$d' \
-    -e '/if I had a dime.*alto 2/Id' \
-    -e '/KCCC/d;/Townie/d' \
-    >> Abbe+Luka.mp3.urllist
-cat "$DIR"/all-t.mp3.tmplist "$DIR"/all-a.mp3.tmplist | sed \
-    -e '/Act II Scene 4/!d' \
-    -e '/middle split/d' \
-    -e '/KCCC/d;/Townie/d' \
-    >> Abbe+Luka.mp3.urllist
-cat "$DIR"/all-t.mp3.tmplist "$DIR"/all-a.mp3.tmplist | sed \
-    -e '/Act II Scene 5/!d' \
-    -e '/tenor 2/Id' \
-    -e '/KCCC/d;/Townie/d' \
-    >> Abbe+Luka.mp3.urllist
-
-fi   ##### TODO #####
-
-if false; then   ##### TODO ##### no videos are available yet
+if false && [ -n "$INDEX_REBELS" ]; then
+    ##### TODO ##### no voice part assignments are available yet
+    cat "$DIR"/all-a.mp3.tmplist | sed \
+        -e '/Act I Scene 1e/,$d' \
+        -e '/KCCC/d;/Townie/d' \
+        > Abbe+Luka.mp3.urllist
+    cat "$DIR"/all-t.mp3.tmplist "$DIR"/all-a.mp3.tmplist | sed \
+        -e '/Act I Scene 1e/!d' \
+        -e '/A Act I Scene 1e.*Bars 47-62/Id' \
+        -e '/tenor 2/Id' \
+        -e '/KCCC/d;/Townie/d' \
+        >> Abbe+Luka.mp3.urllist
+    cat "$DIR"/all-a.mp3.tmplist | sed \
+        -e '1,/Act I Scene 1e/d;/Act I Scene 1e/d' \
+        -e '/Act I Scene 5/,$d' \
+        -e '/KCCC/d;/Townie/d' \
+        >> Abbe+Luka.mp3.urllist
+    cat "$DIR"/all-t.mp3.tmplist "$DIR"/all-a.mp3.tmplist | sed \
+        -e '/Act I Scene 5/!d' \
+        -e '/tenor 2/Id' \
+        -e '/KCCC/d;/Townie/d;/countermelody/d' \
+        >> Abbe+Luka.mp3.urllist
+    cat "$DIR"/all-a.mp3.tmplist | sed \
+        -e '1,/Act I Scene 5/d;/Act I Scene 5/d' \
+        -e '/Act II Scene 4/,$d' \
+        -e '/if I had a dime.*alto 2/Id' \
+        -e '/KCCC/d;/Townie/d' \
+        >> Abbe+Luka.mp3.urllist
+    cat "$DIR"/all-t.mp3.tmplist "$DIR"/all-a.mp3.tmplist | sed \
+        -e '/Act II Scene 4/!d' \
+        -e '/middle split/d' \
+        -e '/KCCC/d;/Townie/d' \
+        >> Abbe+Luka.mp3.urllist
+    cat "$DIR"/all-t.mp3.tmplist "$DIR"/all-a.mp3.tmplist | sed \
+        -e '/Act II Scene 5/!d' \
+        -e '/tenor 2/Id' \
+        -e '/KCCC/d;/Townie/d' \
+        >> Abbe+Luka.mp3.urllist
+fi
 
 #####  video
-echo "... video" >&2
-biglist="$(blist "$INDEX_VIDEO")"
-cat "$biglist" \
-    | sed -e '/\.mp4$/I!d' \
-          -e '/MIRROR/I!d;/SLOW/Id' \
-          -e 's/^[^	]*	//' -e 's/^[^	]*	//' \
-          -e 's/^[^	]*	//' -e 's/^[^	]*	//' \
-    > mirror-fullsp.video.urllist
-cat "$biglist" \
-    | sed -e '/\.mp4$/I!d' \
-          -e '/MIRROR/Id;/SLOW/Id' \
-          -e 's/^[^	]*	//' -e 's/^[^	]*	//' \
-          -e 's/^[^	]*	//' -e 's/^[^	]*	//' \
-    > regular-fullsp.video.urllist
-cat "$biglist" \
-    | sed -e '/\.mp4$/I!d' \
-          -e '/MIRROR/I!d;/SLOW/I!d' \
-          -e 's/^[^	]*	//' -e 's/^[^	]*	//' \
-          -e 's/^[^	]*	//' -e 's/^[^	]*	//' \
-    > mirror-slow.video.urllist
-cat "$biglist" \
-    | sed -e '/\.mp4$/I!d' \
-          -e '/MIRROR/Id;/SLOW/I!d' \
-          -e 's/^[^	]*	//' -e 's/^[^	]*	//' \
-          -e 's/^[^	]*	//' -e 's/^[^	]*	//' \
-    > regular-slow.video.urllist
-cat "$biglist" \
-    | sed -e '/\.pdf$/I!d' \
-          -e '/sponsorship/Id' \
-          -e 's/^[^	]*	//' -e 's/^[^	]*	//' \
-          -e 's/^[^	]*	//' -e 's/^[^	]*	//' \
-    > blocking.video.urllist
-
-fi   ##### TODO #####
+if [ -n "$INDEX_VIDEO" ]; then
+    biglist="$(blist "$INDEX_VIDEO")"
+    cat "$biglist" \
+        | sed -e '/\.mp4$/I!d' \
+              -e '/MIRROR/I!d;/SLOW/Id' \
+              -e 's/^[^	]*	//' -e 's/^[^	]*	//' \
+              -e 's/^[^	]*	//' -e 's/^[^	]*	//' \
+              -e 's/^[^	]*	//' -e 's/^[^	]*	//' \
+              -e 's/^[^	]*	//' \
+              > mirror-fullsp.video.urllist
+    cat "$biglist" \
+        | sed -e '/\.mp4$/I!d' \
+              -e '/MIRROR/Id;/SLOW/Id' \
+              -e 's/^[^	]*	//' -e 's/^[^	]*	//' \
+              -e 's/^[^	]*	//' -e 's/^[^	]*	//' \
+              -e 's/^[^	]*	//' -e 's/^[^	]*	//' \
+              -e 's/^[^	]*	//' \
+              > regular-fullsp.video.urllist
+    cat "$biglist" \
+        | sed -e '/\.mp4$/I!d' \
+              -e '/MIRROR/I!d;/SLOW/I!d' \
+              -e 's/^[^	]*	//' -e 's/^[^	]*	//' \
+              -e 's/^[^	]*	//' -e 's/^[^	]*	//' \
+              -e 's/^[^	]*	//' -e 's/^[^	]*	//' \
+              -e 's/^[^	]*	//' \
+              > mirror-slow.video.urllist
+    cat "$biglist" \
+        | sed -e '/\.mp4$/I!d' \
+              -e '/MIRROR/Id;/SLOW/I!d' \
+              -e 's/^[^	]*	//' -e 's/^[^	]*	//' \
+              -e 's/^[^	]*	//' -e 's/^[^	]*	//' \
+              -e 's/^[^	]*	//' -e 's/^[^	]*	//' \
+              -e 's/^[^	]*	//' \
+              > regular-slow.video.urllist
+    cat "$biglist" \
+        | sed -e '/\.pdf$/I!d' \
+              -e '/sponsorship/Id' \
+              -e 's/^[^	]*	//' -e 's/^[^	]*	//' \
+              -e 's/^[^	]*	//' -e 's/^[^	]*	//' \
+              -e 's/^[^	]*	//' -e 's/^[^	]*	//' \
+              -e 's/^[^	]*	//' \
+              > blocking.video.urllist
+fi
 
 ### demo MP3s
 if [ -e .generate-demo -a -e tmplists/demo.mp3.tmplist ]; then
