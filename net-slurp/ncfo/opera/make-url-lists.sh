@@ -79,6 +79,7 @@ extract_section () {
               -e 's,^\([^	]*\)SCENE FIVE,\1Scene 5,' \
               -e 's,^\([^	]*\)SCENE ,\1Scene ,' \
               -e 's,^\([^	]*Scene [^ :	]*\)[^	]*	,\1	,' \
+              -e 's/^Act \([^ 	]*\) Scene \([^ 	]*\)/\1.\2/' \
               -e 's,^\([^	]*	\)[^	]*	,\1,' \
               -e 's,^\([^	]*	\)[^	]*	,\1,' \
               -e 's/^\([^	]*\)	/\1 /' \
@@ -122,6 +123,7 @@ extract_demorch () {
               -e 's,^\([^	]*\)SCENE FIVE,\1Scene 5,' \
               -e 's,^\([^	]*\)SCENE ,\1Scene ,' \
               -e 's,^\([^	]*Scene [^ :	]*\)[^	]*	,\1	,' \
+              -e 's/^Act \([^ 	]*\) Scene \([^ 	]*\)/\1.\2/' \
               -e 's/^\([^	]*	\)[^	]*	/\1/' \
               -e 's/^\([^	]*	\)[^	]*\(	[0-9]*\.\)/\1\2/' \
               -e 's,^\([^	]*	\)[0-9]*\.  *,\1,' \
@@ -154,7 +156,8 @@ extract_satb_sections () {
     local biglist="$1"; shift
     local sec_prefix="$1"; shift
     local sec_suffix="$1"; shift
-    local base="$1"; shift
+    local list_prefix="$1"; shift
+    local list_suffix="$1"; shift
     local files_prefix="$1"; shift
     local files_suffix="$1"; shift
 
@@ -162,20 +165,21 @@ extract_satb_sections () {
         short="`echo "$voice" | sed -e 's/^\(.\)[^ ]* \?/\1/;y/SATBC/satbc/'`"
         full_voice="$voice"
         extract_section "$biglist" \
-            "$sec_prefix$full_voice$sec_suffix" "$base-$short" \
+            "$sec_prefix$full_voice$sec_suffix" \
+            "$list_prefix$short$list_suffix" \
             "$files_prefix`echo "$short" | sed -e 'y/satb/SATB/'` " \
             "$files_suffix"
     done
 }
 
-#extract_satb_sections "$biglist" '' ' MP3s' 'courtiers' 'Cou' ''
+#extract_satb_sections "$biglist" '' ' MP3s' 'courtiers-' '' 'Cou' ''
 #extract_section "$biglist" 'AZARMIK' 'Azarmik-cit3'
 
 if [ -n "$INDEX_REBELS" ]; then
-    extract_satb_sections "$(blist "$INDEX_REBELS")" '' ' MP3s' 'rebels'
+    extract_satb_sections "$(blist "$INDEX_REBELS")" '' ' MP3s' '' '-rebels'
 fi
 if [ -n "$INDEX_EMPIRE" ]; then
-    extract_satb_sections "$(blist "$INDEX_EMPIRE")" '' ' MP3s' 'empire'
+    extract_satb_sections "$(blist "$INDEX_EMPIRE")" '' ' MP3s' '' '-empire'
 fi
 if [ -n "$INDEX_SOLO" ]; then
     # Hack: Luke gets identified as "PRINCIPAL SOLOISTS" instead, not fixing.
@@ -200,7 +204,7 @@ fi
 
 
 if [ -n "$INDEX_REBELS" -a -n "$INDEX_EMPIRE" ]; then
-    cat "$DIR"/*-{s,a,ac,t,b}.mp3.tmplist | sed \
+    cat "$DIR"/{s,a,ac,t,b}-*.mp3.tmplist | sed \
         -e '/NOOP/d' \
         > X-all-voices.mp3.urllist
 fi
@@ -210,7 +214,7 @@ if [ -n "$INDEX_REBELS" ]; then set -- "$@" rebels; fi
 if [ -n "$INDEX_EMPIRE" ]; then set -- "$@" empire; fi
 for ch in "$@"; do
     for vp in s a t b; do
-        cp "$DIR"/"$ch"-"$vp".mp3.tmplist "$ch"-"$vp".mp3.urllist
+        cp "$DIR"/"$vp"-"$ch".mp3.tmplist X-"$vp"-"$ch".mp3.urllist
     done
 done
 
@@ -220,7 +224,7 @@ if [ -n "$INDEX_SOLO" ]; then
     cat "$DIR"/luke.mp3.tmplist | sed \
         -e '/NOOP/d' \
         > Katarina.mp3.urllist
-    cp "$DIR"/rebels-s.mp3.tmplist rebels-s.mp3.urllist
+    cp "$DIR"/s-rebels.mp3.tmplist s-rebels.mp3.urllist
 fi
 
 ### bert (Chewie!!!)
@@ -229,13 +233,13 @@ if [ -n "$INDEX_SOLO" ]; then
     cat "$DIR"/chewie.mp3.tmplist | sed \
         -e '/NOOP/d' \
         > bert.mp3.urllist
-    cp "$DIR"/rebels-t.mp3.tmplist rebels-t.mp3.urllist
+    cp "$DIR"/t-rebels.mp3.tmplist t-rebels.mp3.urllist
 fi
 
 ### Abbe and Luka (???)
 # MP3s
 if [ -n "$INDEX_REBELS" ]; then
-    cat "$DIR"/rebels-a.mp3.tmplist | sed \
+    cat "$DIR"/a-rebels.mp3.tmplist | sed \
         -e '/NOOP/d' \
         > Abbe+Luka.mp3.urllist
 fi
