@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 SORT_BY_NUMBER=()
 SORT_BY_NAME=()
@@ -41,6 +41,10 @@ strip_prefix () {
     perl -pe 's/^[0-9A-Z](\w*[0-9A-Z])?(?:[0-9](\.[0-9])?[a-z]?|\+[a-z])[-_\s]//'
 }
 
+strip_part () {
+    perl -pe 's/^[SATB](?:mix)? //'
+}
+
 show_tracks () {
     for arg in "$@"; do
 	if [ "$arg" = "-" ]; then
@@ -66,6 +70,7 @@ show_tracks "$@" \
     | sed -e 's,.*/,,;s/\.mp3$//i' \
     | ${SORT_BY_NUMBER[@]:-cat} \
     | ${STRIP_PREFIX[@]:-strip_prefix} \
+    | strip_part \
     | ${SORT_BY_NAME[@]:-cat} \
     | ${REPLACE_SPACES[@]:-sed -e 's/[-_][-_]*/ /g'} \
     | cat -n

@@ -224,6 +224,8 @@ if [ -n "$INDEX_SOLO" ]; then
     cat "$DIR"/luke.mp3.tmplist | sed \
         -e '/NOOP/d' \
         > Katarina.mp3.urllist
+fi
+if [ -n "$INDEX_REBELS" ]; then
     cp "$DIR"/s-rebels.mp3.tmplist s-rebels.mp3.urllist
 fi
 
@@ -233,6 +235,8 @@ if [ -n "$INDEX_SOLO" ]; then
     cat "$DIR"/chewie.mp3.tmplist | sed \
         -e '/NOOP/d' \
         > bert.mp3.urllist
+fi
+if [ -n "$INDEX_REBELS" ]; then
     cp "$DIR"/t-rebels.mp3.tmplist t-rebels.mp3.urllist
 fi
 
@@ -242,6 +246,20 @@ if [ -n "$INDEX_REBELS" ]; then
     cat "$DIR"/a-rebels.mp3.tmplist | sed \
         -e '/NOOP/d' \
         > Abbe+Luka.mp3.urllist
+fi
+
+### burning CDs
+if [ -n "$INDEX_REBELS" ]; then
+    : #cp "$DIR"/s-rebels.mp3.tmplist s-rebels.mp3.urllist
+    : #cp "$DIR"/a-rebels.mp3.tmplist a-rebels.mp3.urllist
+    : #cp "$DIR"/t-rebels.mp3.tmplist t-rebels.mp3.urllist
+    : #cp "$DIR"/b-rebels.mp3.tmplist b-rebels.mp3.urllist
+fi
+if [ -n "$INDEX_EMPIRE" ]; then
+    cp "$DIR"/s-empire.mp3.tmplist s-empire.mp3.urllist
+    cp "$DIR"/a-empire.mp3.tmplist a-empire.mp3.urllist
+    cp "$DIR"/t-empire.mp3.tmplist t-empire.mp3.urllist
+    : #cp "$DIR"/b-empire.mp3.tmplist b-empire.mp3.urllist
 fi
 
 #####  video
