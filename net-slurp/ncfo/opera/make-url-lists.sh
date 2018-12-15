@@ -233,7 +233,7 @@ fi
 # MP3s
 if [ -n "$INDEX_SOLO" ]; then
     cat "$DIR"/chewie.mp3.tmplist | sed \
-        -e '/NOOP/d' \
+        -e 's/:\(At the spaceport\)/:I.4 \1/I' \
         > bert.mp3.urllist
 fi
 if [ -n "$INDEX_REBELS" ]; then

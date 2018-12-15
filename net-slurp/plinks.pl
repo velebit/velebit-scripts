@@ -127,6 +127,7 @@ sub get_leading_whitespace_amount ( @ ) {
   my $text = join '', map get_raw_text($_), grep defined, @nodes;
   s/\t/    /g;  # HACK: treat each tab like 4 spaces
   $text =~ s/\xA0/ /g;  $text =~ s/\xC2//g;
+  $text =~ /\S/ or return undef;
   my $whitespace = (($text =~ /^( +)/) ? length $1 : 0);
   ($whitespace > $WHITESPACE_MAX_IGNORED) ? $whitespace : 0;
 }
@@ -253,6 +254,7 @@ sub get_preceding_less_indented_lines_text ( $;$ ) {
   {
     my @current = get_same_line_siblings($node);
     $indent = get_leading_whitespace_amount(@current);
+    defined $indent or $indent = 0;
     $node = $current[0] if @current;
   }
   my @lines;
@@ -261,8 +263,9 @@ sub get_preceding_less_indented_lines_text ( $;$ ) {
     while ($node and $indent > $WHITESPACE_DELTA_IGNORED) {
       my @previous = get_previous_line_siblings($node)
         or last LINE;
-      my $previous_indent = get_leading_whitespace_amount(@previous);
       $node = $previous[0];
+      my $previous_indent = get_leading_whitespace_amount(@previous);
+      defined $previous_indent or next LINE;
       if ($previous_indent < ($indent - $WHITESPACE_DELTA_IGNORED)) {
         unshift @lines, get_text(@previous);
         $indent = $previous_indent;
