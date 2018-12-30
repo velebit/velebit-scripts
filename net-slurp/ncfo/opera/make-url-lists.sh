@@ -98,6 +98,16 @@ extract_section () {
               -e 's/   */ /g' -e 's/^  *//' -e 's/  *	/	/g' \
               -e 's/^\([^	]*\)	\(.*\)$/\2	'"$out_tag:$files_prefix"'\1'"$files_suffix"'/' \
               -e 's,\xe2\x80\x99,'\'',g' \
+              -e 's/:\(At the spaceport\)/:I.4 \1/I' \
+              -e 's/:\([SATB] \)\?I.3 \(It.s a Deal\)/:\1I.4 \2/I' \
+              -e 's/:\([SATB] \)\?II.2 \(Prisoner Transfer\)/:\1II.3 \2/I' \
+              -e 's/:\([SATB] \)\?II.2 \(Destiny 2\)/:\1II.3 \2/I' \
+              -e 's/:\([SATB] \)\?II.3 \(Waiting for Obi-Wan\)/:\1II.4 \2/I' \
+              -e 's/:\([SATB] \)\?II.3 \(The Titans\)/:\1II.4 \2/I' \
+              -e 's/:\([SATB] \)\?II.4 \(Rebels Are We 3\)/:\1II.5 \2/I' \
+              -e 's/:\([SATB] \)\?II.4 \(The Battle [13]\)/:\1II.5 \2/I' \
+              -e 's/:\([SATB] \)\?II.4 \(Grand Finale\)/:\1II.5 \2/I' \
+              -e 's/:\([SATB] \)\?II.4 \(Encore\)/:\1II.5 \2/I' \
         > "$DIR"/"$file".mp3.tmplist
 }
 
@@ -233,7 +243,7 @@ fi
 # MP3s
 if [ -n "$INDEX_SOLO" ]; then
     cat "$DIR"/chewie.mp3.tmplist | sed \
-        -e 's/:\(At the spaceport\)/:I.4 \1/I' \
+	-e '/NOOP/d' \
         > bert.mp3.urllist
 fi
 if [ -n "$INDEX_REBELS" ]; then
