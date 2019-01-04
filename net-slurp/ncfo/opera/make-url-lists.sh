@@ -241,10 +241,24 @@ fi
 
 ### bert (Chewie!!!)
 # MP3s
-if [ -n "$INDEX_SOLO" ]; then
+if [ -n "$INDEX_SOLO" -a -n "$INDEX_DEMO" -a -n "$INDEX_ORCH" ]; then
     cat "$DIR"/chewie.mp3.tmplist | sed \
-	-e '/NOOP/d' \
+	-e '/Alderaan.*orchestra/,$d' \
         > bert.mp3.urllist
+    cat "$DIR"/orchestra.mp3.tmplist | sed \
+	-e '/Alderaan/!d' \
+        >> bert.mp3.urllist
+    cat "$DIR"/chewie.mp3.tmplist | sed \
+	-e '1,/Alderaan.*orchestra/d' \
+	-e '1,/Prisoner Transfer.*Chewbacca singing/I!d' \
+	-e '/Our Darkest Hour 2/I{;/Alderaan/!d;}' \
+        >> bert.mp3.urllist
+    cat "$DIR"/demo.mp3.tmplist | sed \
+	-e '/Prisoner Transfer/I!d' \
+        >> bert.mp3.urllist
+    cat "$DIR"/chewie.mp3.tmplist | sed \
+	-e '1,/Prisoner Transfer.*Chewbacca singing/Id' \
+        >> bert.mp3.urllist
 fi
 if [ -n "$INDEX_REBELS" ]; then
     cp "$DIR"/t-rebels.mp3.tmplist t-rebels.mp3.urllist
