@@ -3,8 +3,15 @@
 # usage: extras2process [dirs...] [-- directive-files...]
 #
 # Takes a list of extras directories on the command line, and a list
-# of already prepared processing directives on stdin.  The names of
-# the extras directories must be in one of the following formats:
+# of already prepared processing directives on stdin (or in specified
+# directive-files, if any).  The output will be all of the directives
+# seen on stdin, *plus* all of the corresponding extras.  Extras for
+# directories not seen on stdin will be ignored, with a warning
+# message.
+#
+# The extras directories must contain the extra entries as files or
+# symbolic links, within subdirectories named according to one of the
+# following formats:
 #     **/*.DEST/first
 #     **/*.DEST/before.MATCH
 #     **/*.DEST/after.MATCH
@@ -15,9 +22,21 @@
 # the input directives, "*." is an optional string prefix and "**/" is
 # an optional path.  For files in *.DEST, "last" is implied.
 #
-# The output is all of the directives seen on stdin, *plus* all of the
-# corresponding extras.  Extras for directories not seen on stdin will
-# be ignored, with a warning message.
+# The "+" character in MATCH separates phrases, and implies a ".*"
+# regexp match.
+#
+# A leading "seq{number}." prefix is stripped from all files/links if
+# present.  The result is used as the name of the output file.
+#
+# For example, if invoked as
+#     extras2process.pl mp3-extras.bert
+# and the mp3-extras.bert tree contains the file or link
+#     mp3-extras.bert/after.Some Track+without me/seq0.extra Some Track.mp3
+# and the stdin contains the line
+#     mp3/SomeTrack_NoMe.mp3=../bert/Some Track (without me).mp3
+# (and nothing else matches), the output will contain
+#     mp3/SomeTrack_NoMe.mp3=../bert/Some Track (without me).mp3
+#     mp3-extras.bert/after.Some Track+without me/seq0.extra Some Track.mp3=../bert/extra Some Track.mp3
 
 use warnings;
 use strict;
