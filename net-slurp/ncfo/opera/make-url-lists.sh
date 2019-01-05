@@ -250,8 +250,15 @@ if [ -n "$INDEX_SOLO" -a -n "$INDEX_DEMO" -a -n "$INDEX_ORCH" ]; then
         >> bert.mp3.urllist
     cat "$DIR"/chewie.mp3.tmplist | sed \
 	-e '1,/Alderaan.*orchestra/d' \
-	-e '1,/Prisoner Transfer.*Chewbacca singing/I!d' \
+	-e '1,/Prisoner.*Lament.*Chewbacca singing/I!d' \
 	-e '/Our Darkest Hour 2/I{;/Alderaan/!d;}' \
+        >> bert.mp3.urllist
+    cat "$DIR"/demo.mp3.tmplist | sed \
+	-e '/Prisoner.*Lament/I!d' \
+        >> bert.mp3.urllist
+    cat "$DIR"/chewie.mp3.tmplist | sed \
+	-e '1,/Prisoner.*Lament.*Chewbacca singing/Id' \
+	-e '1,/Prisoner Transfer.*Chewbacca singing/I!d' \
         >> bert.mp3.urllist
     cat "$DIR"/demo.mp3.tmplist | sed \
 	-e '/Prisoner Transfer/I!d' \
