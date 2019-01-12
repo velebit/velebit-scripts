@@ -4,11 +4,12 @@ found=()
 links=()
 linked=()
 
-while read path; do
-    found+=("$(basename "$path")")
-done < <( find mixed.* -type f -print | sort )
+while read -r path; do
+    found+=("$path")
+done < <( find mixed -name '*.aup' -o -type d -name '*_data' -prune \
+	       -o -type f -print | sort )
 
-while read path; do
+while read -r path; do
     links+=("$path")
     linked+=("$(basename "$(readlink "$path")")")
 done < <( find mp3-extras.* -type l -print | sort )
