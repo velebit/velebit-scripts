@@ -67,7 +67,7 @@ show_tracks () {
 }
 
 show_tracks "$@" \
-    | sed -e 's,.*/,,;s/\.mp3$//i' \
+    | sed -e 's,.*/,,;s/\.wav$//i;s/\.mp3$//i' \
     | ${SORT_BY_NUMBER[@]:-cat} \
     | ${STRIP_PREFIX[@]:-strip_prefix} \
     | strip_part \
