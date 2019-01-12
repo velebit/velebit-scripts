@@ -241,10 +241,18 @@ fi
 
 ### bert (Chewie!!!)
 # MP3s
-if [ -n "$INDEX_SOLO" -a -n "$INDEX_DEMO" -a -n "$INDEX_ORCH" ]; then
+if [ -n "$INDEX_SOLO" -a -n "$INDEX_REBELS" -a \
+     -n "$INDEX_DEMO" -a -n "$INDEX_ORCH" ]; then
     cat "$DIR"/chewie.mp3.tmplist | sed \
-	-e '/Alderaan.*orchestra/,$d' \
+	-e '/Alderaan/,$d' \
         > bert.mp3.urllist
+    cat "$DIR"/t-rebels.mp3.tmplist | sed \
+	-e '/I.m the Best.*Aliens/I,/Jabba/I!d' \
+        >> bert.mp3.urllist
+    cat "$DIR"/chewie.mp3.tmplist | sed \
+	-e '/Alderaan/,$!d' \
+	-e '/Alderaan.*orchestra/,$d' \
+        >> bert.mp3.urllist
     cat "$DIR"/orchestra.mp3.tmplist | sed \
 	-e '/Alderaan/!d' \
         >> bert.mp3.urllist
@@ -258,13 +266,19 @@ if [ -n "$INDEX_SOLO" -a -n "$INDEX_DEMO" -a -n "$INDEX_ORCH" ]; then
         >> bert.mp3.urllist
     cat "$DIR"/chewie.mp3.tmplist | sed \
 	-e '1,/Prisoner.*Lament.*Chewbacca singing/Id' \
-	-e '1,/Prisoner Transfer.*Chewbacca singing/I!d' \
+	-e '1,/Prisoner Transfer.*without Chewbacca/I!d' \
         >> bert.mp3.urllist
     cat "$DIR"/demo.mp3.tmplist | sed \
 	-e '/Prisoner Transfer/I!d' \
         >> bert.mp3.urllist
+    cat "$DIR"/t-rebels.mp3.tmplist | sed \
+	-e '/Grand Finale.*beginning/I!d' \
+        >> bert.mp3.urllist
     cat "$DIR"/chewie.mp3.tmplist | sed \
-	-e '1,/Prisoner Transfer.*Chewbacca singing/Id' \
+	-e '1,/Prisoner Transfer.*without Chewbacca/Id' \
+        >> bert.mp3.urllist
+    cat "$DIR"/t-rebels.mp3.tmplist | sed \
+	-e '/Grand Finale.*end/I,$!d' \
         >> bert.mp3.urllist
 fi
 if [ -n "$INDEX_REBELS" ]; then
@@ -275,7 +289,10 @@ fi
 # MP3s
 if [ -n "$INDEX_REBELS" ]; then
     cat "$DIR"/a-rebels.mp3.tmplist | sed \
-        -e '/NOOP/d' \
+        -e '/Droids/Id' \
+        -e '/a cappella/Id' \
+        -e '/Sandpeople/Id' \
+        -e '/Ghosts/Id' \
         > Abbe+Luka.mp3.urllist
 fi
 
@@ -283,7 +300,7 @@ fi
 if [ -e .generate-cd -a -n "$INDEX_REBELS" ]; then
     : #cp "$DIR"/s-rebels.mp3.tmplist s-rebels.mp3.urllist
     : #cp "$DIR"/a-rebels.mp3.tmplist a-rebels.mp3.urllist
-    : #cp "$DIR"/t-rebels.mp3.tmplist t-rebels.mp3.urllist
+    cp "$DIR"/t-rebels.mp3.tmplist t-rebels.mp3.urllist
     : #cp "$DIR"/b-rebels.mp3.tmplist b-rebels.mp3.urllist
 fi
 if [ -e .generate-cd -a -n "$INDEX_EMPIRE" ]; then
