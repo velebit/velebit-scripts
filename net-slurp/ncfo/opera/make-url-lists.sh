@@ -298,16 +298,16 @@ fi
 
 ### burning CDs
 if [ -e .generate-cd -a -n "$INDEX_REBELS" ]; then
-    : #cp "$DIR"/s-rebels.mp3.tmplist s-rebels.mp3.urllist
-    : #cp "$DIR"/a-rebels.mp3.tmplist a-rebels.mp3.urllist
+    : ##cp "$DIR"/s-rebels.mp3.tmplist s-rebels.mp3.urllist
+    cp "$DIR"/a-rebels.mp3.tmplist a-rebels.mp3.urllist
     cp "$DIR"/t-rebels.mp3.tmplist t-rebels.mp3.urllist
-    : #cp "$DIR"/b-rebels.mp3.tmplist b-rebels.mp3.urllist
+    : ##cp "$DIR"/b-rebels.mp3.tmplist b-rebels.mp3.urllist
 fi
 if [ -e .generate-cd -a -n "$INDEX_EMPIRE" ]; then
-    cp "$DIR"/s-empire.mp3.tmplist s-empire.mp3.urllist
-    cp "$DIR"/a-empire.mp3.tmplist a-empire.mp3.urllist
-    cp "$DIR"/t-empire.mp3.tmplist t-empire.mp3.urllist
-    : #cp "$DIR"/b-empire.mp3.tmplist b-empire.mp3.urllist
+    : #cp "$DIR"/s-empire.mp3.tmplist s-empire.mp3.urllist
+    : #cp "$DIR"/a-empire.mp3.tmplist a-empire.mp3.urllist
+    : #cp "$DIR"/t-empire.mp3.tmplist t-empire.mp3.urllist
+    : ##cp "$DIR"/b-empire.mp3.tmplist b-empire.mp3.urllist
 fi
 
 #####  video
