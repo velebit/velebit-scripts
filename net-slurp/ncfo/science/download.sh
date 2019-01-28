@@ -1,5 +1,5 @@
 #!/bin/sh
-page=2018_Web_of_Life_Practice_Page
+page=2019_One_Whole_Step_Practice_Page
 file="`basename "$page"`"
 type=mp3
 dir=mp3
@@ -9,7 +9,7 @@ if [ -f "$dir"/index.html ]; then
 cp -p "$dir/$file" "$dir/$file".orig
 wget --load-cookies cookies.txt \
     -nd -P "$dir" -N --restrict-file-names=windows \
-    -A .mp3,.MP3,"$file" -r -l 1 \
+    -A .mp3,.MP3,"$file",index.html -r -l 1 \
     --progress=bar:force \
     http://www.familyopera.org/drupal/"$page" \
   2>&1 | tee "$log"
