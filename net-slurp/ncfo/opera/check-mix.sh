@@ -6,7 +6,8 @@ linked=()
 
 while read -r path; do
     found+=("$path")
-done < <( find mixed -name '*.aup' -o -type d -name '*_data' -prune \
+done < <( find mixed from-midi \
+	       -name '*.aup' -o -type d -name '*_data' -prune \
 	       -o -type f -print | sort )
 
 while read -r path; do
