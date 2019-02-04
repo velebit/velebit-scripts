@@ -50,7 +50,10 @@ sub fixed_gain ( $ ) {
   my ($in) = @_;
   my ($out) = fixed_gain_name $in;
   my ($t_in) = (stat $in)[9];
-  defined $t_in or warn("Input file modtime not found for '$in'"), return $in;
+  if (! defined $t_in) {
+      -f $in or warn("Input file '$in' is missing!"), return undef;
+      warn("Input file modtime not found for '$in'"), return $in;
+  }
   my ($t_out) = (stat $out)[9];
   if (!defined($t_out) || ($t_out < $t_in)) {
     print STDERR "$out: updating gain.\n";
@@ -87,7 +90,7 @@ while (<>) {
   defined $out or die "bad input format: '$_'";
 
   my $fixed = fixed_gain $in;
-  push @output, "$fixed=$out\n";  # print all at the very end
+  push @output, "$fixed=$out\n" if $fixed;  # print all at the very end
 }
 
 print $OUTPUT $_ for @output;
