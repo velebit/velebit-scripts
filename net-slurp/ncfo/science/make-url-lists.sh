@@ -124,7 +124,7 @@ fi
 ### specific URL lists for our family
 
 sed -e '/NothingForNow/Id' \
-    "$DIR"/soprano-high-kids.mp3.urllist > Katarina+Luka.mp3.urllist
+    "$DIR"/soprano-all-all.mp3.urllist > Katarina+Luka.mp3.urllist
 #sed -e '1,/AnnieJumpCannon/!d' \
 #    "$DIR"/soprano-high-kids.mp3.urllist > Katarina+Luka.mp3.urllist
 #sed -e '/AnnieJumpCannon/!d' \

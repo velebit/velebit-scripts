@@ -14,7 +14,7 @@
 ^(?=.*Sally.*Ride) => OWS14_
 ^(?=.*Science.*Fact.*Science.*Fiction) => OWS15_
 ^(?=.*Space.*Time) => OWS16_
-^(?=.*Thirty-Nine) => OWS17_
+^(?=.*Thirty-?Nine) => OWS17_
 ^(?=.*Weightless) => OWS18_
 ^(?=.*Women.*in.*Space) => OWS19_
 ^(?=.*POSSIBLE.*MINI.*OPERA) => OWS20_
