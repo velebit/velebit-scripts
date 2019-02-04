@@ -256,6 +256,9 @@ if [ -n "$INDEX_SOLO" -a -n "$INDEX_REBELS" -a \
     cat "$DIR"/orchestra.mp3.tmplist | sed \
 	-e '/Alderaan/!d' \
         >> bert.mp3.urllist
+    cat "$DIR"/demo.mp3.tmplist | sed \
+	-e '/Alderaan/!d' \
+        >> bert.mp3.urllist
     cat "$DIR"/chewie.mp3.tmplist | sed \
 	-e '1,/Alderaan.*orchestra/d' \
 	-e '1,/Prisoner.*Lament.*Chewbacca singing/I!d' \
