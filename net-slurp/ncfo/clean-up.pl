@@ -27,7 +27,7 @@ open my $LOG, '<', $log or die "open($log): $!";
 while (<$LOG>) {
   s/[\r\n]+//g;
   if (/^(?:Saving to: |Server file no newer than local file |File .* not modified on server)/) {
-    my ($file) = /[`‘](.+)['’]/
+    my ($file) = /[`'‘](.+)['’]/
       or die "Format error: no file name found in\n    $_\n ";
     #print STDERR "F $file\n";
     if ($file !~ $ignored_re) {
