@@ -6,6 +6,7 @@ INDEX_EMPIRE=
 INDEX_SOLO=
 INDEX_DEMO=
 INDEX_ORCH=
+INDEX_SCENE=
 INDEX_PDF=
 INDEX_VIDEO=
 
@@ -17,7 +18,7 @@ while [ "$#" -gt 0 ]; do
         --empire)   INDEX_EMPIRE="$2"; shift; shift ;;
         --solo)     INDEX_SOLO="$2"; shift; shift ;;
         --demo)     INDEX_DEMO="$2"; shift; shift ;;
-        --orch)     INDEX_ORCH="$2"; shift; shift ;;
+        --orch)     INDEX_ORCH="$2"; INDEX_SCENE="$2"; shift; shift ;;
         --pdf)      INDEX_PDF="$2"; shift; shift ;;
         --video)    INDEX_VIDEO="$2"; shift; shift ;;
         *)
@@ -211,6 +212,10 @@ if [ -n "$INDEX_ORCH" ]; then
     extract_demorch "$(blist "$INDEX_ORCH")" \
                     'Overture\|Orchestra.*' 'orchestra'
 fi
+if [ -n "$INDEX_SCENE" ]; then
+    extract_demorch "$(blist "$INDEX_SCENE")" \
+                    'soundtrack\|sound track' 'scenes'
+fi
 
 
 if [ -n "$INDEX_REBELS" -a -n "$INDEX_EMPIRE" ]; then
@@ -370,6 +375,12 @@ if [ -e .generate-orchestra -a -e tmplists/orchestra.mp3.tmplist ]; then
     echo "... orchestra" >&2
     cat tmplists/orchestra.mp3.tmplist \
         > orchestra.mp3.urllist
+fi
+if [ -e .generate-scenes -a -e tmplists/scenes.mp3.tmplist ]; then
+    echo "... scenes (Red)" >&2
+    cat tmplists/scenes.mp3.tmplist \
+	| sed -e '/:I\.3/!{;/Gold/d;}' \
+        > scenes-red.mp3.urllist
 fi
 
 ### score PDFs
