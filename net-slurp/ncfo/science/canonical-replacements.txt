@@ -6,13 +6,13 @@
 ^(?=.*Earthrise) => OWS06_
 ^(?=.*Einstein.?Rosen) => OWS07_
 ^(?=.*I.?m.*Your.*Moon) => OWS08_
-^(?=.*International.*Space.*Station) => OWS09_
+^(?=.*(?:International.*Space.*Station|ISS)) => OWS09_
 ^(?=.*Little.*Rover) => OWS10_
 ^(?=.*Moondust) => OWS11_
-^(?=.*Propulsion) => OWS12_
+^(?=.*(?:Propulsion|Dawntreader)) => OWS12_
 ^(?=.*Re.?entry) => OWS13_
 ^(?=.*Sally.*Ride) => OWS14_
-^(?=.*Science.*Fact.*Science.*Fiction) => OWS15_
+^(?=.*Science.*Fact) => OWS15_
 ^(?=.*Space.*Time) => OWS16_
 ^(?=.*Thirty-?Nine) => OWS17_
 ^(?=.*Weightless) => OWS18_
