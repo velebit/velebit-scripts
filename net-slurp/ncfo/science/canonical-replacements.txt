@@ -2,7 +2,7 @@
 ^(?=.*Points) => OWS02_
 ^(?=.*medley) => OWS03_
 ^(?=.*PoT18.*Moon) => OWS04_
-^(?=.*Day.*to.*Day) => OWS05_
+^(?=.*Droids.*in.*Space) => OWS05_
 ^(?=.*Earthrise) => OWS06_
 ^(?=.*Einstein.?Rosen) => OWS07_
 ^(?=.*I.?m.*Your.*Moon) => OWS08_
