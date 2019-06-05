@@ -23,17 +23,17 @@ arg_fail () {
 }
 
 status () {
-    date="`date +'%Y-%m-%d %H:%M:%S'`"
+    local date="`date +'%Y-%m-%d %H:%M:%S'`"
     echo "-- ${COLOR_DATE}[$date]${COLOR_NONE} -- ${COLOR_STAT}$*${COLOR_NONE}"
 }
 
 status_ok () {
-    date="`date +'%Y-%m-%d %H:%M:%S'`"
+    local date="`date +'%Y-%m-%d %H:%M:%S'`"
     echo "-- ${COLOR_DATE}[$date]${COLOR_NONE} -- ${COLOR_GOOD}$*${COLOR_NONE}"
 }
 
 status_fail () {
-    date="`date +'%Y-%m-%d %H:%M:%S'`"
+    local date="`date +'%Y-%m-%d %H:%M:%S'`"
     echo "-- ${COLOR_DATE}[$date]${COLOR_NONE} -- ${COLOR_FAIL}$*${COLOR_NONE}"
 }
 
@@ -154,6 +154,8 @@ list_excludes () {
     local suffix="$3"
 
     local dir_slash="${dir%%/}/"
+    local i path relative
+
     for i in $full_backup $tar_backup $ignore; do
         path="`partition_path $i`"
         case "$path" in
@@ -181,6 +183,7 @@ run_backup () {
     local dst_base="$2"
     local dst_ext="$3"
     local dst="$dst_base$dst_ext"
+    local ext xdst
 
     set --
     for ext in '' '.tar' '.tar.gz' '.tar.bz2'; do
@@ -326,6 +329,7 @@ partition_name () {
 run_all_backups () {
     CheckSpace
 
+    local i
     for i in $full_backup; do
         run_backup "`partition_path $i`" "`backup_path $i`" ""
     done
@@ -342,6 +346,17 @@ run_all_backups () {
     fi
 }
 
+backup_start="`date +'%Y-%m-%d %H:%M:%S'`"
+
+generate_last_backup () {
+    local backup_file="$1"
+    local backup_end="`date +'%Y-%m-%d %H:%M:%S'`"
+    echo "$backup_file" && \
+	echo "# Started: $backup_start" && \
+	echo "# Ended:   $backup_end" && \
+	true
+}
+
 mark_last_backup () {
     backup_file="$1"
     set -- `cd "$backup"; echo DISK_*`
@@ -353,15 +368,18 @@ mark_last_backup () {
             status "Would update $last_backup_file"
         else
             if [ ! -e "$last_backup" ]; then mkdir "$last_backup"; fi
-            if echo "$backup_file" > "$last_backup_file"; then
+            if generate_last_backup "$backup_file" > "$last_backup_file"; then
                 status "Updated $last_backup_file"
+	    else
+                status "Failed to update $last_backup_file"
             fi
         fi
     fi
 }
 
 check_partition_list () {
-    header='Backed up partitions/subdirs MISSING:'
+    local header='Backed up partitions/subdirs MISSING:'
+    local i
     for i in $full_backup $tar_backup; do
         if [ ! -d "/$i" ]; then
             if [ -n "$header" ]; then
@@ -389,8 +407,9 @@ check_partition_list () {
 }
 
 check_partition_coverage () {
-    header='Mounted partitions/subdirs NOT configured for full backups:'
-    mountpoints="`mount | awk '{print $3}'`"
+    local header='Mounted partitions/subdirs NOT configured for full backups:'
+    local mountpoints="`mount | awk '{print $3}'`"
+    local path name i
     for path in $mountpoints; do
         name="`partition_name "$path"`"
         for i in $full_backup $tar_backup $ignore; do
@@ -420,6 +439,7 @@ check_partition_coverage () {
 dump_disk_setup () {
     echo "--------------------- BASIC DISK INFORMATION ---------------------" \
         | sed -ne 's/-/*/g;h;s/./*/g;p;x;p;x;p;s/.*//;p'
+    local d n p
     for d in /dev/nvme[0-9]; do
         if [ -e "$d" ]; then
             echo "--------------------------- $d ---------------------------" \
