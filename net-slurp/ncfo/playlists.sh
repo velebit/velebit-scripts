@@ -26,7 +26,7 @@ fi
 
 cd ..
 
-generate_wpl () {
+generate_wpl_raw () {
     local name="$1"; shift
     local list="$1"; shift
 
@@ -37,6 +37,10 @@ generate_wpl () {
     sed -e 's/&/&amp;/g' -e 's,^,    <media src=",;s,$,"/>,' < "$list"
     echo "  </seq></body>"
     echo "</smil>"
+}
+
+generate_wpl () {
+    generate_wpl_raw "$@" | perl -pe 's/\n/\r\n/g'
 }
 
 generate_m3u () {
@@ -73,7 +77,6 @@ make_playlist () {
 	rm -f "$prefix$dir$suffix".{wpl,m3u}; return
     fi
     generate_wpl "$prefix$dir$suffix" tracks.tmp > "$prefix$dir$suffix.wpl"
-    unix2dos -q "$prefix$dir$suffix.wpl"
     generate_m3u "$prefix$dir$suffix" tracks.tmp > "$prefix$dir$suffix.m3u"
     rm -f tracks.tmp
     echo "Generated $prefix$dir$suffix.wpl and $prefix$dir$suffix.m3u"
