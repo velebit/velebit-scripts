@@ -29,11 +29,16 @@ fi
 
 show_8_mp3_dir="Red cast"
 show_7_mp3_dir="Gold cast"
+show_8_acts_dir="Red cast, acts"
+show_7_acts_dir="Gold cast, acts"
 if [ -n "$delete_mp3_dirs" ]; then
-    rm -rf "../$show_8_mp3_dir" "../$show_7_mp3_dir"
+    rm -rf "../$show_8_mp3_dir" "../$show_7_mp3_dir" \
+       "../$show_8_acts_dir" "../$show_7_acts_dir"
 fi
 count_show_8=0
 count_show_7=0
+count_show_8_acts=0
+count_show_7_acts=0
 ./plinks.pl -pt mp3/index.html | \
     while IFS='	' read text url; do
 	file="${url##*/}"
@@ -42,8 +47,20 @@ count_show_7=0
 	name="${name%%, sung *}"
 	name="${name%% - *}"
 	name="${name//[\/?:]/_}"
-	case "$url" in
-	    */19SO-Show8/*.mp3)
+	case "${name}:::${url}" in
+	    Act\ *:::*/19SO-Show8/*.mp3)
+		if [ -n "$copy_show_8_mp3" ]; then
+		    printf -v count_show_8_acts "%02d" \
+			   "$(("${count_show_8_acts##0}"+1))"
+		    [ -d "../$show_8_acts_dir" ] \
+			|| mkdir "../$show_8_acts_dir"
+		    if ! cp -p mp3/"$file" \
+			 "../$show_8_acts_dir/${count_show_8_acts} $name.mp3";\
+		    then
+			echo "Warning: copy failed for $file." >&2
+		    fi
+		fi ;;
+	    *:::*/19SO-Show8/*.mp3)
 		if [ -n "$copy_show_8_mp3" ]; then
 		    printf -v count_show_8 "%02d" "$(("${count_show_8##0}"+1))"
 		    [ -d "../$show_8_mp3_dir" ] || mkdir "../$show_8_mp3_dir"
@@ -52,7 +69,19 @@ count_show_7=0
 			echo "Warning: copy failed for $file." >&2
 		    fi
 		fi ;;
-	    */19SO-Show7/*.mp3)
+	    Act\ *:::*/19SO-Show7/*.mp3)
+		if [ -n "$copy_show_7_mp3" ]; then
+		    printf -v count_show_7_acts "%02d" \
+			   "$(("${count_show_7_acts##0}"+1))"
+		    [ -d "../$show_7_acts_dir" ] \
+			|| mkdir "../$show_7_acts_dir"
+		    if ! cp -p mp3/"$file" \
+			 "../$show_7_acts_dir/${count_show_7_acts} $name.mp3";\
+		    then
+			echo "Warning: copy failed for $file." >&2
+		    fi
+		fi ;;
+	    *:::*/19SO-Show7/*.mp3)
 		if [ -n "$copy_show_7_mp3" ]; then
 		    printf -v count_show_7 "%02d" "$(("${count_show_7##0}"+1))"
 		    [ -d "../$show_7_mp3_dir" ] || mkdir "../$show_7_mp3_dir"
