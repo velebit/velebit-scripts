@@ -5,8 +5,8 @@ cd ..
 PATH="${PATH}:${HOME}/perl-lib/bin"
 eyeD3='eyeD3'
 verbose=
-dryrun=
-wipe=
+old_tag_args=(--remove-v1)
+new_tag_args=(--to-v2.3)
 
 id3_artist="NCFO practice"
 id3_album_prefix="`/bin/pwd | sed -e 's,.*[\\/],,'`: "
@@ -45,10 +45,8 @@ update_tags_from_playlist () {
 	    *) echo "Bad strip style '$id3_track_strip_style' (ignored)" >&2 ;;
 	esac
 	echo "Updating tags for $file..."
-	if [ -n "$wipe" -a -z "$dryrun" ]; then
-	    $eyeD3 --remove-all -Q "$file" >/dev/null 2>&1
-	fi
-	local cmd=($eyeD3 -t "$name" -a "$id3_artist" \
+	local cmd=($eyeD3 "${old_tag_args[@]}" "${new_tag_args[@]}" \
+                          -t "$name" -a "$id3_artist" \
 			  -A "$id3_album_prefix$who$id3_album_suffix" \
 			  -n "$track" -N "$num_tracks" -Q "$file")
 	if [ -n "$verbose" ]; then
@@ -87,7 +85,6 @@ process_playlist_lines () {
 
 while true; do
     case "$1" in
-	-N) dryrun=yes; shift ;;
 	-n) eyeD3='echo "WOULD run: eyeD3"'; shift ;;
 	-v) verbose=yes; shift ;;
 	-a) id3_artist="$2"; shift; shift ;;
@@ -100,7 +97,10 @@ while true; do
 	-xp) id3_playlist_strip_style=paren; shift ;;
 	-tx) id3_track_strip_style=none; shift ;;
 	-tn) id3_track_strip_style=no_number; shift ;;
-	-W) wipe=yes; shift ;;
+	-W|--wipe) old_tag_args=(--remove-all); shift ;;
+	-k|--keep) old_tag_args=(); new_tag_args=(); shift ;;
+	-3|-2.3) new_tag_args=(--to-v2.3); shift ;;
+	-4|-2.4) new_tag_args=(--to-v2.4); shift ;;
 	*)  break ;;
     esac
 done
