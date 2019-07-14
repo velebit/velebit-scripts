@@ -37,14 +37,32 @@ for i in mp3/[xy]/*; do
 	*/x/*.mp3)
 	    if [ -n "$copy_cast_x_mp3" ]; then
 		[ -d "../$cast_x_mp3_dir" ] || mkdir "../$cast_x_mp3_dir"
-		outfile="Antiphony2002_castX_`basename "$i"`"
+		base="`basename "$i"`"
+		outfile="Antiphony2002_castX_$base"
 		cp -p "$i" "../$cast_x_mp3_dir/$outfile"
+		# look at the other side...
+		set -- mp3/y/"${base%%[^0-9_]*}"*
+		if [ "$#" -eq 0 -o \( "$#" -eq 1 -a ! -e "$1" \) ]; then
+		    echo "Note: using x/$base for y, too." >&2
+		    [ -d "../$cast_y_mp3_dir" ] || mkdir "../$cast_y_mp3_dir"
+		    outfile="Antiphony2002_castY_$base"
+		    cp -p "$i" "../$cast_y_mp3_dir/$outfile"
+		fi
 	    fi ;;
 	*/y/*.mp3)
 	    if [ -n "$copy_cast_y_mp3" ]; then
 		[ -d "../$cast_y_mp3_dir" ] || mkdir "../$cast_y_mp3_dir"
-		outfile="Antiphony2002_castY_`basename "$i"`"
+		base="`basename "$i"`"
+		outfile="Antiphony2002_castY_$base"
 		cp -p "$i" "../$cast_y_mp3_dir/$outfile"
+		# look at the other side...
+		set -- mp3/x/"${base%%[^0-9_]*}"*
+		if [ "$#" -eq 0 -o \( "$#" -eq 1 -a ! -e "$1" \) ]; then
+		    echo "Note: using y/$base for x, too." >&2
+		    [ -d "../$cast_x_mp3_dir" ] || mkdir "../$cast_x_mp3_dir"
+		    outfile="Antiphony2002_castX_$base"
+		    cp -p "$i" "../$cast_x_mp3_dir/$outfile"
+		fi
 	    fi ;;
 #	*/index.html)
 #	    ;;
