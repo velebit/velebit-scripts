@@ -10,6 +10,8 @@ while true; do
 	    copy_show_8_mp3=yes; use_defaults=; shift ;;
 	--gold|--show-7)
 	    copy_show_7_mp3=yes; use_defaults=; shift ;;
+	--all)
+	    copy_show_8_mp3=yes; copy_show_7_mp3=yes; use_defaults=; shift ;;
 	-d|--delete)
 	    delete_mp3_dirs=yes; shift ;;
 	-*)

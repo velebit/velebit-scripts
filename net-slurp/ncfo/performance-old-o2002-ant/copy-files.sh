@@ -10,6 +10,8 @@ while true; do
 	    copy_cast_x_mp3=yes; use_defaults=; shift ;;
 	-y|--cast-y)
 	    copy_cast_y_mp3=yes; use_defaults=; shift ;;
+	--all)
+	    copy_cast_x_mp3=yes; copy_cast_y_mp3=yes; use_defaults=; shift ;;
 	-d|--delete)
 	    delete_mp3_dirs=yes; shift ;;
 	-*)

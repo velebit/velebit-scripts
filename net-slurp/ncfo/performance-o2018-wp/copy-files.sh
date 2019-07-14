@@ -13,6 +13,9 @@ while true; do
 	    copy_show_3_mp3=yes; copy_show_3_video=yes; use_defaults=; shift ;;
 	--show-4)
 	    copy_show_4_mp3=yes; copy_show_4_video=yes; use_defaults=; shift ;;
+	--all)
+	    copy_show_3_mp3=yes; copy_show_3_video=yes
+	    copy_show_4_mp3=yes; copy_show_4_video=yes; use_defaults=; shift ;;
 	-d|--delete)
 	    delete_mp3_dirs=yes; delete_video_dirs=yes; shift ;;
 	-*)
