@@ -1,0 +1,222 @@
+#!/usr/bin/perl
+use warnings;
+use strict;
+
+our $host_info = '/etc/dhcp/dhcpd.conf';
+our @lease_info = ( '/var/lib/dhcp/dhcpd.leases' );
+
+@ARGV and $ARGV[0] eq '-d' and (shift, $host_info = shift);
+@ARGV and @lease_info = @ARGV;
+
+{
+  package Hosts;
+
+  sub new ( $@ ) {
+    my ($pkg, @files) = @_;
+    ref $pkg and die;
+    my $self = bless +{ files => \@files, data => +{} }, $pkg;
+    $self->_read();
+    $self;
+  }
+
+  sub get ( $ ) {
+    my ($self) = @_;
+    ref $self or die;
+    %{$self->{data}}
+      or warn "Warning: no host data was found in @{$self->{files}}.\n";
+    %{$self->{data}};
+  }
+
+  sub _read ( $ ) {
+    my ($self) = @_;
+    ref $self or die;
+    for my $file (@{$self->{files}}) {
+      local (@ARGV) = ($file);
+      while (<>) {
+        s/[\r\n]+$//;
+        /^(?:\#(\#?))?\s*host\s+(\S+)\s*\{/
+          and $self->_host_set(($1 || '') . $2), next;
+        /^\s*\#?\s*host\b/ and $self->_warn_host_parse($_), next;
+        /\s((?:(?:[0-9a-f]{2}:){5}|(?:[0-9a-f]{2}-){5})[0-9a-f]{2})[\s;]/
+          and $self->_mac_set($1), $self->_ship, next;
+        /\}/ and $self->_close_scope(), next;
+      }
+      $self->_close_scope();
+    }
+  }
+
+  sub _host_set ( $$ ) {
+    my ($self, $host) = @_;
+    exists $self->{host} and defined $self->{host}
+      and warn "Warning: no MAC address found for host $self->{host}.\n";
+    $self->{host} = $host;
+  }
+  sub _mac_set ( $$ ) {
+    my ($self, $mac) = @_;
+    exists $self->{mac} and defined $self->{mac}
+      and warn "Warning: no host found for MAC address $self->{mac}.\n";
+    $self->{mac} = $mac;
+  }
+
+  sub _ship ( $ ) {
+    my ($self) = @_;
+    my $has_host = (exists $self->{host} and defined $self->{host});
+    my $has_mac = (exists $self->{mac} and defined $self->{mac});
+    ! $has_host and ! $has_mac and return;
+    $has_host
+      or (warn("Warning: no host found for MAC address $self->{mac}.\n"),
+          $self->{host} = $self->{mac} = undef,
+          return);
+    $has_mac
+      or (warn("Warning: no MAC address found for host $self->{host}.\n"),
+          $self->{host} = $self->{mac} = undef,
+          return);
+    exists $self->{data}->{$self->{mac}}
+      and (warn("Warning: >1 host found for MAC address $self->{mac}.\n"),
+           $self->{host} = $self->{mac} = undef,
+           return);
+    $self->{data}->{$self->{mac}} = $self->{host};
+    $self->{host} = $self->{mac} = undef;
+  }
+
+  sub _close_scope ( $ ) {
+    my ($self) = @_;
+    my $has_host = (exists $self->{host} and defined $self->{host});
+    my $has_mac = (exists $self->{mac} and defined $self->{mac});
+    $has_mac and 1
+      and warn("Warning: no host found for MAC address $self->{mac}.\n");
+    $has_host and 0
+      and warn("Warning: no MAC address found for host $self->{host}.\n");
+    $self->{host} = $self->{mac} = undef;
+  }
+
+  sub _warn_host_parse ( $$ ) {
+    my ($self, $line) = @_;
+    warn "Warning: unexpected line:\n  '$line'\n ";
+  }
+}
+
+{
+  package Leases;
+
+  sub new ( $@ ) {
+    my ($pkg, @files) = @_;
+    ref $pkg and die;
+    my $self = bless +{ files => \@files, data => +{} }, $pkg;
+    $self->_read();
+    $self;
+  }
+
+  sub get ( $ ) {
+    my ($self) = @_;
+    ref $self or die;
+    %{$self->{data}}
+      or warn "Warning: no host data was found in @{$self->{files}}.\n";
+    %{$self->{data}};
+  }
+
+  sub _read ( $ ) {
+    my ($self) = @_;
+    ref $self or die;
+    for my $file (@{$self->{files}}) {
+      local (@ARGV) = ($file);
+      while (<>) {
+        s/[\r\n]+$//;
+#        /^\s*starts\s+\d+\s+(\S+\s+\S+);/
+#          and $self->_date_set($1), next;
+        /^\s*ends\s+\d+\s+(\S+\s+\S+);/
+          and $self->_date_set($1), next;
+        /\s((?:(?:[0-9a-f]{2}:){5}|(?:[0-9a-f]{2}-){5})[0-9a-f]{2})[\s;]/
+          and $self->_mac_set($1), next;
+        /^\s*set\s+vendor-class-identifier\s*=\s*"(.*)";/
+          and $self->_vendor_set($1), next;
+        /^[^"]*[\{\}]/ and $self->_close_scope(), next;
+      }
+      $self->_close_scope();
+    }
+  }
+
+  sub _date_set ( $$ ) {
+    my ($self, $date) = @_;
+    exists $self->{entry}->{date} and defined $self->{entry}->{date}
+      and warn "Warning: Duplicate date in a lease.\n";
+    $self->{entry}->{date} = $date;
+  }
+  sub _mac_set ( $$ ) {
+    my ($self, $mac) = @_;
+    exists $self->{entry}->{mac} and defined $self->{entry}->{mac}
+      and warn "Warning: Duplicate MAC address in a lease.\n";
+    $self->{entry}->{mac} = $mac;
+  }
+  sub _vendor_set ( $$ ) {
+    my ($self, $vendor) = @_;
+    exists $self->{entry}->{vendor} and defined $self->{entry}->{vendor}
+      and warn "Warning: Duplicate vendor in a lease.\n";
+    $self->{entry}->{vendor} = $vendor;
+  }
+
+  sub _ship ( $ ) {
+    my ($self) = @_;
+    ! $self->{entry} and return;
+    my $mac = ($self->{entry}->{mac} || '');
+    if (! exists $self->{data}->{$mac}) {
+      $self->{data}->{$mac} = $self->{entry};
+    } elsif (exists $self->{entry}->{date} and defined $self->{entry}->{date}) {
+      my $old = $self->{data}->{$mac};
+      if (exists $old->{date} and defined $old->{date}
+          and $old->{date} ge $self->{entry}->{date}) {
+        # old entry is newer
+      } else {
+        $self->{data}->{$mac} = $self->{entry};
+      }
+    }
+    delete $self->{entry};
+  }
+
+  sub _close_scope ( $ ) {
+    my ($self) = @_;
+    $self->_ship();
+  }
+}
+
+sub get_mac_info ( $ ) {
+  local ($_) = @_;
+  s/:/-/;
+  s/:/-/;
+  s/:.*/-00-00-00/;
+  sleep 1;
+  `wget -q -O- http://api.macvendors.com/"$_"`;
+}
+
+sub word ( $$ ) {
+  my ($index, $text) = @_;
+  return undef unless defined $text;
+  (grep defined, split /\s+/, $text)[$index] || '';
+}
+
+sub col ( $$ ) {
+  my ($wid, $text) = @_;
+  (!defined $text or !length $text) and $text = '???';
+  length($text) > $wid and $text = substr($text, 0, $wid-3) . '...';
+  $text . (' ' x ($wid - length $text));
+}
+
+sub min ( @ ) { (sort {$a <=> $b} @_)[0]; }
+sub max ( @ ) { (sort {$a <=> $b} @_)[-1]; }
+sub clamp ( $$$ ) { min(max($_[0], $_[1]), $_[2]); }
+
+my $columns = $ENV{COLUMNS} || 80;
+my $width_hosts = 8 + clamp(int(($columns - 44) / 3), 0, 22);
+my $width_info = max($columns - (17+2+$width_hosts+1+10+1), 8);
+
+my %hosts = Hosts->new($host_info)->get;
+for my $leases (@lease_info) {
+  my %leases = Leases->new($leases)->get;
+  for my $mac (sort {($leases{$a}{date} || '') cmp ($leases{$b}{date} || '')}
+	       keys %leases) {
+    my $info = get_mac_info $mac;
+    my $date = $leases{$mac}->{date} if exists $leases{$mac}->{date};
+    printf "%-17s  %s %s %s\n", $mac, col($width_hosts, $hosts{$mac}),
+      col(10, word(0, $date) || ''), col($width_info, $info);
+  }
+}

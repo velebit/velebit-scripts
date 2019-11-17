@@ -1,0 +1,225 @@
+#!/bin/bash
+
+if [ "$#" -lt 2 -o "$#" -gt 2 ]; then
+    echo "Usage: $(basename "$0" .sh) DISK_DEVICE BACKUP_ID" >& 2
+    exit 1
+fi
+
+ddev="$1"; shift
+id="$1"; shift
+
+if [ ! -b "$ddev" ]; then
+    if [ -b "/dev/$ddev" ]; then ddev="/dev/$ddev"; fi
+    if [ ! -b "$ddev" ]; then
+        echo "$ddev: not a block device" >& 2
+        exit 1
+    fi
+fi
+if [ ! -e "/sys/block/`basename "$ddev"`" ]; then
+    echo "$ddev: block device not in /sys/block" >& 2
+    exit 1
+fi
+if [ ! -w "$ddev" ]; then
+    echo "$ddev: block device not writable" >& 2
+    exit 1
+fi
+
+if [ -z "$id" ]; then
+    echo "Empty backup disk index ID" >& 2
+    exit 1
+fi
+
+full_id="DISK_$id"
+keyfile="/common/backups/key.$full_id"
+headerfile="/common/backups/cryptheader.$full_id"
+
+############################################################
+
+random_password () {
+    local num_characters="${1-20}"; shift
+    local num_bytes="$num_characters"  # >1 char/byte so will be enough
+    dd if=/dev/urandom bs="$num_bytes" count=1 status=none \
+        | base32 --wrap=0 \
+        | dd bs="$num_characters" count=1 conv=lcase status=none
+}
+
+mkpart_command () {
+    local ddev="$1"; shift
+    local partname="$1"; shift
+    local args="$("$(dirname "$0")/align_partition" --args "$ddev")"
+    if [ -z "$args" ]; then exit 1; fi
+    echo "mkpart $partname $args"
+}
+
+run () {
+    echo "# $*"
+    "$@"
+}
+
+run_parted () {
+    local ddev="$1"; shift
+    if [ "$#" -eq 0 ] || [ -z "$1" ]; then
+        echo "No run_parted command specified!" >&2
+        exit 1
+    fi
+    run parted -a optimal -s "$ddev" "$@"
+}
+
+check_confirmation () {
+    answer=
+    while [ "($answer)" != "(yes)" ]; do
+        [ "($answer)" = "(no)" ] && exit 1
+        [ "($answer)" = "(n)" ] && exit 1
+        echo "Type 'yes<Enter>' to continue, or Ctrl-C to exit." >&2
+        read answer
+    done
+}
+
+wait_for () {
+    local path="$1"; shift
+    if [ ! -e "$path" ]; then
+        echo "Waiting for $path..." >&2
+        while [ ! -e "$path" ]; do
+            sleep 1
+        done
+        echo "...done." >&2
+    fi
+}
+
+disk2part () {
+    local ddev="$1"; shift
+    local partid="${1-1}"; shift
+    case "$ddev" in
+        /dev/sd[a-z])
+            echo "${ddev}${partid}" ;;
+        /dev/nvme[0-9]n[0-9])
+            echo "${ddev}p${partid}" ;;
+        *)
+            echo "Partition schema not known for disk device $ddev" >&2
+            exit 1 ;;
+    esac
+}
+
+crypt_format () {
+    local pdev="$1"; shift
+    local keyfile="$1"; shift
+    run cryptsetup luksFormat --batch-mode --type luks2 -c aes-xts-plain64 \
+                              --key-file "$keyfile" "$pdev"
+}
+
+crypt_save_header () {
+    local pdev="$1"; shift
+    local headerfile="$1"; shift
+    rm -f "$headerfile"
+    run cryptsetup luksHeaderBackup --batch-mode \
+                                    --header-backup-file "$headerfile" "$pdev"
+}
+
+crypt_update_crypttab () {
+    local pdev="$1"; shift
+    local cryptname="$1"; shift
+    local keyfile="$1"; shift
+
+    local uuid="`cryptsetup luksUUID "$pdev"`"
+    if [ -z "$uuid" ]; then echo "No UUID found!?" >&2; exit 1; fi
+
+    echo "(updating /etc/crypttab)" >&2
+    cp -p /etc/crypttab /etc/crypttab.orig
+    local tmp="$(tempfile -p crypttab)"
+    if [ -z "$tmp" ]; then echo "No temp file created!?" >&2; exit 1; fi
+    perl -ne 'print unless /^\Q'"$cryptname"'\E\s/' /etc/crypttab > "$tmp"
+    echo "$cryptname UUID=$uuid $keyfile luks,noauto" >> "$tmp"
+    cat "$tmp" > /etc/crypttab
+    rm -f "$tmp"
+    echo "(updated /etc/crypttab)" >&2
+}
+
+crypt_activate () {
+    local pdev="$1"; shift
+    local cryptname="$1"; shift
+    local keyfile="$1"; shift
+    #run udisksctl unlock --no-user-interaction --block-device "$pdev" \
+    #                     --key-file "$keyfile"
+    run cryptdisks_start "$cryptname"
+}
+
+crypt_deactivate () {
+    local pdev="$1"; shift
+    local cryptname="$1"; shift
+    #run udisksctl lock --no-user-interaction --block-device "$pdev"
+    run cryptdisks_stop "$cryptname"
+}
+
+fs_format () {
+    local fsdev="$1"; shift
+    run mkfs.ext4 -c -c -L backup \
+                  -e remount-ro -j -m 0 \
+                  "$fsdev"
+}
+
+fs_mount () {
+    local fsdev="$1"; shift
+    local mountpoint="$1"; shift
+
+    if [ ! -d "$mountpoint" ]; then run mkdir -p "$mountpoint"; fi
+    if [ ! -d "$mountpoint" ]; then
+        echo "Could not create $mountpoint" >&2; exit 1
+    fi
+    run mount -t ext4 "$fsdev" "$mountpoint"
+}
+
+fs_unmount () {
+    local fsdev="$1"; shift
+    local mountpoint="$1"; shift
+    run umount "$fsdev" || exit 1
+    rmdir "$mountpoint"
+}
+
+############################################################
+
+if [ ! -r "$keyfile" ] || [ ! -s "$keyfile" ]; then
+    random_password > "$keyfile" || exit 1
+    if [ ! -r "$keyfile" ]; then
+        echo "Keyfile not created!" >&2; exit 1
+    fi
+    run chmod u=r,go= "$keyfile"
+fi
+if [ ! -s "$keyfile" ]; then
+    echo "Keyfile is empty!" >&2; exit 1
+fi
+
+pdev="`disk2part "$ddev" 1`"
+if [ -z "$pdev" ]; then echo "Partition not known" >&2; exit 1; fi
+cdev="/dev/mapper/backup$id"
+
+if [ -n "$(mount | awk '($1=="'$pdev'")')" ]; then
+    fs_unmount "$cdev" "/media/tmp/backup" || exit 1
+fi
+if [ -e "$cdev" ]; then
+    crypt_deactivate "$pdev" "backup$id" || exit 1
+fi
+
+run_parted "$ddev" unit s print > /tmp/backup_parted_s 2>&1
+run_parted "$ddev" unit gib print > /tmp/backup_parted_gib 2>&1
+run_parted "$ddev" unit gb print > /tmp/backup_parted_gb 2>&1
+cat /tmp/backup_parted_gb
+echo "Are you sure you want to wipe this drive?" >&2
+check_confirmation || exit 1
+
+run_parted "$ddev" mklabel gpt || exit 1
+run_parted "$ddev" $(mkpart_command "$ddev" backup) || exit 1
+wait_for "$pdev" || exit 1
+
+crypt_format "$pdev" "$keyfile" || exit 1
+crypt_save_header "$pdev" "$headerfile" || exit 1
+crypt_update_crypttab "$pdev" "backup$id" "$keyfile" || exit 1
+crypt_activate "$pdev" "backup$id" "$keyfile" || exit 1
+wait_for "$cdev" || exit 1
+
+fs_format "$cdev" || exit 1
+fs_mount "$cdev" "/media/tmp/backup" || exit 1
+touch "/media/tmp/backup/$full_id" || exit 1
+
+fs_unmount "$cdev" "/media/tmp/backup" || exit 1
+crypt_deactivate "$pdev" "backup$id" || exit 1
+echo "BACKUP DISK PROVISIONING COMPLETE."

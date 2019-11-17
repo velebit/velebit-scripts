@@ -1,0 +1,20 @@
+#!/bin/bash
+# Back up a root partition to another partition on the NVME SSD.
+
+script="`dirname "$0"`/backup-partition"
+HOSTNAME="${HOSTNAME-$(hostname)}"
+
+verbose=
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        -v|--verbose)  verbose="$1"; shift ;;
+    esac
+done
+
+if [ "`id -u`" != 0 ]; then
+    echo "Warning: not root.  (Try with ssudo?)" >&2
+fi
+
+"$script" $verbose --write-times /common/backups/last_backup.root_nvme \
+          --root \
+          -X .cache LABEL="root" LABEL="backup_root"

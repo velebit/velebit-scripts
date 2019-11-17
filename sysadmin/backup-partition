@@ -1,0 +1,556 @@
+#!/bin/bash
+# Back up a partition to another partition, which should have a
+# different UUID.  Includes special support for root partitions which
+# includes updating the fstab and grub.cfg files and rebuilding initrd,
+# so that the other partition will be independently bootable (we hope).
+
+export PATH="$PATH":/sbin
+set -o pipefail
+
+run=
+mount_root="/media"
+mount_prefix="${mount_root}/backup"
+log=
+
+
+# Given a mountpoint, find the mounted device.
+_mount2dev_parser () {
+    local want_mount="`realpath "$1" 2>/dev/null`"
+    if [ -z "$want_mount" ]; then return 1; fi
+    set --
+    local dev on mount rest real_mount
+    while read dev on mount rest; do
+        real_mount="`realpath "$mount" 2>/dev/null`"
+        if [ "$on" = "on" -a "$real_mount" = "$want_mount" ]; then
+            set -- "$dev" "$@"
+            #echo "FOUND $dev $real_mount" >&2
+        fi
+    done
+    if [ "$#" -eq 1 ]; then
+        echo "$1"
+    fi
+}
+mount2dev () {
+    mount | _mount2dev_parser "$1"
+}
+
+# Given a mounted device, find its mountpoint.
+_dev2mount_parser () {
+    local want_dev="`realpath "$1" 2>/dev/null`"
+    if [ -z "$want_dev" ]; then
+        echo "Device '$1' not mapped to real path?!" >&2
+        return 1
+    fi
+    set --
+    local dev on mount rest real_dev
+    while read dev on mount rest; do
+        real_dev="`realpath "$dev" 2>/dev/null`"
+        if [ "$real_dev" = "$want_dev" -a "$on" = "on" ]; then
+            set -- "$mount" "$@"
+            #echo "FOUND $real_dev $mount" >&2
+        fi
+    done
+    if [ "$#" -eq 1 ]; then
+        echo "$1"
+    fi
+}
+dev2mount () {
+    mount | _dev2mount_parser "$1"
+}
+
+# Get the UUID for a device.
+dev2uuid () {
+    set -- `blkid -o value -s UUID "$1"`
+    [ "$#" -eq 1 ] && echo "$1"
+}
+
+
+# Given a file or directory, get the device it resides on.
+get_path_device () {
+    local path="`realpath "$1"`"
+    dev="`mount2dev "$path"`"
+    while [ -z "$dev" ]; do
+        parent="`dirname "$path"`"
+        if [ "$parent" = "$path" ]; then
+            echo "Could not determine parent device for '$1'" >&2
+            return
+        fi
+        path="$parent"
+        dev="`mount2dev "$path"`"
+    done
+    echo "$dev"
+}
+
+# Get a device specified by device path, mountpoint, LABEL=*, or UUID=*.
+get_device () {
+    case "$1" in
+        /dev/*)
+            [ -e "$1" ] && echo "$1"
+            ;;
+        LABEL=*|UUID=*)
+            set -- `blkid -o device -t "$1"`
+            [ "$#" -eq 1 ] && echo "$1"
+            ;;
+        *)
+            mount2dev "$1"
+            ;;
+    esac
+}
+
+# Find where a filesystem is mounted, or mount it ourselves.
+prepare_mount () {
+    local dev="$1"
+    local default_name="$2"
+
+    # This code is rife with race conditions, so don't go
+    # mounting/unmounting while running this script...
+
+    local mount="`dev2mount "$dev"`"
+    if [ -n "$mount" ]; then
+        echo "$mount"
+        return
+    fi
+
+    local name="`blkid -s LABEL -o value "$dev" 2>/dev/null`"
+    if [ -z "$name" ]; then name="$default_name"; fi
+    name="`echo "$name" | sed -e 's/[^A-Za-z0-9][^A-Za-z0-9]*/_/g'`"
+    if [ -z "$name" ]; then echo "Bad mount name '$name'" >&2; exit 1; fi
+
+    mount="$mount_prefix/$name"
+    while [ -n "`mount2dev "$mount"`" ]; do
+        name="$name.alt"
+        mount="$mount_prefix/$name"
+    done
+
+    $run mkdir -p "$mount" 1>&2 || exit 10
+    $run mount "$dev" "$mount" 1>&2 || exit 11
+    echo "$mount"
+}
+
+clean_up_mounts () {
+    local mount
+    local retval=0
+    for mount in "$mount_prefix"/*; do
+        if [ -n "`mount2dev "$mount"`" ]; then
+            if ! umount "$mount"; then
+                retval=12; continue
+            fi
+        fi
+        if [ -d "$mount" ]; then
+            if ! rmdir "$mount"; then
+                retval=12; continue
+            fi
+            local parent="`dirname "$mount"`"
+            while [ -d "$parent" -a "$parent" != "$mount_root" ]; do
+                rmdir "$parent" >/dev/null 2>&1 || break
+                parent="`dirname "$parent"`"
+            done
+        fi
+    done
+    return $retval
+}
+
+rsync_quiet="rsync"
+rsync_loud="rsync --info=progress2,flist2,stats2,skip,symsafe --human-readable"
+rsync="$rsync_quiet"
+exclude=()
+
+copy_files () {
+    local src_path="$1"
+    local dst_path="$2"
+
+    # Note: --delete-excluded is intentionally not specified, to avoid
+    #   deleting system directories and so on.  If you want excluded
+    #   stuff to not take up space, delete it yourself...
+
+    echo "  Copying data..."
+    $run $rsync \
+        --one-file-system "${exclude[@]}" --checksum \
+        --archive --delete --hard-links --sparse --acls --xattrs \
+        "$src_path/." "$dst_path/."
+    local status="$?"
+    echo "  ...done."
+    return "$status"
+}
+
+file_shell_game () {
+    local filetype="$1"
+    local file_old="$2"
+    local file_cur="$3"
+    local file_new="$4"
+
+    [ -n "$run" ] && return 0
+
+    # Move current (if any) to old, then move new to current.
+
+    if [ ! -e "$file_new" ]; then
+        echo "  ERROR: no new $filetype file was found!" >&2
+        return 1
+    fi
+
+    if [ -e "$file_cur" ]; then
+        rm -f "$file_old" 2>/dev/null
+        mv "$file_cur" "$file_old"
+        if [ -e "$file_cur" ]; then
+            echo "  ERROR: failed to move the current $filetype file" \
+                " out of the way!" >&2
+            return 2
+        fi
+    fi
+
+    mv "$file_new" "$file_cur"
+    if [ -e "$file_new" ]; then
+        echo "  ERROR: failed to move the new $filetype file!"
+        return 3
+    elif [ ! -e "$file_cur" ]; then
+        echo "  ERROR: failed to replace the current $filetype file!"
+        return 4
+    fi
+}
+
+file_fallback () {
+    local filetype="$1"
+    local file_old="$2"
+    local file_cur="$3"
+    local file_new="$4"
+
+    # Fallback: if there's no new file, we need to create one from cur/old.
+    if [ ! -e "$file_new" ]; then
+        if [ -e "$file_cur" ]; then
+            cp -p "$file_cur" "$file_new"
+        elif [ -e "$file_old" ]; then
+            cp -p "$file_old" "$file_new"
+        else
+            echo "  No $filetype file found in $file_cur or $file_old!" >&2
+            return 1
+        fi
+    fi
+}
+
+restore_fstab () {
+    local dst_path="$1"
+    local fstab_old="${dst_path%%/}/etc/fstab.edited"
+    local fstab_cur="${dst_path%%/}/etc/fstab"
+    local fstab_new="${dst_path%%/}/etc/fstab.source"
+
+    # Fallback: if there's no new file, we need to create one from cur/old.
+    file_fallback fstab "$fstab_old" "$fstab_cur" "$fstab_new" || return 1
+
+    echo "  Restoring source fstab file."
+    file_shell_game fstab "$fstab_old" "$fstab_cur" "$fstab_new" || return 2
+}
+
+propagate_fstab () {
+    local dst_path="$1"
+    local fstab_old="${dst_path%%/}/etc/fstab.source"
+    local fstab_cur="${dst_path%%/}/etc/fstab"
+    local fstab_new="${dst_path%%/}/etc/fstab.edited"
+
+    echo "  Propagating edited fstab file."
+    file_shell_game fstab "$fstab_old" "$fstab_cur" "$fstab_new" || return 2
+}
+
+edit_fstab () {
+    local dst_path="$1"
+    local src_uuid="$2"
+    local dst_uuid="$3"
+    local source_fstab="${dst_path%%/}/etc/fstab"
+    local edited_fstab="${dst_path%%/}/etc/fstab.edited"
+
+    if [ -n "$run" ]; then
+        if [ \( -e "$edited_fstab" -a ! -w "$edited_fstab" \) -o \
+             \( ! -e "$edited_fstab" -a ! -w "${dst_path%%/}/etc" \) ]; then
+            echo "WOULD edit fstab file."
+            return 0
+        fi
+    fi
+
+    echo "  Editing fstab file."
+    rm -f "$edited_fstab" 2>/dev/null
+    cp -p "$source_fstab" "$edited_fstab"
+    awk '{
+           if (/^ *#/||($2!="/")) {
+             print
+           } else {
+             orig=$0; $1="'"UUID=$dst_uuid"'";
+             print; print "### " orig ORS
+           }
+         }' "$source_fstab" > "$edited_fstab"
+}
+
+restore_grub_cfg () {
+    local dst_path="$1"
+    local grub_cfg_old="${dst_path%%/}/boot/grub/grub.cfg.edited"
+    local grub_cfg_cur="${dst_path%%/}/boot/grub/grub.cfg"
+    local grub_cfg_new="${dst_path%%/}/boot/grub/grub.cfg.source"
+
+    # Fallback: if there's no new file, we need to create one from cur/old.
+    file_fallback grub.cfg "$grub_cfg_old" "$grub_cfg_cur" "$grub_cfg_new" \
+        || return 1
+
+    echo "  Restoring source grub.cfg file."
+    file_shell_game grub.cfg "$grub_cfg_old" "$grub_cfg_cur" "$grub_cfg_new" \
+        || return 2
+}
+
+propagate_grub_cfg () {
+    local dst_path="$1"
+    local grub_cfg_old="${dst_path%%/}/boot/grub/grub.cfg.source"
+    local grub_cfg_cur="${dst_path%%/}/boot/grub/grub.cfg"
+    local grub_cfg_new="${dst_path%%/}/boot/grub/grub.cfg.edited"
+
+    echo "  Propagating edited grub.cfg file."
+    file_shell_game grub.cfg "$grub_cfg_old" "$grub_cfg_cur" "$grub_cfg_new" \
+        || return 2
+}
+
+edit_grub_cfg () {
+    local dst_path="$1"
+    local src_uuid="$2"
+    local dst_uuid="$3"
+    local source_grub_cfg="${dst_path%%/}/boot/grub/grub.cfg"
+    local edited_grub_cfg="${dst_path%%/}/boot/grub/grub.cfg.edited"
+
+    if [ -n "$run" ]; then
+        if [ \( -e "$edited_grub_cfg" -a ! -w "$edited_grub_cfg" \) -o \
+             \( ! -e "$edited_grub_cfg" -a ! -w "${dst_path%%/}/etc" \) ]; then
+            echo "WOULD edit grub.cfg file."
+            return 0
+        fi
+    fi
+
+    echo "  Editing grub.cfg file."
+    rm -f "$edited_grub_cfg" 2>/dev/null
+    cp -p "$source_grub_cfg" "$edited_grub_cfg"
+    sed -e '/^### BEGIN .*\/[2-4][0-9]_/,/^### END .*\/[2-4][0-9]_/d' \
+        -e 's/'"$src_uuid"'/'"$dst_uuid"'/Ig' \
+        "$source_grub_cfg" > "$edited_grub_cfg"
+}
+
+update_initrd () {
+    local dst_path="$1"
+    local prefix="${dst_path%%/}"
+    local update_bin="/usr/sbin/update-initramfs"
+
+    if [ -e "$prefix$update_bin" ]; then
+        echo "  Updating initrd files."
+
+        mount --bind /proc "$prefix/proc"
+        mount --bind /dev "$prefix/dev"
+        mount --bind /sys "$prefix/sys"
+
+        local retval=0
+        # NB: we want a failure when chroot fails; requires Bash's "-o pipefail"
+        chroot "$dst_path" "$update_bin" -u -k all | sed -e 's/^/    /' \
+            || retval=2
+
+        umount "$prefix/proc"
+        umount "$prefix/dev"
+        umount "$prefix/sys"
+
+        return $retval
+    fi
+}
+
+begin_root_copy () {
+    local src_path="$1"
+    local dst_path="$2"
+
+    if ! restore_fstab "$dst_path"; then
+        return 6
+    fi
+    if ! restore_grub_cfg "$dst_path"; then
+        return 6
+    fi
+
+    return 0
+}
+
+finish_root_copy () {
+    local src_path="$1"
+    local dst_path="$2"
+    local src_uuid="$3"
+    local dst_uuid="$4"
+
+    if ! edit_fstab "$dst_path" "$src_uuid" "$dst_uuid"; then
+        return 8
+    fi
+    if ! edit_grub_cfg "$dst_path" "$src_uuid" "$dst_uuid"; then
+        return 8
+    fi
+
+    if ! propagate_fstab "$dst_path"; then
+        echo "...FAILED!"
+        return 9
+    fi
+    if ! propagate_grub_cfg "$dst_path"; then
+        echo "...FAILED!"
+        return 9
+    fi
+
+    if ! update_initrd "$dst_path"; then
+        echo "...FAILED!"
+        return 10
+    fi
+
+    return 0
+}
+
+sync_partition () {
+    local src_dev="`get_device "$1"`"
+    local dst_dev="`get_device "$2"`"
+    local begin_hook="$3"
+    local finish_hook="$4"
+
+    if [ -z "$src_dev" ]; then
+        echo "Could not find the device with '$1'." >&2
+        return 1
+    fi
+    if [ -z "$dst_dev" ]; then
+        echo "Could not find the device with '$2'." >&2
+        return 2
+    fi
+
+    local src_uuid="`dev2uuid "$src_dev"`"
+    if [ -z "$src_uuid" ]; then
+        echo "Could not find the UUID for $src_dev ($1)." >&2
+        return 1
+    fi
+    local dst_uuid="`dev2uuid "$dst_dev"`"
+    if [ -z "$dst_uuid" ]; then
+        echo "Could not find the UUID for $dst_dev ($2)." >&2
+        return 2
+    elif [ "$dst_uuid" = "$src_uuid" ]; then
+        echo "UUIDs are the same for $src_dev ($1) and $dst_dev ($2)." >&2
+        return 3
+    fi
+
+    local src_path="`prepare_mount "$src_dev" backup-root-src`"
+    if [ -z "$src_path" ]; then
+        echo "Could not prepare mountpoint for $src_dev ($1)." >&2
+        return 4
+    fi
+    local dst_path="`prepare_mount "$dst_dev" backup-root-dst`"
+    if [ -z "$dst_path" ]; then
+        echo "Could not prepare mountpoint for $dst_dev ($2)." >&2
+        return 5
+    fi
+
+    echo "Copying $src_path to $dst_path..."
+
+    if [ -n "$begin_hook" ]; then
+        if ! "$begin_hook" "$src_path" "$dst_path" \
+                "$src_uuid" "$dst_uuid"; then
+            echo "...FAILED!"
+            return 6
+        fi
+    fi
+
+    if ! copy_files "$src_path" "$dst_path"; then
+        echo "...FAILED!"
+        return 7
+    fi
+
+    if [ -n "$finish_hook" ]; then
+        if ! "$finish_hook" "$src_path" "$dst_path" \
+                "$src_uuid" "$dst_uuid"; then
+            echo "...FAILED!"
+            return 8
+        fi
+    fi
+
+    clean_up_mounts  # ignore errors, I guess
+    echo "...done."
+}
+
+sync_root () {
+    local src_arg="$1"
+    local dst_arg="$2"
+    sync_partition "$src_arg" "$dst_arg" begin_root_copy finish_root_copy
+}
+
+src=
+dst=
+cmd=sync_partition
+affects_boot=
+boot_needs_update=
+keep_going=
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        -n|--dry-run)
+            run="echo WOULD run:"
+            shift ;;
+        -R|--root)
+            cmd=sync_root
+            affects_boot=yes
+            exclude+=(--exclude tmp)
+            shift ;;
+        -D|--data|--no-root|--not-root)
+            cmd=sync_partition
+            affects_boot=
+            shift ;;
+        -X|--exclude)
+            exclude+=(--exclude "$2")
+            shift; shift ;;
+        -v|--verbose)
+            rsync="$rsync_loud"
+            shift ;;
+        -k|--keep-going)
+            keep_going=yes
+            shift ;;
+        --write-times)
+            log="$2"
+            if [ -n "$log" ]; then
+                if [ -L "$log" ]; then
+                    echo "Error: '$log' is a symbolic link!" >&2; exit 3
+                elif [ -e "$log" -a ! -f "$log" ]; then
+                    echo "Error: '$log' is not a regular file!" >&2; exit 3
+                elif [ -e "$log" -a ! -O "$log" ]; then
+                    echo "Error: '$log' is not owned by this user!" >&2; exit 3
+                fi
+                echo "# Started: `date +'%Y-%m-%d %H:%M:%S'`" > "$log"
+            fi
+            shift; shift ;;
+        -*)
+            echo "Unknown flag '$1'!" >&2
+            exit 1 ;;
+        "")
+            echo "Unknown argument ''!" >&2
+            exit 1 ;;
+        *)
+            if [ -z "$src" ]; then
+                src="$1"
+            else
+                dst="$1"
+                if ! "$cmd" "$src" "$dst"; then
+                    if [ -z "$keep_going" ]; then
+                        echo "(stopping)" >&2
+                        exit 2
+                    fi
+                else
+                    if [ -n "$affects_boot" ]; then
+                        boot_needs_update=yes
+                    fi
+                fi
+                src=
+                dst=
+                exclude=()
+            fi
+            shift ;;
+    esac
+done
+if [ -n "$src" ]; then
+    echo "Unexpected argument '$src'!  (Need two arguments for a copy.)" >&2
+    exit 2
+fi
+
+if [ -n "$boot_needs_update" ]; then
+    echo "Updating GRUB menus..."
+    $run update-grub 2>&1 | sed -e 's/^/  /'
+    echo "...done."
+fi
+
+if [ -n "$log" ]; then
+    echo "# Ended:   `date +'%Y-%m-%d %H:%M:%S'`" >> "$log"
+fi
