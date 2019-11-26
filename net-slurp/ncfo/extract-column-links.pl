@@ -2,8 +2,8 @@
 use warnings;
 use strict;
 
-use HTML::TreeBuilder;
 use Getopt::Long;
+use HTML::TreeBuilder;
 use Carp qw( carp croak );
 
 # ----------------------------------------------------------------------
@@ -211,7 +211,7 @@ sub get_in_between_nodes ( $$ ) {
   my $ttop = pop(@tparents);
   $ftop or $ttop or return ();  # same node -> span is ()
   if ($ftop and $ttop) {
-      $ftop->parent == $ttop->parent or die;  # inconsistent lineage -> error
+      $ftop->parent == $ttop->parent or croak;  # inconsistent lineage -> error
       $ftop->pindex >= $ttop->pindex
 	  and return ();  # nodes are in reverse order -> span is ()
   }
@@ -270,28 +270,42 @@ sub get_same_line_siblings ( $ ) {
 }
 
 
-sub count_line_breaks ( $ ) {
-  my ($node) = @_;
-  return 0 unless $node;
+# NB: this implementation matches print-table-links (or did at one point).
+sub count_line_breaks_in ( @ ) {
+  my (@nodes) = @_;
   my $count = 0;
-  my $prev = $node;
-  while (1) {
-    $prev = $prev->left or last;
-    $count += scalar @{[ $prev->look_down(_tag => qr/^(?:br|hr)$/) ]};
-  }
+  $count += scalar @{[ $_->look_down(_tag => qr/^(?:br|hr)$/) ]}
+    for @nodes;
   $count;
 }
 
-sub get_line_by_number ( $$ ) {
+
+# NB: this implementation matches print-table-links (or did at one point).
+sub count_line_breaks ( $ ) {
+  my ($node) = @_;
+  count_line_breaks_in $node->left;
+}
+
+
+# NB: this implementation matches print-table-links (or did at one point).
+sub get_line_edges ( $$ ) {
   my ($parent, $number) = @_;
   return unless $parent;
-  my (@list);
-  for my $node ($parent->content_list) {
-    push @list, $node if $number == 0;
-    $number -= scalar @{[ $node->look_down(_tag => qr/^(?:br|hr)$/) ]};
-    last if $number < 0;
-  }
-  @list;
+  return ($parent, $parent) unless defined $number;
+  my @edges = $parent->look_down(_tag => qr/^(?:br|hr)$/);
+  @edges or return ($parent, $parent);
+  $number == 0 and return ($parent, $edges[0]);
+  $number <= $#edges and return ($edges[$number-1], $edges[$number]);
+  $number == ($#edges+1) and return ($edges[$number-1], $parent);
+  return;
+}
+
+# NB: this implementation matches print-table-links (or did at one point).
+sub get_line_by_number ( $$ ) {
+  my ($parent, $number) = @_;
+  my ($from, $to) = get_line_edges $parent, $number or return;
+  $from == $to and return $from;  # if no breaks (or no number), return cell
+  get_in_between_nodes $from, $to;
 }
 
 

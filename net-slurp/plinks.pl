@@ -6,6 +6,7 @@ use strict;
 use Getopt::Long;
 use HTML::TreeBuilder;
 use URI;
+use Carp qw( carp croak );
 
 $| = 1;
 
@@ -74,6 +75,22 @@ sub has_field ( $ ) {
   scalar grep $_ eq $name, @fields;
 }
 
+sub unique ( @ ) {
+  my (%seen);
+  grep !($seen{$_}++), @_;
+}
+
+sub get_matching_fields ( $ ) {
+  my ($prefix) = @_;
+  unique grep $_ =~ qr/^\Q$prefix\E/, @fields;
+}
+
+sub strip_prefix ( $$ ) {
+  my ($value, $prefix) = @_;
+  $value =~ s/^\Q$prefix\E// or return;
+  $value;
+}
+
 
 our $WHITESPACE_MAX_IGNORED = 1;
 our $WHITESPACE_DELTA_IGNORED = 0;
@@ -117,7 +134,7 @@ GetOptions('verbose|v+' => \$VERBOSITY,
 
 printf STDERR "    %-67s ", "Reading page..." if $VERBOSITY;
 my $tree = HTML::TreeBuilder->new;
-$tree->parse_file($ARGV[0]);
+$tree->parse_file($ARGV[0]) or die "Could not read $ARGV[0]: $!\n";
 $tree->objectify_text();
 print STDERR "done.\n" if $VERBOSITY;
 
@@ -172,7 +189,7 @@ sub get_in_between_nodes ( $$ ) {
   my $ttop = pop(@tparents);
   $ftop or $ttop or return ();  # same node -> span is ()
   if ($ftop and $ttop) {
-      $ftop->parent == $ttop->parent or die;  # inconsistent lineage -> error
+      $ftop->parent == $ttop->parent or croak;  # inconsistent lineage -> error
       $ftop->pindex >= $ttop->pindex
 	  and return ();  # nodes are in reverse order -> span is ()
   }
@@ -426,13 +443,13 @@ sub absolute_uri ( $;$ ) {
 
 # only look at <a ...> tags
 printf STDERR "    %-67s ", "Traversing <a> tags..." if $VERBOSITY;
-my @pages = grep defined $_->{href},
+my @links = grep defined $_->{href},
   map +{ tag => $_, href => $_->attr('href') }, $tree->look_down(_tag => 'a');
 print STDERR "done.\n" if $VERBOSITY;
 
 if (defined $TABLE_LEVEL) {
   printf STDERR "    %-67s ", "Limiting by table level..." if $VERBOSITY;
-  @pages = grep get_table_level($_->{tag}) == $TABLE_LEVEL, @pages;
+  @links = grep get_table_level($_->{tag}) == $TABLE_LEVEL, @links;
   print STDERR "done.\n" if $VERBOSITY;
 }
 
@@ -440,7 +457,7 @@ if (has_field HEADING) {
   printf STDERR "    %-67s ", "Extracting headings..." if $VERBOSITY;
   clear_headings_cache;
   my $get_headings = \&get_markup_headings;
-  $_->{+HEADING} = find_heading_text($_->{tag}, $get_headings) for @pages;
+  $_->{+HEADING} = find_heading_text($_->{tag}, $get_headings) for @links;
   print STDERR "done.\n" if $VERBOSITY;
 }
 
@@ -448,13 +465,13 @@ if (has_field STRONG_OR_HEADING) {
   printf STDERR "    %-67s ", "Extracting heading/strongs..." if $VERBOSITY;
   clear_headings_cache;
   my $get_headings = \&get_display_headings;
-  $_->{+STRONG_OR_HEADING} = find_heading_text($_->{tag}, $get_headings) for @pages;
+  $_->{+STRONG_OR_HEADING} = find_heading_text($_->{tag}, $get_headings) for @links;
   print STDERR "done.\n" if $VERBOSITY;
 }
 
 if (has_field PARENT1_TEXT) {
   printf STDERR "    %-67s ", "Extracting parent text..." if $VERBOSITY;
-  $_->{+PARENT1_TEXT} = get_text($_->{tag}->parent) for @pages;
+  $_->{+PARENT1_TEXT} = get_text($_->{tag}->parent) for @links;
   print STDERR "done.\n" if $VERBOSITY;
 }
 
@@ -463,53 +480,53 @@ if (has_field PRECEDING_LESS_INDENTED_TEXT) {
   $_->{+PRECEDING_LESS_INDENTED_TEXT} =
     get_preceding_less_indented_lines_text(
       $_->{tag}, $PRECEDING_LESS_INDENTED_TEXT_MAX_LINES)
-    for @pages;
+    for @links;
   print STDERR "done.\n" if $VERBOSITY;
 }
 
 if (has_field PREVIOUS_LINE_TEXT) {
   printf STDERR "    %-67s ", "Extracting text on the previous line..." if $VERBOSITY;
-  $_->{+PREVIOUS_LINE_TEXT} = get_text(get_previous_line_siblings($_->{tag})) for @pages;
+  $_->{+PREVIOUS_LINE_TEXT} = get_text(get_previous_line_siblings($_->{tag})) for @links;
   print STDERR "done.\n" if $VERBOSITY;
 }
 
 if (has_field SAME_LINE_TEXT) {
   printf STDERR "    %-67s ", "Extracting text on the same line..." if $VERBOSITY;
-  $_->{+SAME_LINE_TEXT} = get_text(get_same_line_siblings($_->{tag})) for @pages;
+  $_->{+SAME_LINE_TEXT} = get_text(get_same_line_siblings($_->{tag})) for @links;
   print STDERR "done.\n" if $VERBOSITY;
 }
 
 if (has_field SAME_LINE_NUM_LINKS) {
   printf STDERR "    %-67s ", "Extracting # links on the same line..." if $VERBOSITY;
-  $_->{+SAME_LINE_NUM_LINKS} = get_num_links(get_same_line_siblings($_->{tag})) for @pages;
+  $_->{+SAME_LINE_NUM_LINKS} = get_num_links(get_same_line_siblings($_->{tag})) for @links;
   print STDERR "done.\n" if $VERBOSITY;
 }
 
 if (has_field SAME_LINE_BEFORE_LINK) {
   printf STDERR "    %-67s ", "Extracting text before link..." if $VERBOSITY;
-  $_->{+SAME_LINE_BEFORE_LINK} = get_text(get_same_line_before_link($_->{tag})) for @pages;
+  $_->{+SAME_LINE_BEFORE_LINK} = get_text(get_same_line_before_link($_->{tag})) for @links;
   print STDERR "done.\n" if $VERBOSITY;
 }
 
 if (has_field SAME_LINE_AFTER_LINK) {
   printf STDERR "    %-67s ", "Extracting text after link..." if $VERBOSITY;
-  $_->{+SAME_LINE_AFTER_LINK} = get_text(get_same_line_after_link($_->{tag})) for @pages;
+  $_->{+SAME_LINE_AFTER_LINK} = get_text(get_same_line_after_link($_->{tag})) for @links;
   print STDERR "done.\n" if $VERBOSITY;
 }
 
 if (has_field TEXT) {
   printf STDERR "    %-67s ", "Extracting tag text..." if $VERBOSITY;
-  $_->{+TEXT} = get_text($_->{tag}) for @pages;
+  $_->{+TEXT} = get_text($_->{tag}) for @links;
   print STDERR "done.\n" if $VERBOSITY;
 }
 
 if ($BASE_URI) {
-    $_->{href_abs} = absolute_uri($_->{href}, $BASE_URI) for @pages;
+    $_->{href_abs} = absolute_uri($_->{href}, $BASE_URI) for @links;
     push @fields, 'href_abs';
 } else {
     push @fields, 'href';
 }
 
 printf STDERR "    %-67s ", "Producing output..." if $VERBOSITY;
-print join("\t", @$_{@fields}) . "\n" for @pages;
+print join("\t", @$_{@fields}) . "\n" for @links;
 print STDERR "done.\n" if $VERBOSITY;
