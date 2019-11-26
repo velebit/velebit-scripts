@@ -35,6 +35,8 @@ $install \
 $install \
     gcc g++ \
     strace
+$install \
+    libhtml-element-extended-perl libhtml-tableextract-perl
 
 ### file versioning, comparison and whatnot
 $install \
