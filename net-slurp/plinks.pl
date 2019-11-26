@@ -9,10 +9,40 @@ use URI;
 
 $| = 1;
 
-sub Usage () {
-  die("Usage: $0 [-v] [-h] [-hb] [-pt] [-li [NUM]] [-lt] [-ll]" .
-      " [-lb] [-la] [-t] [--table-level LEVEL] [--base BASE] FILE\n");
-  exit 1;
+# ----------------------------------------------------------------------
+
+sub Usage ( @ ) {
+  die join "\n\n", @_, <<"EndOfMessage";
+Usage: $0 [OPTIONS...] HTML_FILE
+Arguments and general options:
+  HTML_FILE                    The path of the input HTML file to be parsed.
+  --verbose              (-v)  Print additional status messages to stderr.
+                               Can be repeated.
+  --base BASE_URI              Use BASE_URI as the base for relative links.
+Data selection options:
+  --table-level LEVEL   (-tl)  Only show links within LEVEL nested tables.
+  --not-in-table               Shorthand for `--table-level 0'.
+Output options (extra fields printed before URI, separated by tabs):
+  --show-heading         (-h)  Show text of preceding <h#> or <title> tag.
+  --show-bold-or-heading
+                        (-hb)  Show text of preceding <strong>, <h#> or
+                               <title> tag, with some heuristic filtering.
+  --show-parent-text    (-pt)  Show text for the link's parent node.
+  --show-previous-line-text
+                       (-plt)  Show text for the line preceding the link.
+  --show-line-text      (-lt)  Show text for the line with the link.
+  --show-less-indented [MAX_LINES]
+                        (-li)  Show text for preceding lines that are less
+                               indented than the line with the link.  Shows at
+                               most MAX_LINES lines, if specified.
+  --show-line-links     (-ll)  Show the *number* of links on the same line.
+  --show-line-before-link
+                        (-lb)  Show text on the same line up to first link.
+  --show-line-after-link
+                        (-la)  Show text on the same line following last link.
+  --show-text            (-t)  Show text of the link itself.
+EndOfMessage
+  exit 1;  # backstop
 }
 
 
