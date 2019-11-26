@@ -109,15 +109,15 @@ sub set_col_label ( $ ) {
 
 GetOptions('file|f=s' => sub { set_input_file $_[1] },
 	   'verbose|v+' => \$VERBOSITY,
+	   'table|t=s' => sub { set_tbl_label $_[1] },
+	   'index|i=i' => sub { set_tbl_label $_[1] },
+	   'column|c=s' => sub { set_col_label $_[1] },
 	   'print-rows|rows|r!' => \$PRINT_COL0_TEXT,
 	   'print-row-lines|row-line|rl!' => \$PRINT_COL0_LINE_TEXT,
 	   'print-line-text|line-text|lt!' => \$PRINT_SAME_LINE_TEXT,
 	   'print-links|links|l!' => \$PRINT_LINK_TEXT,
-	   'message|m=s' => sub { set_msg $_[1] },
-	   'table|t=s' => sub { set_tbl_label $_[1] },
-	   'index|i=i' => sub { set_tbl_label $_[1] },
-	   'column|c=s' => sub { set_col_label $_[1] },
 	   'output|o=s' => sub { set_output_file $_[1] },
+	   'message|m=s' => sub { set_msg $_[1] },
 	   'go|G' => sub { commit },
           ) or Usage;
 
@@ -176,13 +176,21 @@ sub slurp_from_handle ( $ ) {
   $d;
 }
 
-# NB: this implementation matches plinks.
-sub get_text ( @ ) {
+# NB: this implementation matches plinks (or did at one point).
+sub get_raw_text ( @ ) {
   my (@nodes) = @_;
   @nodes = grep defined, @nodes;
   return '' unless @nodes;
   @nodes = map $_->clone, @nodes;
   my $text = join '', map(($_->deobjectify_text() || $_->as_text), @nodes);
+  $text;
+}
+
+
+# NB: this implementation matches plinks (or did at one point).
+sub get_text ( @ ) {
+  my (@nodes) = @_;
+  my $text = get_raw_text(@nodes);
   # 0xA0 is a non-breaking space in Latin-1 and Unicode.
   # 0xC2 0xA0 is the UTF-8 representation of U+00A0; this is a horrible hack.
   $text =~ s/[\s\xA0\xC2]+/ /sg;
@@ -190,30 +198,77 @@ sub get_text ( @ ) {
   $text;
 }
 
-# NB: this implementation matches plinks.
+
+# NB: this implementation matches plinks (or did at one point).
+sub get_in_between_nodes ( $$ ) {
+  my ($from, $to) = @_;
+  my @fparents = ($from, $from->lineage);
+  my @tparents = ($to, $to->lineage);
+  $fparents[-1] == $tparents[-1] or return ();  # not same root -> span is ()
+  pop(@fparents), pop(@tparents)
+    while @fparents and @tparents and $fparents[-1] == $tparents[-1];
+  my $ftop = pop(@fparents);
+  my $ttop = pop(@tparents);
+  $ftop or $ttop or return ();  # same node -> span is ()
+  if ($ftop and $ttop) {
+      $ftop->parent == $ttop->parent or die;  # inconsistent lineage -> error
+      $ftop->pindex >= $ttop->pindex
+	  and return ();  # nodes are in reverse order -> span is ()
+  }
+  my @span;
+  push @span, $_->right for @fparents;
+  if (! $ftop) {
+    push @span, $ttop->left;
+  } elsif (! $ttop) {
+    push @span, $ftop->right;
+  } else {
+    push @span,
+      @{$ftop->parent->content}[($ftop->pindex+1)..($ttop->pindex-1)];
+  }
+  push @span, $_->left for reverse @tparents;
+  return @span;
+}
+
+
+# NB: this implementation matches plinks (or did at one point).
+sub look_leftward_siblings_down ( $@ ) {
+  my ($node, @terms) = @_;
+  while (1) {
+    $node = $node->left or return;
+    my @matches = $node->look_down(@terms);
+    return $matches[-1] if @matches;
+  }
+}
+
+# NB: this implementation matches plinks (or did at one point).
+sub look_rightward_siblings_down ( $@ ) {
+  my ($node, @terms) = @_;
+  while (1) {
+    $node = $node->right or return;
+    my @matches = $node->look_down(@terms);
+    return $matches[0] if @matches;
+  }
+}
+
+
+# NB: this implementation matches plinks (or did at one point).
 sub get_same_line_siblings ( $ ) {
   my ($node) = @_;
-  return '' unless $node;
-  my @list = ($node);
-  {
-    my $prev = $node;
-    while (1) {
-      $prev = $prev->left or last;
-      $prev->look_down(_tag => qr/^(?:br|hr)$/) and last;
-      unshift @list, $prev;
-    }
+  return () unless $node;
+  my $start = look_leftward_siblings_down($node, _tag => qr/^(?:br|hr)$/);
+  my $end = look_rightward_siblings_down($node, _tag => qr/^(?:br|hr)$/);
+  if ($start and $end) {
+    # NB: $start and $end can't be the same node
+    return (get_in_between_nodes($start, $end), $end);   # exclude $start
+  } elsif ($start) {
+    return (get_in_between_nodes($start, $node->parent));    # exclude $start
+  } elsif ($end) {
+    return (get_in_between_nodes($node->parent, $end), $end);
+  } else {
+    return $node->parent->content_list;
   }
-  {
-    my $next = $node;
-    while (1) {
-      $next = $next->right or last;
-      $next->look_down(_tag => qr/^(?:br|hr)$/) and last;
-      push @list, $next;
-    }
-  }
-  # TODO: go to parent if list has only 1 node?
-  @list;
 }
+
 
 sub count_line_breaks ( $ ) {
   my ($node) = @_;

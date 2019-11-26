@@ -84,24 +84,24 @@ our $VERBOSITY = 0;
 our $TABLE_LEVEL;
 our $BASE_URI;
 GetOptions('verbose|v+' => \$VERBOSITY,
+           'base=s' => \$BASE_URI,
+           'table-level|tl=i' => \$TABLE_LEVEL,
+           'not-in-table' => sub { $TABLE_LEVEL = 0 },
            'show-heading|h!' =>
            sub { add_rm_field HEADING, $_[1] },
-           'bold-is-heading|b' =>
-           sub { die("Option --bold-is-heading (-b) is deprecated." .
-                     "  Try --show-bold-or-heading (-hb)?\n\n"); },
            'show-bold-or-heading|hb!' =>
            sub { add_rm_field STRONG_OR_HEADING, $_[1] },
            'show-parent-text|pt!' =>
            sub { add_rm_field PARENT1_TEXT, $_[1] },
+           'show-previous-line-text|plt!' =>
+           sub { add_rm_field PREVIOUS_LINE_TEXT, $_[1] },
+           'show-line-text|lt!' =>
+           sub { add_rm_field SAME_LINE_TEXT, $_[1] },
            'show-less-indented|li:999' =>
            sub {
              add_rm_field PRECEDING_LESS_INDENTED_TEXT, ($_[1] > 0);
              $PRECEDING_LESS_INDENTED_TEXT_MAX_LINES = $_[1];
            },
-           'show-previous-line-text|plt!' =>
-           sub { add_rm_field PREVIOUS_LINE_TEXT, $_[1] },
-           'show-line-text|lt!' =>
-           sub { add_rm_field SAME_LINE_TEXT, $_[1] },
            'show-line-links|ll!' =>
            sub { add_rm_field SAME_LINE_NUM_LINKS, $_[1] },
            'show-line-before-link|lb!' =>
@@ -110,11 +110,9 @@ GetOptions('verbose|v+' => \$VERBOSITY,
            sub { add_rm_field SAME_LINE_AFTER_LINK, $_[1] },
            'show-text|t!' =>
            sub { add_rm_field TEXT, $_[1] },
-           'table-level|tl=i' => \$TABLE_LEVEL,
-           'not-in-table' => sub { $TABLE_LEVEL = 0 },
-           'base=s' => \$BASE_URI,
           ) or Usage;
-@ARGV == 1 or Usage;
+@ARGV >= 1 or Usage "File name not provided.";
+@ARGV <= 1 or Usage "Too many arguments provided.";
 
 
 printf STDERR "    %-67s ", "Reading page..." if $VERBOSITY;
@@ -173,8 +171,11 @@ sub get_in_between_nodes ( $$ ) {
   my $ftop = pop(@fparents);
   my $ttop = pop(@tparents);
   $ftop or $ttop or return ();  # same node -> span is ()
-  $ftop and $ttop and $ftop->pindex >= $ttop->pindex
-    and return ();  # nodes are in reverse order -> span is ()
+  if ($ftop and $ttop) {
+      $ftop->parent == $ttop->parent or die;  # inconsistent lineage -> error
+      $ftop->pindex >= $ttop->pindex
+	  and return ();  # nodes are in reverse order -> span is ()
+  }
   my @span;
   push @span, $_->right for @fparents;
   if (! $ftop) {
@@ -182,7 +183,6 @@ sub get_in_between_nodes ( $$ ) {
   } elsif (! $ttop) {
     push @span, $ftop->right;
   } else {
-    $ftop->parent == $ttop->parent or die;
     push @span,
       @{$ftop->parent->content}[($ftop->pindex+1)..($ttop->pindex-1)];
   }
