@@ -33,8 +33,7 @@ inspect() {
 source "$(dirname "$0")/_uri.sh"
 html_dir=html
 ./make-url-lists.sh --wipe \
-                    --rebels "$html_dir/${rebels_uri##*/}.html" \
-                    --empire "$html_dir/${empire_uri##*/}.html" \
+                    --chorus "$html_dir/${chorus_uri##*/}.html" \
                     --solo "$html_dir/${solo_uri##*/}.html" \
                     --demo "$html_dir/${demo_uri##*/}.html" \
                     --orch "$html_dir/${demo_uri##*/}.html" \

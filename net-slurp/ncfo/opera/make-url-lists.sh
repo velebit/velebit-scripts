@@ -1,8 +1,7 @@
 #!/bin/bash
 
 DO_WIPE=
-INDEX_REBELS=
-INDEX_EMPIRE=
+INDEX_CHORUS=
 INDEX_SOLO=
 INDEX_DEMO=
 INDEX_ORCH=
@@ -14,8 +13,7 @@ while [ "$#" -gt 0 ]; do
     case "$1" in
         --wipe)     DO_WIPE=yes; shift ;;
         #--mp3)      INDEX_MP3="$2"; shift; shift ;;
-        --rebels)   INDEX_REBELS="$2"; shift; shift ;;
-        --empire)   INDEX_EMPIRE="$2"; shift; shift ;;
+        --chorus)   INDEX_CHORUS="$2"; shift; shift ;;
         --solo)     INDEX_SOLO="$2"; shift; shift ;;
         --demo)     INDEX_DEMO="$2"; shift; shift ;;
         --orch)     INDEX_ORCH="$2"; INDEX_SCENE="$2"; shift; shift ;;
@@ -133,16 +131,13 @@ extract_demorch () {
               -e 's,^\([^	]*\)SCENE FOUR,\1Scene 4,' \
               -e 's,^\([^	]*\)SCENE FIVE,\1Scene 5,' \
               -e 's,^\([^	]*\)SCENE ,\1Scene ,' \
+              -e 's,^\([^	]*Scene [^	]*\)Scene ,\1S,I' \
               -e 's,^\([^	]*Scene [^ :	]*\)[^	]*	,\1	,' \
               -e 's/^Act \([^ 	]*\) Scene \([^ 	]*\)/\1.\2/' \
+              -e 's/^Scene \([^ 	]*\)/sc\1/' \
               -e 's/^\([^	]*	\)[^	]*	/\1/' \
-              -e 's/^\([^	]*	\)[^	]*\(	[0-9]*\.\)/\1\2/' \
-              -e 's,^\([^	]*	\)[0-9]*\.  *,\1,' \
-              -e 's,^\([^	]*	[^	]*\)([^()	]*),\1,' \
-              -e 's,^\([^	]*	[^	]*\)([^()	]*),\1,' \
-              -e 's/^\([^	]*\)	/\1 /' \
               -e 's/^\([^	]*	\)[^	]*	/\1/' \
-              -e 's,^\([^	]*	\)[0-9]*\.  *,\1,' \
+              -e 's/^\([^	]*	\)[^	]*	/\1/' \
               -e 's/^\([^	]*\)	/\1 /' \
               -e '/^[^	]*	'"$section"'/I!d' \
               -e 's/^\([^	]*\)	/\1 /' \
@@ -186,24 +181,21 @@ extract_satb_sections () {
 #extract_satb_sections "$biglist" '' ' MP3s' 'courtiers-' '' 'Cou' ''
 #extract_section "$biglist" 'AZARMIK' 'Azarmik-cit3'
 
-if [ -n "$INDEX_REBELS" ]; then
-    extract_satb_sections "$(blist "$INDEX_REBELS")" '' ' MP3s' '' '-rebels'
-fi
-if [ -n "$INDEX_EMPIRE" ]; then
-    extract_satb_sections "$(blist "$INDEX_EMPIRE")" '' ' MP3s' '' '-empire'
+if [ -n "$INDEX_CHORUS" ]; then
+    extract_satb_sections "$(blist "$INDEX_CHORUS")" '' ' MP3s' '' '-chorus'
 fi
 if [ -n "$INDEX_SOLO" ]; then
     # Hack: Luke gets identified as "PRINCIPAL SOLOISTS" instead, not fixing.
     extract_section "$(blist "$INDEX_SOLO")" "PRINCIPAL SOLOISTS" "luke"
-    extract_section "$(blist "$INDEX_SOLO")" "HAN SOLO" "han"
-    extract_section "$(blist "$INDEX_SOLO")" "PRINCESS LEIA" "leia"
-    extract_section "$(blist "$INDEX_SOLO")" "OBI-WAN KENOBI" "obiwan"
-    extract_section "$(blist "$INDEX_SOLO")" "DARTH VADER" "darth"
-    extract_section "$(blist "$INDEX_SOLO")" "C-3PO" "c3po"
-    extract_section "$(blist "$INDEX_SOLO")" "R2-D2" "r2d2"
-    extract_section "$(blist "$INDEX_SOLO")" "CHEWBACCA" "chewie"
-    extract_section "$(blist "$INDEX_SOLO")" "JABBA THE HUTT" "jabba"
-    extract_section "$(blist "$INDEX_SOLO")" "UNCLE OWEN" "owen"
+    #extract_section "$(blist "$INDEX_SOLO")" "HAN SOLO" "han"
+    #extract_section "$(blist "$INDEX_SOLO")" "PRINCESS LEIA" "leia"
+    #extract_section "$(blist "$INDEX_SOLO")" "OBI-WAN KENOBI" "obiwan"
+    #extract_section "$(blist "$INDEX_SOLO")" "DARTH VADER" "darth"
+    #extract_section "$(blist "$INDEX_SOLO")" "C-3PO" "c3po"
+    #extract_section "$(blist "$INDEX_SOLO")" "R2-D2" "r2d2"
+    #extract_section "$(blist "$INDEX_SOLO")" "CHEWBACCA" "chewie"
+    #extract_section "$(blist "$INDEX_SOLO")" "JABBA THE HUTT" "jabba"
+    #extract_section "$(blist "$INDEX_SOLO")" "UNCLE OWEN" "owen"
 fi
 if [ -n "$INDEX_DEMO" ]; then
     extract_demorch "$(blist "$INDEX_DEMO")" 'Demo' 'demo'
@@ -218,15 +210,14 @@ if [ -n "$INDEX_SCENE" ]; then
 fi
 
 
-if [ -n "$INDEX_REBELS" -a -n "$INDEX_EMPIRE" ]; then
+if [ -n "$INDEX_CHORUS" ]; then
     cat "$DIR"/{s,a,ac,t,b}-*.mp3.tmplist | sed \
         -e '/NOOP/d' \
         > X-all-voices.mp3.urllist
 fi
 
 set --
-if [ -n "$INDEX_REBELS" ]; then set -- "$@" rebels; fi
-if [ -n "$INDEX_EMPIRE" ]; then set -- "$@" empire; fi
+if [ -n "$INDEX_CHORUS" ]; then set -- "$@" chorus; fi
 for ch in "$@"; do
     for vp in s a t b; do
         cp "$DIR"/"$vp"-"$ch".mp3.tmplist X-"$vp"-"$ch".mp3.urllist
@@ -235,87 +226,84 @@ done
 
 ### Katarina (Luke!!!)
 # MP3s
-if [ -n "$INDEX_SOLO" ]; then
-    cat "$DIR"/luke.mp3.tmplist | sed \
-        -e '/NOOP/d' \
-        > Katarina.mp3.urllist
-fi
-if [ -n "$INDEX_REBELS" ]; then
-    cp "$DIR"/s-rebels.mp3.tmplist s-rebels.mp3.urllist
+#if [ -n "$INDEX_SOLO" ]; then
+#    cat "$DIR"/luke.mp3.tmplist | sed \
+#        -e '/NOOP/d' \
+#        > Katarina.mp3.urllist
+#fi
+if [ -n "$INDEX_CHORUS" ]; then
+    cp "$DIR"/s-chorus.mp3.tmplist s-chorus.mp3.urllist
 fi
 
 ### bert (Chewie!!!)
 # MP3s
-if [ -n "$INDEX_SOLO" -a -n "$INDEX_REBELS" -a \
-     -n "$INDEX_DEMO" -a -n "$INDEX_ORCH" ]; then
-    cat "$DIR"/chewie.mp3.tmplist | sed \
-	-e '/Alderaan/,$d' \
-        > bert.mp3.urllist
-    cat "$DIR"/t-rebels.mp3.tmplist | sed \
-	-e '/I.m the Best.*Aliens/I,/Jabba/I!d' \
-        >> bert.mp3.urllist
-    cat "$DIR"/chewie.mp3.tmplist | sed \
-	-e '/Alderaan/,$!d' \
-	-e '/Alderaan.*orchestra/,$d' \
-        >> bert.mp3.urllist
-    cat "$DIR"/orchestra.mp3.tmplist | sed \
-	-e '/Alderaan/!d' \
-        >> bert.mp3.urllist
-    cat "$DIR"/demo.mp3.tmplist | sed \
-	-e '/Alderaan/!d' \
-        >> bert.mp3.urllist
-    cat "$DIR"/chewie.mp3.tmplist | sed \
-	-e '1,/Alderaan.*orchestra/d' \
-	-e '1,/Prisoner.*Lament.*Chewbacca singing/I!d' \
-	-e '/Our Darkest Hour 2/I{;/Alderaan/!d;}' \
-        >> bert.mp3.urllist
-    cat "$DIR"/demo.mp3.tmplist | sed \
-	-e '/Prisoner.*Lament/I!d' \
-        >> bert.mp3.urllist
-    cat "$DIR"/chewie.mp3.tmplist | sed \
-	-e '1,/Prisoner.*Lament.*Chewbacca singing/Id' \
-	-e '1,/Prisoner Transfer.*without Chewbacca/I!d' \
-        >> bert.mp3.urllist
-    cat "$DIR"/demo.mp3.tmplist | sed \
-	-e '/Prisoner Transfer/I!d' \
-        >> bert.mp3.urllist
-    cat "$DIR"/t-rebels.mp3.tmplist | sed \
-	-e '/Grand Finale.*beginning/I!d' \
-        >> bert.mp3.urllist
-    cat "$DIR"/chewie.mp3.tmplist | sed \
-	-e '1,/Prisoner Transfer.*without Chewbacca/Id' \
-        >> bert.mp3.urllist
-    cat "$DIR"/t-rebels.mp3.tmplist | sed \
-	-e '/Grand Finale.*end/I,$!d' \
-        >> bert.mp3.urllist
-fi
-if [ -n "$INDEX_REBELS" ]; then
-    cp "$DIR"/t-rebels.mp3.tmplist t-rebels.mp3.urllist
+#if [ -n "$INDEX_SOLO" -a -n "$INDEX_CHORUS" -a \
+#     -n "$INDEX_DEMO" -a -n "$INDEX_ORCH" ]; then
+#    cat "$DIR"/chewie.mp3.tmplist | sed \
+#	-e '/Alderaan/,$d' \
+#        > bert.mp3.urllist
+#    cat "$DIR"/t-chorus.mp3.tmplist | sed \
+#	-e '/I.m the Best.*Aliens/I,/Jabba/I!d' \
+#        >> bert.mp3.urllist
+#    cat "$DIR"/chewie.mp3.tmplist | sed \
+#	-e '/Alderaan/,$!d' \
+#	-e '/Alderaan.*orchestra/,$d' \
+#        >> bert.mp3.urllist
+#    cat "$DIR"/orchestra.mp3.tmplist | sed \
+#	-e '/Alderaan/!d' \
+#        >> bert.mp3.urllist
+#    cat "$DIR"/demo.mp3.tmplist | sed \
+#	-e '/Alderaan/!d' \
+#        >> bert.mp3.urllist
+#    cat "$DIR"/chewie.mp3.tmplist | sed \
+#	-e '1,/Alderaan.*orchestra/d' \
+#	-e '1,/Prisoner.*Lament.*Chewbacca singing/I!d' \
+#	-e '/Our Darkest Hour 2/I{;/Alderaan/!d;}' \
+#        >> bert.mp3.urllist
+#    cat "$DIR"/demo.mp3.tmplist | sed \
+#	-e '/Prisoner.*Lament/I!d' \
+#        >> bert.mp3.urllist
+#    cat "$DIR"/chewie.mp3.tmplist | sed \
+#	-e '1,/Prisoner.*Lament.*Chewbacca singing/Id' \
+#	-e '1,/Prisoner Transfer.*without Chewbacca/I!d' \
+#        >> bert.mp3.urllist
+#    cat "$DIR"/demo.mp3.tmplist | sed \
+#	-e '/Prisoner Transfer/I!d' \
+#        >> bert.mp3.urllist
+#    cat "$DIR"/t-chorus.mp3.tmplist | sed \
+#	-e '/Grand Finale.*beginning/I!d' \
+#        >> bert.mp3.urllist
+#    cat "$DIR"/chewie.mp3.tmplist | sed \
+#	-e '1,/Prisoner Transfer.*without Chewbacca/Id' \
+#        >> bert.mp3.urllist
+#    cat "$DIR"/t-chorus.mp3.tmplist | sed \
+#	-e '/Grand Finale.*end/I,$!d' \
+#        >> bert.mp3.urllist
+#fi
+if [ -n "$INDEX_CHORUS" ]; then
+    cp "$DIR"/t-chorus.mp3.tmplist t-chorus.mp3.urllist
 fi
 
 ### Abbe and Luka (???)
 # MP3s
-if [ -n "$INDEX_REBELS" ]; then
-    cat "$DIR"/a-rebels.mp3.tmplist | sed \
-        -e '/Droids/Id' \
-        -e '/a cappella/Id' \
-        -e '/Sandpeople/Id' \
-        -e '/Ghosts/Id' \
-        > Abbe+Luka.mp3.urllist
+#if [ -n "$INDEX_CHORUS" ]; then
+#    cat "$DIR"/a-chorus.mp3.tmplist | sed \
+#        -e '/Droids/Id' \
+#        -e '/a cappella/Id' \
+#        -e '/Sandpeople/Id' \
+#        -e '/Ghosts/Id' \
+#        > Abbe+Luka.mp3.urllist
+#fi
+if [ -n "$INDEX_CHORUS" ]; then
+    cp "$DIR"/a-chorus.mp3.tmplist a-chorus.mp3.urllist
 fi
 
 ### burning CDs
-if [ -e .generate-cd -a -n "$INDEX_REBELS" ]; then
-    : ##cp "$DIR"/s-rebels.mp3.tmplist s-rebels.mp3.urllist
-    cp "$DIR"/a-rebels.mp3.tmplist a-rebels.mp3.urllist
-    cp "$DIR"/t-rebels.mp3.tmplist t-rebels.mp3.urllist
-    : ##cp "$DIR"/b-rebels.mp3.tmplist b-rebels.mp3.urllist
-fi
-if [ -e .generate-cd -a -n "$INDEX_EMPIRE" ]; then
-    : #cp "$DIR"/s-empire.mp3.tmplist s-empire.mp3.urllist
-    : #cp "$DIR"/a-empire.mp3.tmplist a-empire.mp3.urllist
-    : #cp "$DIR"/t-empire.mp3.tmplist t-empire.mp3.urllist
-    : ##cp "$DIR"/b-empire.mp3.tmplist b-empire.mp3.urllist
+if [ -e .generate-cd -a -n "$INDEX_CHORUS" ]; then
+    : ##cp "$DIR"/s-chorus.mp3.tmplist s-chorus.mp3.urllist
+    cp "$DIR"/a-chorus.mp3.tmplist a-chorus.mp3.urllist
+    cp "$DIR"/t-chorus.mp3.tmplist t-chorus.mp3.urllist
+    : ##cp "$DIR"/b-chorus.mp3.tmplist b-chorus.mp3.urllist
 fi
 
 #####  video

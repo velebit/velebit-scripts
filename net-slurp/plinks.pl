@@ -318,16 +318,29 @@ sub get_markup_headings ( $ ) {
   $node->look_down(_tag => qr/^(?:title|h\d)$/);
 }
 
+sub is_valid_display_heading ( $ ) {
+  my ($node) = @_;
+  return unless $node;
+  return 1 if $node->tag =~ qr/^(?:title|h\d)$/;
+  if ($node->tag eq 'strong') {
+    return 0 unless $node->parent->tag =~ /^(?:p|dt|div)$/;
+
+    my @left_nodes = nonempty($node->left);
+    return 0 if @left_nodes and $left_nodes[-1]->tag !~ /^(?:br|hr)$/;
+
+    my @right_nodes = nonempty($node->right);
+    shift @right_nodes if @right_nodes and $right_nodes[0]->tag eq 'a';
+    return 0 if @right_nodes and $right_nodes[0]->tag ne 'br';
+
+    return 1;
+  }
+  0;
+}
+
 sub get_display_headings ( $ ) {
   my ($node) = @_;
   return unless $node;
-  my ($left, $right);
-  grep(($_->tag ne 'strong'
-        or ($_->parent->tag =~ /^(?:p|dt|div)$/
-            and ((($left = (nonempty($_->left))[-1]) ? $left->tag : '')
-                 =~ /^(?:br|hr|)$/)
-            and ((($right = (nonempty($_->right))[0]) ? $right->tag : '')
-                 =~ /^(?:br|)$/))),
+  grep(is_valid_display_heading($_),
        $node->look_down(_tag => qr/^(?:title|h\d|strong)$/));
 }
 

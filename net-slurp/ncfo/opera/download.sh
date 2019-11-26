@@ -7,7 +7,7 @@ file_dir="$mp3_dir"
 #log=download-"$type".log
 log=download.log
 
-all_uris=("$rebels_uri" "$empire_uri" "$solo_uri" "$demo_uri")
+all_uris=("$chorus_uri" "$solo_uri" "$demo_uri")
 
 for file in "${all_uris[@]##*/}"; do
     if [ -f "$html_dir/$file.html" ]; then
@@ -34,8 +34,7 @@ for file in "${all_uris[@]##*/}"; do
     rm -f "$html_dir/$file.html"; mv "$html_dir/$file" "$html_dir/$file.html"
 done
 
-./make-url-lists.sh --rebels "$html_dir/${rebels_uri##*/}.html" \
-                    --empire "$html_dir/${empire_uri##*/}.html" \
+./make-url-lists.sh --chorus "$html_dir/${chorus_uri##*/}.html" \
                     --solo "$html_dir/${solo_uri##*/}.html" \
                     --demo "$html_dir/${demo_uri##*/}.html" \
                     --orch "$html_dir/${demo_uri##*/}.html"
