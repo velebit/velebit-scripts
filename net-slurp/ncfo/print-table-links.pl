@@ -324,9 +324,11 @@ sub is_valid_display_heading ( $ ) {
     my @left_nodes = nonempty($node->left);
     return 0 if @left_nodes and $left_nodes[-1]->tag !~ /^(?:br|hr)$/;
 
-    my @right_nodes = nonempty($node->right);
-    shift @right_nodes if @right_nodes and $right_nodes[0]->tag eq 'a';
-    return 0 if @right_nodes and $right_nodes[0]->tag ne 'br';
+    if (0) {
+      my @right_nodes = nonempty($node->right);
+      shift @right_nodes if @right_nodes and $right_nodes[0]->tag eq 'a';
+      return 0 if @right_nodes and $right_nodes[0]->tag ne 'br';
+    }
 
     return 1;
   }
