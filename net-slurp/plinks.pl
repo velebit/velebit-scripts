@@ -7,6 +7,7 @@ use Getopt::Long;
 use HTML::TreeBuilder;
 use URI;
 use Carp qw( carp croak );
+use Text::Unidecode;
 
 $| = 1;
 
@@ -20,6 +21,7 @@ Arguments and general options:
   --verbose              (-v)  Print additional status messages to stderr.
                                Can be repeated.
   --base BASE_URI              Use BASE_URI as the base for relative links.
+  --ascii-text           (-7)  Print text (but not the URI!) as ASCII, without accents etc.
 Data selection options:
   --table-level LEVEL   (-tl)  Only show links within LEVEL nested tables.
   --not-in-table               Shorthand for `--table-level 0'.
@@ -92,16 +94,19 @@ sub strip_prefix ( $$ ) {
 }
 
 
+our $VERBOSITY = 0;
+our $TABLE_LEVEL;
+our $BASE_URI;
+our $TEXT_AS_ASCII = 0;
+
 our $WHITESPACE_MAX_IGNORED = 1;
 our $WHITESPACE_DELTA_IGNORED = 0;
 
 our $PRECEDING_LESS_INDENTED_TEXT_MAX_LINES = 999;
 
-our $VERBOSITY = 0;
-our $TABLE_LEVEL;
-our $BASE_URI;
 GetOptions('verbose|v+' => \$VERBOSITY,
            'base=s' => \$BASE_URI,
+           'ascii-text|7!' => \$TEXT_AS_ASCII,
            'table-level|tl=i' => \$TABLE_LEVEL,
            'not-in-table' => sub { $TABLE_LEVEL = 0 },
            'show-heading|h!' =>
@@ -134,7 +139,9 @@ GetOptions('verbose|v+' => \$VERBOSITY,
 
 printf STDERR "    %-67s ", "Reading page..." if $VERBOSITY;
 my $tree = HTML::TreeBuilder->new;
-$tree->parse_file($ARGV[0]) or die "Could not read $ARGV[0]: $!\n";
+open my $file, '<:encoding(UTF-8)', $ARGV[0]
+  or die "Could not open $ARGV[0]: $!\n";
+$tree->parse_file($file) or die "Could not parse $ARGV[0]: $!\n";
 $tree->objectify_text();
 print STDERR "done.\n" if $VERBOSITY;
 
@@ -156,6 +163,7 @@ sub get_text ( @ ) {
   # 0xC2 0xA0 is the UTF-8 representation of U+00A0; this is a horrible hack.
   $text =~ s/[\s\xA0\xC2]+/ /sg;
   $text =~ s/^ //;  $text =~ s/ $//;
+  $text = unidecode($text) if $TEXT_AS_ASCII;
   $text;
 }
 
@@ -191,7 +199,7 @@ sub get_in_between_nodes ( $$ ) {
   if ($ftop and $ttop) {
       $ftop->parent == $ttop->parent or croak;  # inconsistent lineage -> error
       $ftop->pindex >= $ttop->pindex
-	  and return ();  # nodes are in reverse order -> span is ()
+        and return ();  # nodes are in reverse order -> span is ()
   }
   my @span;
   push @span, $_->right for @fparents;
@@ -376,9 +384,9 @@ sub is_valid_display_heading ( $ ) {
     return 0 if @left_nodes and $left_nodes[-1]->tag !~ /^(?:br|hr)$/;
 
     if (0) {
-	my @right_nodes = nonempty($node->right);
-	shift @right_nodes if @right_nodes and $right_nodes[0]->tag eq 'a';
-	return 0 if @right_nodes and $right_nodes[0]->tag ne 'br';
+      my @right_nodes = nonempty($node->right);
+      shift @right_nodes if @right_nodes and $right_nodes[0]->tag eq 'a';
+      return 0 if @right_nodes and $right_nodes[0]->tag ne 'br';
     }
 
     return 1;

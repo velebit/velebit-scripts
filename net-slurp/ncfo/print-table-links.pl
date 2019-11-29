@@ -10,6 +10,7 @@ use HTML::TreeBuilder;
 # Doesn't use other existing modules for a wide variety of reasons, including I can't look through all of them.
 use URI;
 use Carp qw( carp croak );
+use Text::Unidecode;
 
 $| = 1;
 
@@ -23,6 +24,7 @@ Arguments and general options:
   --verbose              (-v)  Print additional status messages to stderr.
                                Can be repeated.
   --base BASE_URI              Use BASE_URI as the base for relative links.
+  --ascii-text           (-7)  Print text (but not the URI!) as ASCII, without accents etc.
   --separator SEP              String used to separate entries when combined in
                                a single output field.
 Data selection options:
@@ -134,13 +136,17 @@ sub strip_prefix ( $$ ) {
 our $VERBOSITY = 0;
 our $TABLE_LEVEL;
 our $BASE_URI;
+our $TEXT_AS_ASCII = 0;
+
 our $SPLIT_AT_LINE_BREAKS = 1;
 our $CELL_SEPARATOR = ' // ';
+
 GetOptions('verbose|v+' => \$VERBOSITY,
            'base=s' => \$BASE_URI,
-	   'separator=s' => \$CELL_SEPARATOR,
+           'ascii-text|7!' => \$TEXT_AS_ASCII,
+           'separator=s' => \$CELL_SEPARATOR,
            'table-level|tl=i' => \$TABLE_LEVEL,
-	   'ignore-breaks|ibr!' => sub { $SPLIT_AT_LINE_BREAKS = ! $_[1] },
+           'ignore-breaks|ibr!' => sub { $SPLIT_AT_LINE_BREAKS = ! $_[1] },
            'show-heading|h!' =>
            sub { add_rm_field PRE_TABLE_HEADING, $_[1] },
            'show-bold-or-heading|hb!' =>
@@ -157,11 +163,11 @@ GetOptions('verbose|v+' => \$VERBOSITY,
            sub { add_rm_field SAME_ENTRY_TEXT_BEFORE_LINK, $_[1] },
            'show-same-entry-text-after-link|entry-after|ea!' =>
            sub { add_rm_field SAME_ENTRY_TEXT_AFTER_LINK, $_[1] },
-	   'show-text-at-column|at-column|ec=i' =>
+           'show-text-at-column|at-column|ec=i' =>
            sub { add_rm_field SAME_ROW_ENTRY_TEXT_AT_COLUMN_prefix . $_[1], 1 },
-	   'show-text-at-row|at-row|er=i' =>
+           'show-text-at-row|at-row|er=i' =>
            sub { add_rm_field SAME_COLUMN_ENTRY_TEXT_AT_ROW_prefix . $_[1], 1 },
-	   'show-same-row-text|row-text|rr!' =>
+           'show-same-row-text|row-text|rr!' =>
            sub { add_rm_field SAME_ROW_TEXT, $_[1] },
            'show-same-row-text-before-cell|row-before|rb!' =>
            sub { add_rm_field SAME_ROW_TEXT_BEFORE_CELL, $_[1] },
@@ -176,7 +182,9 @@ GetOptions('verbose|v+' => \$VERBOSITY,
 
 printf STDERR "    %-67s ", "Reading page..." if $VERBOSITY;
 my $tree = HTML::TreeBuilder->new;
-$tree->parse_file($ARGV[0]) or die "Could not read $ARGV[0]: $!\n";
+open my $file, '<:encoding(UTF-8)', $ARGV[0]
+  or die "Could not open $ARGV[0]: $!\n";
+$tree->parse_file($file) or die "Could not parse $ARGV[0]: $!\n";
 $tree->objectify_text();
 print STDERR "done.\n" if $VERBOSITY;
 
@@ -200,6 +208,7 @@ sub get_text ( @ ) {
   # 0xC2 0xA0 is the UTF-8 representation of U+00A0; this is a horrible hack.
   $text =~ s/[\s\xA0\xC2]+/ /sg;
   $text =~ s/^ //;  $text =~ s/ $//;
+  $text = unidecode($text) if $TEXT_AS_ASCII;
   $text;
 }
 
@@ -218,7 +227,7 @@ sub get_in_between_nodes ( $$ ) {
   if ($ftop and $ttop) {
       $ftop->parent == $ttop->parent or croak;  # inconsistent lineage -> error
       $ftop->pindex >= $ttop->pindex
-	  and return ();  # nodes are in reverse order -> span is ()
+        and return ();  # nodes are in reverse order -> span is ()
   }
   my @span;
   push @span, $_->right for @fparents;
@@ -431,16 +440,16 @@ if (@tables) {
     for my $r (0..$#rows) {
       my $c = -1;
       for my $cell ($rows[$r]->content_list) {
-	$cell->tag =~ /^t[hd]$/ or croak "unexpected tag @{[$cell->tag]}";
-	++$c while $in_rowspan[$r][$c+1];
-	for (0..(($cell->attr('colspan') || 1)-1)) {
-	  ++$c;
-	  $in_rowspan[$r][$c]
-	    and croak "row span/column span intersection";
-	  $cells[$r][$c] = $cell;
-	  $cells[$r+$_][$c] = $cell, ++$in_rowspan[$r+$_][$c]
-	    for 1..(($cell->attr('rowspan') || 1)-1);
-	}
+        $cell->tag =~ /^t[hd]$/ or croak "unexpected tag @{[$cell->tag]}";
+        ++$c while $in_rowspan[$r][$c+1];
+        for (0..(($cell->attr('colspan') || 1)-1)) {
+          ++$c;
+          $in_rowspan[$r][$c]
+            and croak "row span/column span intersection";
+          $cells[$r][$c] = $cell;
+          $cells[$r+$_][$c] = $cell, ++$in_rowspan[$r+$_][$c]
+            for 1..(($cell->attr('rowspan') || 1)-1);
+        }
       }
       ++$c while $c < $#{$in_rowspan[$r]} && $in_rowspan[$r][$c+1];
       $c < $#{$cells[$r]} and croak;
@@ -469,17 +478,17 @@ if (@tables) {
   for my $table (@tables) {
     for my $r (0..($table->{rows}-1)) {
       for my $c (0..($table->{columns}-1)) {
-	my $cell = $table->{cells}[$r][$c];
-	for my $tag ($cell->look_down(_tag => 'a')) {
-	  exists $links{$tag} or next;  # skip already filtered out
-	  exists $links{$tag}{cell} and next;  # skip seen due to spans
-	  $links{$tag}{cell} = $cell;
-	  # these may be needed for many other checks/generators
-	  $links{$tag}{+ROW_NUMBER} = $r;
-	  $links{$tag}{+COLUMN_NUMBER} = $c;
-	  $links{$tag}{+CELL_LINE_NUMBER} =
-	    count_line_breaks_in get_in_between_nodes $cell, $tag;
-	}
+        my $cell = $table->{cells}[$r][$c];
+        for my $tag ($cell->look_down(_tag => 'a')) {
+          exists $links{$tag} or next;  # skip already filtered out
+          exists $links{$tag}{cell} and next;  # skip seen due to spans
+          $links{$tag}{cell} = $cell;
+          # these may be needed for many other checks/generators
+          $links{$tag}{+ROW_NUMBER} = $r;
+          $links{$tag}{+COLUMN_NUMBER} = $c;
+          $links{$tag}{+CELL_LINE_NUMBER} =
+            count_line_breaks_in get_in_between_nodes $cell, $tag;
+        }
       }
     }
   }
@@ -552,9 +561,9 @@ if (has_field SAME_ENTRY_TEXT_AFTER_LINK) {
     for my $field (@fields) {
       my $column = strip_prefix $field, SAME_ROW_ENTRY_TEXT_AT_COLUMN_prefix;
       for my $link (@links) {
-	my $line = $link->{+CELL_LINE_NUMBER} if $SPLIT_AT_LINE_BREAKS;
-	$link->{$field} = get_text get_entry($link->{table},
-					     $link->{row}, $column, $line);
+        my $line = $link->{+CELL_LINE_NUMBER} if $SPLIT_AT_LINE_BREAKS;
+        $link->{$field} = get_text get_entry($link->{table},
+                                             $link->{row}, $column, $line);
       }
     }
     print STDERR "done.\n" if $VERBOSITY;
@@ -568,8 +577,8 @@ if (has_field SAME_ENTRY_TEXT_AFTER_LINK) {
     for my $field (@fields) {
       my $row = strip_prefix $field, SAME_COLUMN_ENTRY_TEXT_AT_ROW_prefix;
       for my $link (@links) {
-	$link->{$field} = get_text get_entry($link->{table},
-					     $row, $link->{column}, undef);
+        $link->{$field} = get_text get_entry($link->{table},
+                                             $row, $link->{column}, undef);
       }
     }
     print STDERR "done.\n" if $VERBOSITY;
@@ -584,10 +593,10 @@ if (has_field SAME_ROW_TEXT) {
     my $table = $link->{table};
     $link->{+SAME_ROW_TEXT} =
       join($CELL_SEPARATOR,
-	   map(get_text($_),
-	       get_entries($table,
-			   $link->{row}, [ 0..($table->{columns}-1) ],
-			   $line)));
+           map(get_text($_),
+               get_entries($table,
+                           $link->{row}, [ 0..($table->{columns}-1) ],
+                           $line)));
   }
   print STDERR "done.\n" if $VERBOSITY;
 }
@@ -599,10 +608,10 @@ if (has_field SAME_ROW_TEXT_BEFORE_CELL) {
     my $table = $link->{table};
     $link->{+SAME_ROW_TEXT_BEFORE_CELL} =
       join($CELL_SEPARATOR,
-	   map(get_text($_),
-	       get_entries($table,
-			   $link->{row}, [ 0..($link->{column}-1) ],
-			   $line)));
+           map(get_text($_),
+               get_entries($table,
+                           $link->{row}, [ 0..($link->{column}-1) ],
+                           $line)));
   }
   print STDERR "done.\n" if $VERBOSITY;
 }
@@ -614,11 +623,11 @@ if (has_field SAME_ROW_TEXT_AFTER_CELL) {
     my $table = $link->{table};
     $link->{+SAME_ROW_TEXT_AFTER_CELL} =
       join($CELL_SEPARATOR,
-	   map(get_text($_),
-	       get_entries($table,
-			   $link->{row},
-			   [ ($link->{column}+1)..($table->{columns}-1) ],
-			   $line)));
+           map(get_text($_),
+               get_entries($table,
+                           $link->{row},
+                           [ ($link->{column}+1)..($table->{columns}-1) ],
+                           $line)));
   }
   print STDERR "done.\n" if $VERBOSITY;
 }
