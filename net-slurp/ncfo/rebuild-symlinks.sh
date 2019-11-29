@@ -61,10 +61,13 @@ if [ "$subdir" != "-" ]; then
     ln -s "$TOP"/"$subdir"/*.*[^~] .
 fi
 if [ "$subdir" != "audition" ]; then
-    # in most cases, link everything from the top level
+    # in most cases, link everything from the top level...
     ln -s "$TOP"/*.*[^~] .
-    # ...plus plinks from one level up.
+    # ...plus plinks from one level up...
     ln -s /home/bert/scripts/net-slurp/plinks.pl .
+    # ...and a few things from the music directory.
+    ln -s /home/bert/scripts/music/id3wipe .
+    ln -s /home/bert/scripts/music/reduce-bitrate.sh .
 else
     # fallback: link at least this script from the top level!
     ln -s "$TOP"/"`basename "$0"`" .

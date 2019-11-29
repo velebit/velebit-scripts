@@ -50,7 +50,7 @@ sub process_file ( $$ ) {
     print STDERR "--- $out\n";
     system('cp', $in, $out) and die "cp failed.\n";
     if (/\.mp3$/i) {
-      $wipe_id3 and (system("$ENV{HOME}/scripts/music/id3wipe", '-f', $out)
+      $wipe_id3 and (system("./id3wipe", '-f', $out)
 		     and warn "id3wipe failed.\n");
       $adjust_gain and (system('replaygain', '-f', $out)
 			and warn "replaygain failed.\n");

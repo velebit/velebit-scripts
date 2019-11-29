@@ -1,4 +1,5 @@
-#!/bin/sh
+#!/bin/bash
+
 mp3_links_dir='../for-lo-fi/NCFO practice'
 video_out_dir='../video/lo-fi/'
 
@@ -18,6 +19,72 @@ case "`/bin/pwd`" in
 	esac
 	;;
 esac
+
+######################################################################
+
+rpath () {
+    local path="$1"; shift
+    local rprefix="$1"; shift
+    case "$rprefix" in
+	.|./)   rprefix= ;;
+	*/)     ;;
+	*)      rprefix="$rprefix/" ;;
+    esac
+    case "$path" in
+	/*) echo "$path" ;;
+	*)  echo "$rprefix$path" ;;
+    esac
+}
+
+rlpath () {
+    local path="$1"; shift
+    local prefix="$1"; shift
+    local rprefix="${1-$prefix}"; shift
+
+    local lpath="$(readlink "$(rpath "$path" "$rprefix")")"
+    while [ -n "$lpath" ]; do
+	path="$(rpath "$lpath" "$(dirname "$path")")"
+	lpath="$(readlink "$(rpath "$path" "$rprefix")")"
+    done
+    rpath "$path" "$prefix"
+}
+
+back_path () {
+    local path="$1"; shift
+    local wd="${1-.}"; shift
+    case "$path" in
+	/*) echo "$path"; return ;;
+    esac
+
+    wd="$(realpath "$wd")"
+    if [ -z "$wd" ]; then exit 9; fi
+    local back="."
+    while [ "x$path" != "x." ]; do
+	case "$path" in
+	    ./*)    path="${path#./}" ;;
+	    ../*)   back="$(basename "$wd")/$back"; wd="$(dirname "$wd")"
+		    path="${path#../}" ;;
+	    */?*)   back="../$back"; wd="$(realpath "$wd/${path%%/*}")"
+		    path="${path#*/}" ;;
+	    *)      back="../$back"; wd="$(realpath "$wd/$path")"
+		    path="." ;;
+	esac
+    done
+    echo "${back%/.}"
+}
+
+back_link () {
+    local path="$1"; shift
+    local wd="${1-.}"; shift
+
+    local dir="$(dirname "$path")"
+    local back="$(back_path "$dir" "$wd")/$(basename "$path")"
+    rm -f "$path"
+    #ln -s "$(rlpath "$back" "" "$dir")" "$path"
+    ln -s "$back" "$path"
+}
+
+######################################################################
 
 rm -rf "$mp3_links_dir"
 mkdir -p "$mp3_links_dir"
@@ -42,10 +109,10 @@ for i in ../*.m3u; do
 	ln -s ../../"$src" "$mp3_links_dir"/"$dst"
     fi
 done
-cp convert-mp3-lo-fi.sh "`dirname "$mp3_links_dir"`"
+back_link "$(dirname "$mp3_links_dir")"/convert-mp3-lo-fi.sh
 
 if [ -e convert-video-lo-fi.sh ]; then
     mkdir -p "$video_out_dir"
-    cp /home/bert/scripts/music/reduce-bitrate.sh "$video_out_dir"
-    cp convert-video-lo-fi.sh "`dirname "$video_out_dir"`"
+    back_link "$video_out_dir"/reduce-bitrate.sh
+    back_link "$(dirname "$video_out_dir")"/convert-video-lo-fi.sh
 fi
