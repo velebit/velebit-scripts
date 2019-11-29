@@ -30,6 +30,7 @@ else
 fi
 
 verbose=
+log_level='-v info -nostats'
 run=
 out_dir="`dirname "$0"`"
 out_dir="`abs_path "$out_dir"`"
@@ -56,6 +57,9 @@ while [ "$#" -gt 0 ]; do
              child_flags="$child_flags -R '$1'" ;;
 	-n)  run='echo $'; child_flags="$child_flags -n" ;;
 	-v)  verbose=yes; child_flags="$child_flags -v" ;;
+	-Vv) log_level='-v verbose -stats'; child_flags="$child_flags -Vv" ;;
+	-Vi) log_level='-v info -nostats'; child_flags="$child_flags -Vi" ;;
+	-Ve) log_level='-v error -nostats'; child_flags="$child_flags -Ve" ;;
 	--audio)  mode=audio; child_flags="$child_flags --audio" ;;
 	--video)  mode=video; child_flags="$child_flags --video" ;;
 	-*)  echo "Unknown flag '$arg'!" >&2; exit 1 ;;
@@ -86,7 +90,7 @@ while [ "$#" -gt 0 ]; do
 		    fi
 		else
 		    echo "> $new_dir/$new_file" >&2
-		    $run $ffmpeg -v verbose -y \
+		    $run $ffmpeg $log_level -y \
 			-i "$arg" -vn -b:a "$audio_rate" \
 			"$out_dir/$new_dir/$new_file" \
 			< /dev/null
@@ -116,7 +120,7 @@ while [ "$#" -gt 0 ]; do
 		    fi
 		else
 		    echo "> $new_dir/$new_file" >&2
-		    $run $ffmpeg -v verbose -y -strict experimental \
+		    $run $ffmpeg $log_level -y -strict experimental \
 			-i "$arg" -b:a "$audio_rate" \
 			"$out_dir/$new_dir/$new_file" \
 			< /dev/null
