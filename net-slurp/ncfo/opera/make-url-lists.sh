@@ -78,7 +78,7 @@ extract_table_section () {
     cat "$tlist" \
         | sed -e '/\.mp3$/I!d;/^'"$section"'/I!d' \
               -e 's/^[^	]*	//' \
-              -e '/^1	/d' `# skip column 1` \
+              -e '/^[01]	/d' `# skip column 1 (and 0, for Piper)` \
               -e '/^3	/s,^\([^	]*	[^	]*	\),\1pan w ,' \
               -e 's/^[^	]*	//' \
               -e 's/^Act \([^ 	]*\) Scene \([^ 	]*\)/\1.\2/I' \
@@ -100,6 +100,7 @@ extract_table_section () {
               -e 's/^\([^	]*\)(  */\1(/' \
               -e 's/^\([^	]*\)  *)/\1)/' \
               -e 's/   */ /g' -e 's/^  *//' -e 's/  *	/	/g' \
+              -e 's/, *,/,/;s/, *,/,/' -e 's/  *,/,/g' \
               -e 's/^\([^	]*\)	\(.*\)$/\2	'"$out_tag:$files_prefix"'\1'"$files_suffix"'/' \
               -e 's,\xe2\x80\x99,'\'',g' \
         > "$DIR"/"$file".mp3.tmplist
