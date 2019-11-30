@@ -11,6 +11,7 @@ use HTML::TreeBuilder;
 # Doesn't use other existing modules for a wide variety of reasons, including I can't look through all of them.
 use URI;
 use Carp qw( carp croak );
+use Unicode::Normalize ();
 use Text::Unidecode;
 
 $| = 1;
@@ -205,8 +206,10 @@ sub get_raw_text ( @ ) {
 sub get_text ( @ ) {
   my (@nodes) = @_;
   my $text = get_raw_text(@nodes);
+  $text = Unicode::Normalize::NFKC($text);
   # 0xA0 is a non-breaking space in Latin-1 and Unicode.
-  # 0xC2 0xA0 is the UTF-8 representation of U+00A0; this is a horrible hack.
+  # 0xC2 0xA0 is the UTF-8 representation of U+00A0; this is a horrible hack
+  # (which may no longer be needed; not bothering to test.)
   $text =~ s/[\s\xA0\xC2]+/ /sg;
   $text =~ s/^ //;  $text =~ s/ $//;
   $text = unidecode($text) if $TEXT_AS_ASCII;
