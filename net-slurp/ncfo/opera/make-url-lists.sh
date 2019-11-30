@@ -44,7 +44,7 @@ plist () {
     if [ ! -e "$plist" ]; then
         echo "... $plist" >&2
         ./plinks.pl -hb -li -plt -lt -lb -t -la \
-                    -7 --base "$base_uri" "$index" > "$plist"
+                    --base "$base_uri" "$index" > "$plist"
     fi
     echo "$plist"
 }
@@ -55,7 +55,7 @@ tlist () {
     if [ ! -e "$tlist" ]; then
         echo "... $tlist" >&2
         ./print-table-links.pl -hb -nc -rb -eb -t -ea -ra -sep '~' \
-			       -7 --base "$base_uri" "$index" > "$tlist"
+			       --base "$base_uri" "$index" > "$tlist"
     fi
     echo "$tlist"
 }
