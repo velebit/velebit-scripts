@@ -3,6 +3,7 @@
 # Based on plinks (for framework) and extract-column-links (for table handling).
 use warnings;
 use strict;
+use open ':std', ':encoding(UTF-8)';
 
 use Getopt::Long;
 use HTML::TreeBuilder;

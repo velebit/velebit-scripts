@@ -40,6 +40,7 @@
 
 use warnings;
 use strict;
+use open ':std', ':encoding(UTF-8)';
 use POSIX qw( ENOENT );
 
 my $SORTED = 0;

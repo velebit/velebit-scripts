@@ -6,13 +6,8 @@
 # already been encountered.
 use warnings;
 use strict;
+use open ':std', ':encoding(UTF-8)';
 use Getopt::Long;
-
-# allow Unicode (utf8-encoded) console output
-BEGIN {
-  binmode(STDOUT, ":utf8");
-  binmode(STDERR, ":utf8");
-};
 
 my $script = $0;  $script =~ s,.*[/\\],,;
 

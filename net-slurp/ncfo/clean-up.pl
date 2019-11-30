@@ -1,10 +1,9 @@
 #!/usr/bin/perl
 use warnings;
 use strict;
-use Getopt::Long;
-
 use utf8;
-use open qw(:std :utf8);
+use open ':std', ':encoding(UTF-8)';
+use Getopt::Long;
 
 our @IGNORED = ( 'html/' );
 our @DIRS = ();

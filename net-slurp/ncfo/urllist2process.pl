@@ -1,6 +1,7 @@
 #!/usr/bin/perl
 use warnings;
 use strict;
+use open ':std', ':encoding(UTF-8)';
 use Getopt::Long;
 
 our $SRC_PREFIX = 'mp3/';

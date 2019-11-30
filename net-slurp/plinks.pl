@@ -2,6 +2,7 @@
 # Show all links in a given page (file).
 use warnings;
 use strict;
+use open ':std', ':encoding(UTF-8)';
 
 use Getopt::Long;
 use HTML::TreeBuilder;
