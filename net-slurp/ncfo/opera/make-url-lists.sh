@@ -54,8 +54,8 @@ tlist () {
     local tlist="${index##*/}"; tlist="$DIR/${tlist%%.html}.t.tmplist"
     if [ ! -e "$tlist" ]; then
         echo "... $tlist" >&2
-        ./print-table-links.pl -hb -nc -rb -eb -t -ea -ra -sep '~' \
-			       --base "$base_uri" "$index" > "$tlist"
+        ./print-table-links.pl -hb -nc -rb -eb -t -ea -ra -sep '~' -sl \
+                               --base "$base_uri" "$index" > "$tlist"
     fi
     echo "$tlist"
 }
