@@ -176,6 +176,19 @@ extract_satb_sections () {
 
 if [ -n "$INDEX_CHORUS" ]; then
     extract_satb_sections "$(tlist "$INDEX_CHORUS")" '' ' MP3s' '' '-chorus'
+
+    extract_table_section "$(tlist "$INDEX_CHORUS")" "SUPPORTING" \
+                          "all-supporting"
+    for s in clement thomasina walter myles edmund \
+	     'cabin boy' \
+	     'reveler 1' 'reveler 2' 'reveler 3' 'reveler 4' \
+	     'captain gouda' 'henk' 'schenk' 'denk' \
+	     jolye dowland \
+	     soldier yeoman ; do
+	f="${s// /-}"
+	grep -i '\<'"$s"',' "$DIR"/all-supporting.mp3.tmplist \
+	     > "$DIR"/"$f".mp3.tmplist
+    done
 fi
 if [ -n "$INDEX_SOLO" ]; then
     extract_table_section "$(tlist "$INDEX_SOLO")" "Lady Mary" "lady-mary"
