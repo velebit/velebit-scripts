@@ -190,11 +190,11 @@ if [ -n "$INDEX_SOLO" ]; then
     extract_table_section "$(tlist "$INDEX_SOLO")" "Cicely" "cicely"
     extract_table_section "$(tlist "$INDEX_SOLO")" "Oswald" "oswald+susan"
     extract_table_section "$(tlist "$INDEX_SOLO")" "Don Diego" \
-			  "diego+felipe+leonora"
+                          "diego+felipe+leonora"
     extract_table_section "$(tlist "$INDEX_SOLO")" "Paco, Pepe" \
-			  "paco+pepe+pio+juancho"
+                          "paco+pepe+pio+juancho"
     extract_table_section "$(tlist "$INDEX_SOLO")" "Margery, Dorcas" \
-			  "margery+dorcas+amphillis+eunice+grissell"
+                          "margery+dorcas+amphillis+eunice+grissell"
 fi
 if [ -n "$INDEX_DEMO" ]; then
     extract_demorch "$(plist "$INDEX_DEMO")" 'Demo' 'demo'
@@ -363,12 +363,12 @@ if [ -e .generate-orchestra -a -e tmplists/orchestra.mp3.tmplist ]; then
     cat tmplists/orchestra.mp3.tmplist \
         > orchestra.mp3.urllist
 fi
-if [ -e .generate-scenes -a -e tmplists/scenes.mp3.tmplist ]; then
-    echo "... scenes (Red)" >&2
-    cat tmplists/scenes.mp3.tmplist \
-	| sed -e '/:I\.3/!{;/Gold/d;}' \
-        > scenes-red.mp3.urllist
-fi
+#if [ -e .generate-scenes -a -e tmplists/scenes.mp3.tmplist ]; then
+#    echo "... scenes (Red)" >&2
+#    cat tmplists/scenes.mp3.tmplist \
+#	| sed -e '/:I\.3/!{;/Gold/d;}' \
+#        > scenes-red.mp3.urllist
+#fi
 
 ### score PDFs
 
