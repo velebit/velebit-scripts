@@ -467,8 +467,10 @@ if (@tables) {
     for my $r (0..($table->{rows}-1)) {
       my $n0 = $table->{columns};
       my $nR = @{$cells[$r]};
-      $nR < $n0 and warn("warning: too few cells ($nR < $n0) in row $r");
-      $nR > $n0 and warn("warning: too many cells ($nR > $n0) in row $r");
+      $nR < $n0 and warn("warning: too few cells ($nR < $n0) in row $r" .
+                         " (near @{[$cells[$r][-1]->as_HTML]})");
+      $nR > $n0 and warn("warning: too many cells ($nR > $n0) in row $r" .
+                         " (near @{[$cells[$r][-1]->as_HTML]})");
     }
   }
   print STDERR "done.\n" if $VERBOSITY;
@@ -482,7 +484,7 @@ if (@tables) {
   for my $table (@tables) {
     for my $r (0..($table->{rows}-1)) {
       for my $c (0..($table->{columns}-1)) {
-        my $cell = $table->{cells}[$r][$c];
+        my $cell = $table->{cells}[$r][$c] or next;
         for my $tag ($cell->look_down(_tag => 'a')) {
           exists $links{$tag} or next;  # skip already filtered out
           exists $links{$tag}{cell} and next;  # skip seen due to spans
