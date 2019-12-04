@@ -26,7 +26,8 @@ Arguments and general options:
   --verbose              (-v)  Print additional status messages to stderr.
                                Can be repeated.
   --base BASE_URI              Use BASE_URI as the base for relative links.
-  --ascii-text           (-7)  Print text (but not the URI!) as ASCII, without accents etc.
+  --ascii-text           (-7)  Print text (but not the URI!) as ASCII, without
+                               accents etc.
   --separator SEP              String used to separate entries when combined in
                                a single output field.
 Data selection options:
@@ -34,6 +35,8 @@ Data selection options:
   --ignore-breaks      (-ibr)  Don't use line breaks as "sub-row" delimiters.
                                By default, an "entry" is a break-delimited line
                                within a cell.  With -ibr, an "entry" is a cell.
+Data ordering options:
+  --sort-by-line        (-sl)  Order links by row *and line* before column.
 Output options (extra fields printed before URI, separated by tabs):
   --show-heading         (-h)  Show text of <h#> or <title> tag before table.
   --show-bold-or-heading
@@ -142,6 +145,7 @@ our $TEXT_AS_ASCII = 0;
 
 our $SPLIT_AT_LINE_BREAKS = 1;
 our $CELL_SEPARATOR = ' // ';
+our $REORDER_BY_LINE = 0;
 
 GetOptions('verbose|v+' => \$VERBOSITY,
            'base=s' => \$BASE_URI,
@@ -149,6 +153,7 @@ GetOptions('verbose|v+' => \$VERBOSITY,
            'separator=s' => \$CELL_SEPARATOR,
            'table-level|tl=i' => \$TABLE_LEVEL,
            'ignore-breaks|ibr!' => sub { $SPLIT_AT_LINE_BREAKS = ! $_[1] },
+           'sort-by-line|by-line|sl!' => \$REORDER_BY_LINE,
            'show-heading|h!' =>
            sub { add_rm_field PRE_TABLE_HEADING, $_[1] },
            'show-bold-or-heading|hb!' =>
@@ -500,6 +505,27 @@ if (@tables) {
   }
   (exists $_->{+ROW_NUMBER} and exists $_->{+COLUMN_NUMBER})
     or croak  $_->{href} for @links;
+  print STDERR "done.\n" if $VERBOSITY;
+}
+
+if ($REORDER_BY_LINE) {
+  printf STDERR "    %-67s ", "Reordering links..." if $VERBOSITY;
+  $links[$_]{original_order} = $_ for 0..$#links;
+  {
+      my $current_table = '';  # any non-undef value will do
+      my $table_index = 0;
+      for my $link (@links) {
+          # update index on any table change, to deal w/ nested tables
+          ++$table_index, ($current_table = $link->{table})
+              if $current_table ne $link->{table};
+          $link->{table_order} = $table_index;
+      }
+  }
+  @links = sort { $a->{table_order} <=> $b->{table_order} or
+                  $a->{+ROW_NUMBER} <=> $b->{+ROW_NUMBER} or
+                  $a->{+CELL_LINE_NUMBER} <=> $b->{+CELL_LINE_NUMBER} or
+                  $a->{+COLUMN_NUMBER} <=> $b->{+COLUMN_NUMBER} or
+                  $a->{original_order} <=> $b->{original_order} } @links;
   print STDERR "done.\n" if $VERBOSITY;
 }
 
