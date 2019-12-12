@@ -37,6 +37,7 @@ Data selection options:
                                within a cell.  With -ibr, an "entry" is a cell.
 Data ordering options:
   --sort-by-line        (-sl)  Order links by row *and line* before column.
+  --output-by-line      (-ol)  Do --sort-by-line and repeat single-line links.
 Output options (extra fields printed before URI, separated by tabs):
   --show-heading         (-h)  Show text of <h#> or <title> tag before table.
   --show-bold-or-heading
@@ -146,6 +147,7 @@ our $TEXT_AS_ASCII = 0;
 our $SPLIT_AT_LINE_BREAKS = 1;
 our $CELL_SEPARATOR = ' // ';
 our $REORDER_BY_LINE = 0;
+our $REPEAT_SINGLE_LINE = 0;
 
 GetOptions('verbose|v+' => \$VERBOSITY,
            'base=s' => \$BASE_URI,
@@ -153,7 +155,9 @@ GetOptions('verbose|v+' => \$VERBOSITY,
            'separator=s' => \$CELL_SEPARATOR,
            'table-level|tl=i' => \$TABLE_LEVEL,
            'ignore-breaks|ibr!' => sub { $SPLIT_AT_LINE_BREAKS = ! $_[1] },
-           'sort-by-line|by-line|sl!' => \$REORDER_BY_LINE,
+           'sort-by-line|sl!' => \$REORDER_BY_LINE,
+           'output-by-line|by-line|ol!' =>
+           sub { $REORDER_BY_LINE = $REPEAT_SINGLE_LINE = $_[1] },
            'show-heading|h!' =>
            sub { add_rm_field PRE_TABLE_HEADING, $_[1] },
            'show-bold-or-heading|hb!' =>
@@ -488,8 +492,20 @@ if (@tables) {
 
   for my $table (@tables) {
     for my $r (0..($table->{rows}-1)) {
+      my $row_num_lines = undef;
+      my @cell_num_lines = (undef) x $table->{columns};
       for my $c (0..($table->{columns}-1)) {
         my $cell = $table->{cells}[$r][$c] or next;
+        my $cell_num_line_breaks = count_line_breaks_in $cell;
+        if ($cell_num_line_breaks > 0) {
+          $cell_num_lines[$c] = $cell_num_line_breaks+1;
+          (!defined $row_num_lines or $row_num_lines < $cell_num_lines[$c])
+            and $row_num_lines = $cell_num_lines[$c];
+        }
+      }
+      for my $c (0..($table->{columns}-1)) {
+        my $cell = $table->{cells}[$r][$c] or next;
+        my $cell_num_line_breaks = count_line_breaks_in $cell;
         for my $tag ($cell->look_down(_tag => 'a')) {
           exists $links{$tag} or next;  # skip already filtered out
           exists $links{$tag}{cell} and next;  # skip seen due to spans
@@ -497,8 +513,14 @@ if (@tables) {
           # these may be needed for many other checks/generators
           $links{$tag}{+ROW_NUMBER} = $r;
           $links{$tag}{+COLUMN_NUMBER} = $c;
-          $links{$tag}{+CELL_LINE_NUMBER} =
-            count_line_breaks_in get_in_between_nodes $cell, $tag;
+          $links{$tag}{+CELL_LINE_NUMBER} = undef;
+          my $line_number =
+            count_line_breaks_in get_in_between_nodes $cell, $tag
+            if defined $cell_num_lines[$c];
+          $links{$tag}{+CELL_LINE_NUMBER} = $line_number;
+          $links{$tag}{original_cell_line_number} = $line_number;
+          $links{$tag}{cell_num_lines} = $cell_num_lines[$c];
+          $links{$tag}{row_num_lines} = $row_num_lines;
         }
       }
     }
@@ -507,6 +529,30 @@ if (@tables) {
     or croak  $_->{href} for @links;
   print STDERR "done.\n" if $VERBOSITY;
 }
+
+sub replicate_if_single_line ( $ ) {
+  my ($link) = @_;
+  return $link if defined $link->{+CELL_LINE_NUMBER};
+  return $link if ! defined $link->{row_num_lines};
+
+  my @copies = map +{ %$link, (CELL_LINE_NUMBER) => $_ },
+    0..($link->{row_num_lines}-1);
+
+  # HACK: fix up %links bookkeeping too, as a side effect (!).
+  $links{$copies[0]{tag}} = $copies[0];
+
+  @copies;
+}
+
+if ($REPEAT_SINGLE_LINE) {
+  if (scalar grep((! defined $_->{+CELL_LINE_NUMBER}
+                   and defined $_->{row_num_lines}), @links)) {
+    printf STDERR "    %-67s ", "Replicating single lines..." if $VERBOSITY;
+    @links = map replicate_if_single_line($_), @links;
+    print STDERR "done.\n" if $VERBOSITY;
+  }
+}
+
 
 if ($REORDER_BY_LINE) {
   printf STDERR "    %-67s ", "Reordering links..." if $VERBOSITY;
@@ -523,7 +569,8 @@ if ($REORDER_BY_LINE) {
   }
   @links = sort { $a->{table_order} <=> $b->{table_order} or
                   $a->{+ROW_NUMBER} <=> $b->{+ROW_NUMBER} or
-                  $a->{+CELL_LINE_NUMBER} <=> $b->{+CELL_LINE_NUMBER} or
+                  (($a->{+CELL_LINE_NUMBER} || -1) <=>
+                   ($b->{+CELL_LINE_NUMBER} || -1)) or
                   $a->{+COLUMN_NUMBER} <=> $b->{+COLUMN_NUMBER} or
                   $a->{original_order} <=> $b->{original_order} } @links;
   print STDERR "done.\n" if $VERBOSITY;
