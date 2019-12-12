@@ -323,35 +323,35 @@ if [ -n "$INDEX_VIDEO" ]; then
     plist="$(plist "$INDEX_VIDEO")"
     cat "$plist" \
         | sed -e '/\.mp4$/I!d' \
-              -e '/MIRROR/I!d;/SLOW/Id' \
               -e 's/^[^	]*	//' -e 's/^[^	]*	//' \
               -e 's/^[^	]*	//' -e 's/^[^	]*	//' \
               -e 's/^[^	]*	//' -e 's/^[^	]*	//' \
               -e 's/^[^	]*	//' \
+              -e '/MIRROR/I!d;/SLOW/Id' \
               > mirror-fullsp.video.urllist
     cat "$plist" \
         | sed -e '/\.mp4$/I!d' \
-              -e '/MIRROR/Id;/SLOW/Id' \
               -e 's/^[^	]*	//' -e 's/^[^	]*	//' \
               -e 's/^[^	]*	//' -e 's/^[^	]*	//' \
               -e 's/^[^	]*	//' -e 's/^[^	]*	//' \
               -e 's/^[^	]*	//' \
+              -e '/MIRROR/Id;/SLOW/Id' \
               > regular-fullsp.video.urllist
     cat "$plist" \
         | sed -e '/\.mp4$/I!d' \
-              -e '/MIRROR/I!d;/SLOW/I!d' \
               -e 's/^[^	]*	//' -e 's/^[^	]*	//' \
               -e 's/^[^	]*	//' -e 's/^[^	]*	//' \
               -e 's/^[^	]*	//' -e 's/^[^	]*	//' \
               -e 's/^[^	]*	//' \
+              -e '/MIRROR/I!d;/SLOW/I!d' \
               > mirror-slow.video.urllist
     cat "$plist" \
         | sed -e '/\.mp4$/I!d' \
-              -e '/MIRROR/Id;/SLOW/I!d' \
               -e 's/^[^	]*	//' -e 's/^[^	]*	//' \
               -e 's/^[^	]*	//' -e 's/^[^	]*	//' \
               -e 's/^[^	]*	//' -e 's/^[^	]*	//' \
               -e 's/^[^	]*	//' \
+              -e '/MIRROR/Id;/SLOW/I!d' \
               > regular-slow.video.urllist
     cat "$plist" \
         | sed -e '/\.pdf$/I!d' \
