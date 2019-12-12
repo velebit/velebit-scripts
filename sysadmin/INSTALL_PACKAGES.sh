@@ -11,7 +11,7 @@ $install \
     smartmontools nvme-cli sysstat \
     discover hdparm \
     mdadm \
-    cryptsetup keyutils \
+    cryptsetup-bin cryptsetup-run keyutils \
     perl perl-doc \
     python3 ipython3 python3-pip \
     python3-tk \
@@ -30,6 +30,7 @@ $install \
     screen
 
 #    xfce4-mixer \
+# no need for crypt disk setup at boot (cryptsetup, cryptsetup-initramfs)
 
 ## development and the like
 $install \
