@@ -79,10 +79,10 @@ extract_table_section () {
         | sed -e '/\.mp3$/I!d;/^'"$section"'/I!d' \
               -e 's/^[^	]*	//' \
               -e '/^[01]	/d' `# skip column 1 (and 0, for Piper)` \
-              -e '/^3	/s,^\([^	]*	[^	]*	\),\1pan w ,' \
+              -e 's,^\(3	\)\([^	]*	\),\1pan \2w ,' \
               -e 's/^[^	]*	//' \
-              -e 's/^Act \([^ 	]*\) Scene \([^ 	]*\)/\1.\2/I' \
-              -e 's/^Scene \([^ 	]*\)/sc\1/I' \
+              -e 's/^\(pan \)\?Act \([^	 ]*\) Scene \([^	 ]*\)/\1\2.\3/I' \
+              -e 's/^\(pan \)\?Scene \([^ 	]*\)/\1sc\2/I' \
               -e 's/	/, /' \
               -e 's/	/ /' \
               -e 's/	/ /' \
@@ -181,12 +181,14 @@ if [ -n "$INDEX_CHORUS" ]; then
                           "all-supporting"
     for s in clement thomasina walter myles edmund \
              'cabin boy' \
-             'reveler 1' 'reveler 2' 'reveler 3' 'reveler 4' \
+             tavernkeeper 'reveler 1' 'reveler 2' 'reveler 3' 'reveler 4' \
              'captain gouda' 'henk' 'schenk' 'denk' \
              jolye dowland \
              soldier yeoman ; do
         f="${s// /-}"
-        grep -i '\<'"$s"',' "$DIR"/all-supporting.mp3.tmplist \
+        cat "$DIR"/all-supporting.mp3.tmplist \
+            | grep -i '\<'"$s"'\(,\| *&\)' \
+            | uniq \
              > "$DIR"/"$f".mp3.tmplist
     done
 fi
@@ -206,8 +208,8 @@ if [ -n "$INDEX_SOLO" ]; then
                           "diego+felipe+leonora"
     extract_table_section "$(tlist "$INDEX_SOLO")" "Paco, Pepe" \
                           "paco+pepe+pio+juancho"
-    extract_table_section "$(tlist "$INDEX_SOLO")" "Margery, Dorcas" \
-                          "margery+dorcas+amphillis+eunice+grissell"
+    extract_table_section "$(tlist "$INDEX_SOLO")" "Jeffries, Margery, Dorcas" \
+                          "jailers"
 fi
 if [ -n "$INDEX_DEMO" ]; then
     extract_demorch "$(plist "$INDEX_DEMO")" 'Demo' 'demo'

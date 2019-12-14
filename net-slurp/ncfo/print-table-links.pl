@@ -29,7 +29,7 @@ Arguments and general options:
   --ascii-text           (-7)  Print text (but not the URI!) as ASCII, without
                                accents etc.
   --separator SEP              String used to separate entries when combined in
-                               a single output field.
+                               a single output field.  [default: ' // ']
 Data selection options:
   --table-level LEVEL   (-tl)  Only show links within LEVEL nested tables.
   --ignore-breaks      (-ibr)  Don't use line breaks as "sub-row" delimiters.
