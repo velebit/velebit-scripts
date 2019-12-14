@@ -210,10 +210,10 @@ my $width_hosts = 8 + clamp(int(($columns - 44) / 3), 0, 22);
 my $width_info = max($columns - (17+2+$width_hosts+1+10+1), 8);
 
 my %hosts = Hosts->new($host_info)->get;
-for my $leases (@lease_info) {
-  my %leases = Leases->new($leases)->get;
-  for my $mac (sort {($leases{$a}{date} || '') cmp ($leases{$b}{date} || '')}
-	       keys %leases) {
+{
+  my %leases = Leases->new(@lease_info)->get;
+  for my $mac (sort {($leases{$b}{date} || '') cmp ($leases{$a}{date} || '')}
+               keys %leases) {
     my $info = get_mac_info $mac;
     my $date = $leases{$mac}->{date} if exists $leases{$mac}->{date};
     printf "%-17s  %s %s %s\n", $mac, col($width_hosts, $hosts{$mac}),
