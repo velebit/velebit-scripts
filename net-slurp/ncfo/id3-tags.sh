@@ -14,6 +14,8 @@ id3_album_suffix=" practice"
 id3_playlist_strip_style=word2
 id3_track_strip_style=none
 
+msg_dir_prefix=
+
 update_tags_from_playlist () {
     local playlist="$1"
     local who="`echo "$playlist" | sed -e 's/\..*//'`"
@@ -64,7 +66,7 @@ default_playlists () {
 
 process_playlist () {
     local playlist="$1"
-    echo "Updating tags for playlist $playlist..."
+    echo "Updating tags for playlist $msg_dir_prefix$playlist..."
     LOG=id3-tags."$playlist".log
     update_tags_from_playlist "$playlist" > "$LOG" 2>&1
     sed -e '/^Updating tags for /d;/^Need to change /d' "$LOG"
@@ -101,6 +103,8 @@ while true; do
 	-k|--keep) old_tag_args=(); new_tag_args=(); shift ;;
 	-3|-2.3) new_tag_args=(--to-v2.3); shift ;;
 	-4|-2.4) new_tag_args=(--to-v2.4); shift ;;
+	-d) if ! cd "$2"; then echo "$0: couldn't cd to '$2'!" >&2; exit 1; fi
+	    msg_dir_prefix="$msg_dir_prefix$2/"; shift; shift ;;
 	*)  break ;;
     esac
 done

@@ -33,6 +33,8 @@ if [ ! -d "$DIR" ]; then mkdir "$DIR"; fi
 
 base_uri=http://www.familyopera.org/drupal/DUMMY/
 
+do_generate_zip=
+if [ -e .generate-zip ]; then do_generate_zip=yes; fi
 do_generate_cd=
 if [ -e .generate-cd ]; then do_generate_cd=yes; fi
 do_generate_demo=
@@ -85,10 +87,15 @@ tlist () {
     echo "$tlist"
 }
 
-extract_table_section () {
+get_table_mp3_sections () {
+    local tlist="$1"; shift
+    sed -e '/\.mp3$/I!d;s/	.*//' "$tlist" | sort | uniq
+}
+
+extract_table_section_columns () {
     local tlist="$1"; shift
     local section="$1"; shift
-    local file="$1"; shift
+    local column="$1"; shift
     local files_prefix="$1"; shift
     local files_suffix="$1"; shift
 
@@ -103,7 +110,7 @@ extract_table_section () {
     cat "$tlist" \
         | sed -e '/\.mp3$/I!d;/^'"$section"'/I!d' \
               -e 's/^[^	]*	//' \
-              -e '/^[01]	/d' `# skip column 1 (and 0, for Piper)` \
+              -e '/^'"$column"'	/!d' `# select columns to extract` \
               -e 's,^\(3	\)\([^	]*	\),\1pan \2w ,' \
               -e 's/^[^	]*	//' \
               -e 's/^\(pan \)\?Act \([^	 ]*\) Scene \([^	 ]*\)/\1\2.\3/I' \
@@ -127,7 +134,18 @@ extract_table_section () {
               -e 's/   */ /g' -e 's/^  *//' -e 's/  *	/	/g' \
               -e 's/, *,/,/;s/, *,/,/' -e 's/  *,/,/g' \
               -e 's/^\([^	]*\)	\(.*\)$/\2	'"$out_tag:$files_prefix"'\1'"$files_suffix"'/' \
-              -e 's,\xe2\x80\x99,'\'',g' \
+              -e 's,\xe2\x80\x99,'\'',g'
+}
+
+extract_table_section () {
+    local tlist="$1"; shift
+    local section="$1"; shift
+    local file="$1"; shift
+    local files_prefix="$1"; shift
+    local files_suffix="$1"; shift
+
+    extract_table_section_columns \
+        "$tlist" "$section" '[23]' "$files_prefix" "$files_suffix" \
         > "$DIR"/"$file".mp3.tmplist
 }
 
@@ -391,6 +409,26 @@ fi
 if [ -n "$INDEX_CHORUS" ]; then
     cp "$DIR"/a-chorus.mp3.tmplist a-chorus.mp3.urllist
 fi
+
+### generating zip files
+# for those, we keep David's original file names...
+
+if [ -n "$do_generate_zip" ]; then
+    for i in "$INDEX_CHORUS" "$INDEX_SOLO"; do
+        if [ -n "$i" ]; then
+            get_table_mp3_sections "$(tlist "$i")" \
+            | while read -r section; do
+                base="`echo "$section" \
+                       | perl -CSDA -lpe 's/\b([A-Z]+)\b/\u\L\1/g;s,/,,g'`"
+                extract_table_section_columns "$(tlist "$i")" \
+                                              "$section" '.*' '' '' \
+                    | sed -e 's/	.*$//' \
+                          > "$base".mp3zip.urllist
+                # some links may be repeated in the list, but that's OK
+            done
+        fi
+    done
+ fi
 
 ### burning CDs
 if [ -n "$do_generate_cd" -a -n "$INDEX_CHORUS" ]; then

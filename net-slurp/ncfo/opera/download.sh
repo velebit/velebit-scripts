@@ -38,7 +38,7 @@ done
                     --solo "$html_dir/${solo_uri##*/}.html" \
                     --demo "$html_dir/${demo_uri##*/}.html" \
                     --orch "$html_dir/${demo_uri##*/}.html"
-sed -e 's/	.*//' *."$type".urllist | sort | uniq \
+sed -e 's/	.*//' *."$type"*.urllist | sort | uniq \
     | sed -e '/\.[Mm][Pp]3$/!d' \
     > "$type"-master.urllist
 wget --load-cookies cookies.txt -i "$type"-master.urllist \

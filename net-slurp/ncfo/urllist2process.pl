@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/usr/bin/perl -CSDA
 use warnings;
 use strict;
 use open ':std', ':encoding(UTF-8)';

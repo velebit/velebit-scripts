@@ -1,6 +1,7 @@
 #!/bin/bash
 
 U2P_MP3_ARGS=()
+U2P_MP3ZIP_ARGS=(-d ../zip/pretty/)
 U2P_VIDEO_ARGS=(-s video/ -d ../video/)
 
 CF_ARGS=(--no-replace-any-prefix --prefix '')
@@ -51,6 +52,18 @@ if [ -e .copy-x ]; then set -- "$@" X*.mp3.urllist; fi
     | ./playlists-from-process.pl | inspect M6 \
     | ./process-files.pl "${PF_ARGS[@]}"
 
+do_id3_zip=
+set -- *.mp3zip.urllist
+if [ "$#" -gt 0 -a -e "$1" ]; then
+    do_id3_zip=yes
+    mkdir -p ../zip/pretty
+    ./urllist2process.pl "${U2P_MP3ZIP_ARGS[@]}" "$@" | inspect Z1 \
+	| ./omit-if-missing.pl | inspect Z3 \
+	| ./globally-uniq.pl --sfdd | inspect Z5 \
+	| ./playlists-from-process.pl -s '' | inspect Z6 \
+	| ./process-files.pl "${PF_ARGS[@]}"
+fi
+
 ./urllist2process.pl "${U2P_VIDEO_ARGS[@]}" *.video.urllist | inspect V1 \
     | ./process-files.pl "${PF_ARGS[@]}"
 
@@ -58,3 +71,6 @@ if [ -e .copy-x ]; then set -- "$@" X*.mp3.urllist; fi
 
 word_idx="`(./canonicalize-filenames.pl --print-short;echo and_add_1) | wc -w`"
 ./id3-tags.sh -p "`./canonicalize-filenames.pl -ps` " -tn -xw"$word_idx"
+if [ -n "$do_id3_zip" ]; then
+    ./id3-tags.sh -d zip/pretty -p '' -xx -s ''
+fi
