@@ -3,9 +3,6 @@ use warnings;
 use strict;
 use open ':std', ':encoding(UTF-8)';
 
-use Getopt::Long;
-use File::Basename qw( dirname );
-
 sub is_missing ( $ ) {
   my ($in) = @_;
   -f $in and return 0;
