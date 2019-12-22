@@ -21,6 +21,8 @@ $ignored_re =~ qr/$ignored_re/;
 
 my @referenced;
 my @added;
+my %code_counts;
+my %code_desc;
 
 open my $LOG, '<', $log or die "open($log): $!";
 while (<$LOG>) {
@@ -34,17 +36,34 @@ while (<$LOG>) {
       push @added, $file if /^Saving to: /;
     }
 
-  } elsif (/^\d{4}-\d{2}-\d{2} /) {
+  } elsif (/^(?:--)?\d{4}-\d{2}-\d{2} /) {
     # Don't complain about `...' in date lines; just skip them.
 
   } elsif (/[`‘][^`'‘’]*['’]/) {
     warn "Unexpected quoted name seen in\n    $_\n ";
+
+  } elsif (/^HTTP request sent.*\.\.\.\s*(\d+)\s*(.*)$/) {
+    ++$code_counts{$1};
+    $code_desc{$1} = $2;
   }
 }
 
 my %ref_dir = map +($_ => 1), @DIRS;
 m,^(.+)/, and $1 ne '.' and ++$ref_dir{$1} foreach @referenced;
 my @ref_dir = sort { $ref_dir{$b} <=> $ref_dir{$a} } keys %ref_dir;
+
+if (! %code_counts) {
+  print "Warning: no HTTP results were seen in the output!?\n";
+} else {
+  printf "HTTP: %4d file(s) ***FAILED TO BE RETRIEVED.***\n",
+    delete $code_counts{404} if exists $code_counts{404};
+  printf "HTTP: %4d file(s) were retrieved.\n",
+    delete $code_counts{200} if exists $code_counts{200};
+  printf "HTTP: %4d files have stayed the same.\n",
+    delete $code_counts{304} if exists $code_counts{304};
+  printf "HTTP: %4d files had status: %s %s.\n",
+    $code_counts{$_}, $_, $code_desc{$_} foreach keys %code_counts;
+}
 
 printf "%4d new file(s) were downloaded:\n", scalar @added if @added;
 print  "      $_\n" foreach @added;

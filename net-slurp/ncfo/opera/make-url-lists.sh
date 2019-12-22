@@ -1,6 +1,7 @@
 #!/bin/bash
 
 DO_WIPE=
+DO_CHECK_LINKS=
 INDEX_CHORUS=
 INDEX_SOLO=
 INDEX_DEMO=
@@ -12,7 +13,8 @@ INDEX_VIDEO=
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --wipe)     DO_WIPE=yes; shift ;;
-        #--mp3)      INDEX_MP3="$2"; shift; shift ;;
+        --check-links)
+                    DO_CHECK_LINKS=yes; shift ;;
         --chorus)   INDEX_CHORUS="$2"; shift; shift ;;
         --solo)     INDEX_SOLO="$2"; shift; shift ;;
         --demo)     INDEX_DEMO="$2"; shift; shift ;;
@@ -30,6 +32,29 @@ if [ -n "$DO_WIPE" ]; then rm -f *.urllist "$DIR"/*.urllist; fi
 if [ ! -d "$DIR" ]; then mkdir "$DIR"; fi
 
 base_uri=http://www.familyopera.org/drupal/DUMMY/
+
+do_generate_cd=
+if [ -e .generate-cd ]; then do_generate_cd=yes; fi
+do_generate_demo=
+if [ -e .generate-demo ]; then do_generate_demo=yes; fi
+do_generate_orchestra=
+if [ -e .generate-orchestra ]; then do_generate_orchestra=yes; fi
+do_generate_scenes=
+if [ -e .generate-scenes ]; then do_generate_scenes=yes; fi
+
+do_generate_all_voices=
+if [ -e .generate-all-voices ]; then do_generate_all_voices=yes; fi
+do_generate_all_supporting=
+if [ -e .generate-all-supporting ]; then do_generate_all_supporting=yes; fi
+do_generate_all_solos=
+if [ -e .generate-all-solos ]; then do_generate_all_solos=yes; fi
+
+if [ -n "$DO_CHECK_LINKS" ]; then
+    do_generate_cd=yes; do_generate_demo=yes
+    do_generate_orchestra=yes; do_generate_scenes=yes
+    do_generate_all_voices=yes; do_generate_all_supporting=yes
+    do_generate_all_solos=yes
+fi
 
 ##### generic prep
 
@@ -174,6 +199,49 @@ extract_satb_sections () {
     done
 }
 
+extract_solo_section () {
+    local tlist="$1"; shift
+    local section="$1"; shift
+    local file="$1"; shift
+    local files_prefix="$1"; shift
+    local files_suffix="$1"; shift
+
+    extract_table_section "$tlist" "$section" "$file" \
+                          "$files_prefix" "$files_suffix"
+
+    cat "$DIR"/"$file".mp3.tmplist >> "$DIR"/all-solos.mp3.tmplist
+}
+
+prepare_link_check () {
+    local index="$1"; shift
+    local base="${index##*/}"; base="$DIR/${base%%.html}"
+    echo "... $base.lc*.tmplist" >&2
+    ./plinks.pl --base "$base_uri" "$index" > "$base.lc0.tmplist"
+    sed -ne '/\.mp3$/Ip' "$base.lc0.tmplist" > "$base.lc-mp3.tmplist"
+    sed -ne '/\.pdf$/Ip' "$base.lc0.tmplist" > "$base.lc-pdf.tmplist"
+    sed -ne '/\.mp4$/Ip' "$base.lc0.tmplist" > "$base.lc-video.tmplist"
+    sed -e '/\.mp3$/Id;/\.pdf$/Id;/\.mp4$/Id' "$base.lc0.tmplist" \
+        > "$base.lc1.tmplist"
+    cat "$base.lc1.tmplist" | sed \
+        -e '\,^#,Id' \
+        -e '\,^https\?://www.drupal.org,Id' \
+        -e '\,^https\?://thaliarealtor.com,Id' \
+        -e '\,^https\?://thaliarealtor.com,Id' \
+        -e '\,^https\?://www.exceptionallives.org,Id' \
+        -e '\,^https\?://www.portersquarebooks.com,Id' \
+        -e '\,^https\?://familyopera.org/mailinglist.html$,d' \
+        -e '\,^https\?://www.familyopera.org/drupal/\?$,d' \
+        -e '\,^https\?://www.familyopera.org/drupal/[^\./][^\./]*/\?$,d' \
+        -e '\,^https\?://www.familyopera.org/drupal/node/[1-9][0-9]*$,d' \
+        -e '\,^https\?://www.familyopera.org/drupal/node/[^\./][^\./]*/\?$,d' \
+        -e '\,^https\?://www.familyopera.org/drupal/user/logout,d' \
+        > "$base.lcE.tmplist"
+    if [ -s "$base.lcE.tmplist" ]; then
+        sed -e 's/^/LNK unexpected: /' "$base.lcE.tmplist" >&2
+    fi
+}
+
+
 if [ -n "$INDEX_CHORUS" ]; then
     extract_satb_sections "$(tlist "$INDEX_CHORUS")" '' ' MP3s' '' '-chorus'
 
@@ -193,23 +261,23 @@ if [ -n "$INDEX_CHORUS" ]; then
     done
 fi
 if [ -n "$INDEX_SOLO" ]; then
-    extract_table_section "$(tlist "$INDEX_SOLO")" "Lady Mary" "lady-mary"
-    extract_table_section "$(tlist "$INDEX_SOLO")" "Sir Digory Piper" "piper"
-    extract_table_section "$(tlist "$INDEX_SOLO")" "Queen" "queen"
-    extract_table_section "$(tlist "$INDEX_SOLO")" "Sir Julius Caesar" "caesar"
-    extract_table_section "$(tlist "$INDEX_SOLO")" "Sir John K" "sir-john"
-    extract_table_section "$(tlist "$INDEX_SOLO")" "Parry" "parry"
-    extract_table_section "$(tlist "$INDEX_SOLO")" "Betty" "betty"
-    extract_table_section "$(tlist "$INDEX_SOLO")" "Ned" "ned"
-    extract_table_section "$(tlist "$INDEX_SOLO")" "Nan" "nan"
-    extract_table_section "$(tlist "$INDEX_SOLO")" "Cicely" "cicely"
-    extract_table_section "$(tlist "$INDEX_SOLO")" "Oswald" "oswald+susan"
-    extract_table_section "$(tlist "$INDEX_SOLO")" "Don Diego" \
-                          "diego+felipe+leonora"
-    extract_table_section "$(tlist "$INDEX_SOLO")" "Paco, Pepe" \
-                          "paco+pepe+pio+juancho"
-    extract_table_section "$(tlist "$INDEX_SOLO")" "Jeffries, Margery, Dorcas" \
-                          "jailers"
+    extract_solo_section "$(tlist "$INDEX_SOLO")" "Lady Mary" "lady-mary"
+    extract_solo_section "$(tlist "$INDEX_SOLO")" "Sir Digory Piper" "piper"
+    extract_solo_section "$(tlist "$INDEX_SOLO")" "Queen" "queen"
+    extract_solo_section "$(tlist "$INDEX_SOLO")" "Sir Julius Caesar" "caesar"
+    extract_solo_section "$(tlist "$INDEX_SOLO")" "Sir John K" "sir-john"
+    extract_solo_section "$(tlist "$INDEX_SOLO")" "Parry" "parry"
+    extract_solo_section "$(tlist "$INDEX_SOLO")" "Betty" "betty"
+    extract_solo_section "$(tlist "$INDEX_SOLO")" "Ned" "ned"
+    extract_solo_section "$(tlist "$INDEX_SOLO")" "Nan" "nan"
+    extract_solo_section "$(tlist "$INDEX_SOLO")" "Cicely" "cicely"
+    extract_solo_section "$(tlist "$INDEX_SOLO")" "Oswald" "oswald+susan"
+    extract_solo_section "$(tlist "$INDEX_SOLO")" "Don Diego" \
+                         "diego+felipe+leonora"
+    extract_solo_section "$(tlist "$INDEX_SOLO")" "Paco, Pepe" \
+                         "paco+pepe+pio+juancho"
+    extract_solo_section "$(tlist "$INDEX_SOLO")" "Jeffries, Margery, Dorcas" \
+                         "jailers"
 fi
 if [ -n "$INDEX_DEMO" ]; then
     extract_demorch "$(plist "$INDEX_DEMO")" 'Demo' 'demo'
@@ -224,81 +292,93 @@ if [ -n "$INDEX_SCENE" ]; then
 fi
 
 
-if [ -n "$INDEX_CHORUS" ]; then
+if [ -n "$do_generate_all_voices" -a -n "$INDEX_CHORUS" ]; then
     cat "$DIR"/{s,a,ac,t,b}-*.mp3.tmplist | sed \
         -e '/NOOP/d' \
         > X-all-voices.mp3.urllist
 fi
 
-set --
-if [ -n "$INDEX_CHORUS" ]; then set -- "$@" chorus; fi
-for ch in "$@"; do
-    for vp in s a t b; do
-        cp "$DIR"/"$vp"-"$ch".mp3.tmplist X-"$vp"-"$ch".mp3.urllist
+if [ -n "$do_generate_all_supporting" -a -n "$INDEX_CHORUS" ]; then
+    cat "$DIR"/all-supporting.mp3.tmplist | sed \
+        -e '/NOOP/d' \
+        > X-all-supporting.mp3.urllist
+fi
+
+if [ -n "$do_generate_all_solos" -a -n "$INDEX_SOLO" ]; then
+    cat "$DIR"/all-solos.mp3.tmplist | sed \
+        -e '/NOOP/d' \
+        > X-all-solos.mp3.urllist
+fi
+
+if [ -n "$DO_CHECK_LINKS" ]; then
+    for i in "$INDEX_CHORUS" "$INDEX_SOLO" "$INDEX_DEMO" "$INDEX_ORCH" \
+             "$INDEX_SCENE" "$INDEX_PDF" "$INDEX_VIDEO"; do
+        if [ -n "$i" ]; then
+            prepare_link_check "$i"
+        fi
     done
-done
-
-### Katarina (Luke!!!)
-# MP3s
-#if [ -n "$INDEX_SOLO" ]; then
-#    cat "$DIR"/luke.mp3.tmplist | sed \
-#        -e '/NOOP/d' \
-#        > Katarina.mp3.urllist
-#fi
-if [ -n "$INDEX_CHORUS" ]; then
-    cp "$DIR"/s-chorus.mp3.tmplist s-chorus.mp3.urllist
+    for i in mp3 pdf video; do
+        sort "$DIR"/*."lc-$i.tmplist" | uniq > X-link-check."$i".tmplist
+    done
 fi
 
-### bert (Chewie!!!)
+### Katarina (Clement/soprano 1)
 # MP3s
-#if [ -n "$INDEX_SOLO" -a -n "$INDEX_CHORUS" -a \
-#     -n "$INDEX_DEMO" -a -n "$INDEX_ORCH" ]; then
-#    cat "$DIR"/chewie.mp3.tmplist | sed \
-#	-e '/Alderaan/,$d' \
-#        > bert.mp3.urllist
-#    cat "$DIR"/t-chorus.mp3.tmplist | sed \
-#	-e '/I.m the Best.*Aliens/I,/Jabba/I!d' \
-#        >> bert.mp3.urllist
-#    cat "$DIR"/chewie.mp3.tmplist | sed \
-#	-e '/Alderaan/,$!d' \
-#	-e '/Alderaan.*orchestra/,$d' \
-#        >> bert.mp3.urllist
-#    cat "$DIR"/orchestra.mp3.tmplist | sed \
-#	-e '/Alderaan/!d' \
-#        >> bert.mp3.urllist
-#    cat "$DIR"/demo.mp3.tmplist | sed \
-#	-e '/Alderaan/!d' \
-#        >> bert.mp3.urllist
-#    cat "$DIR"/chewie.mp3.tmplist | sed \
-#	-e '1,/Alderaan.*orchestra/d' \
-#	-e '1,/Prisoner.*Lament.*Chewbacca singing/I!d' \
-#	-e '/Our Darkest Hour 2/I{;/Alderaan/!d;}' \
-#        >> bert.mp3.urllist
-#    cat "$DIR"/demo.mp3.tmplist | sed \
-#	-e '/Prisoner.*Lament/I!d' \
-#        >> bert.mp3.urllist
-#    cat "$DIR"/chewie.mp3.tmplist | sed \
-#	-e '1,/Prisoner.*Lament.*Chewbacca singing/Id' \
-#	-e '1,/Prisoner Transfer.*without Chewbacca/I!d' \
-#        >> bert.mp3.urllist
-#    cat "$DIR"/demo.mp3.tmplist | sed \
-#	-e '/Prisoner Transfer/I!d' \
-#        >> bert.mp3.urllist
-#    cat "$DIR"/t-chorus.mp3.tmplist | sed \
-#	-e '/Grand Finale.*beginning/I!d' \
-#        >> bert.mp3.urllist
-#    cat "$DIR"/chewie.mp3.tmplist | sed \
-#	-e '1,/Prisoner Transfer.*without Chewbacca/Id' \
-#        >> bert.mp3.urllist
-#    cat "$DIR"/t-chorus.mp3.tmplist | sed \
-#	-e '/Grand Finale.*end/I,$!d' \
-#        >> bert.mp3.urllist
-#fi
 if [ -n "$INDEX_CHORUS" ]; then
-    cp "$DIR"/t-chorus.mp3.tmplist t-chorus.mp3.urllist
+    cat "$DIR"/s-chorus.mp3.tmplist | sed \
+        -e '/Grace O.Malley/I,$d' \
+        -e '/Misrule-sop/Id' \
+       > Katarina.mp3.urllist
+    cat "$DIR"/clement.mp3.tmplist | sed \
+        -e 's/\(out_file:\)\(.*\)Clement, /\1Clement \2/' \
+        >> Katarina.mp3.urllist
+    cat "$DIR"/s-chorus.mp3.tmplist | sed \
+        -e '/Epiphany Cake/I,$!d' \
+        -e '/Cornwall-sop-2/Id' \
+        -e '/Epilogue-part2-sop/Id' \
+        >> Katarina.mp3.urllist
 fi
 
-### Abbe and Luka (???)
+### Luka (*enk/soprano 2)
+# MP3s
+if [ -n "$INDEX_CHORUS" ]; then
+    cat "$DIR"/s-chorus.mp3.tmplist | sed \
+        -e '/Aberdeen/I,$d' -e '/Ballad.*Reprise/I,$d' \
+        -e '/Misrule-desc/Id' \
+        -e '/Malley-sop-2-hi/Id' \
+        -e '/Cornwall-desc/Id' \
+        > Luka.mp3.urllist
+    cat "$DIR"/henk.mp3.tmplist | sed \
+        -e 's/\(out_file:\)\(.*\)Henk, /\1Henk \2/' \
+        >> Luka.mp3.urllist
+    cat "$DIR"/schenk.mp3.tmplist | sed \
+        -e 's/\(out_file:\)\(.*\)Schenk, /\1Schenk \2/' \
+        >> Luka.mp3.urllist
+    cat "$DIR"/denk.mp3.tmplist | sed \
+        -e 's/\(out_file:\)\(.*\)Denk, /\1Denk \2/' \
+        >> Luka.mp3.urllist
+    cat "$DIR"/s-chorus.mp3.tmplist | sed \
+        -e '/Ballad.*Reprise/I,$!d' \
+        -e '/Epilogue-part2-desc/Id' \
+        >> Luka.mp3.urllist
+fi
+
+### bert (Walter/tenor)
+# MP3s
+if [ -n "$INDEX_CHORUS" ]; then
+    cat "$DIR"/t-chorus.mp3.tmplist | sed \
+        -e '/Grace O.Malley/I,$d' \
+       > bert.mp3.urllist
+    cat "$DIR"/walter.mp3.tmplist | sed \
+        -e 's/\(out_file:\)\(.*\)Walter, /\1Walter \2/' \
+        >> bert.mp3.urllist
+    cat "$DIR"/t-chorus.mp3.tmplist | sed \
+        -e '/Grace O.Malley/I,$!d' \
+        -e '/Malley-tenor-2-lo/Id' \
+        >> bert.mp3.urllist
+fi
+
+### Abbe (???)
 # MP3s
 #if [ -n "$INDEX_CHORUS" ]; then
 #    cat "$DIR"/a-chorus.mp3.tmplist | sed \
@@ -313,10 +393,10 @@ if [ -n "$INDEX_CHORUS" ]; then
 fi
 
 ### burning CDs
-if [ -e .generate-cd -a -n "$INDEX_CHORUS" ]; then
+if [ -n "$do_generate_cd" -a -n "$INDEX_CHORUS" ]; then
     : ##cp "$DIR"/s-chorus.mp3.tmplist s-chorus.mp3.urllist
-    cp "$DIR"/a-chorus.mp3.tmplist a-chorus.mp3.urllist
-    cp "$DIR"/t-chorus.mp3.tmplist t-chorus.mp3.urllist
+    : ##cp "$DIR"/a-chorus.mp3.tmplist a-chorus.mp3.urllist
+    : ##cp "$DIR"/t-chorus.mp3.tmplist t-chorus.mp3.urllist
     : ##cp "$DIR"/b-chorus.mp3.tmplist b-chorus.mp3.urllist
 fi
 
@@ -366,22 +446,22 @@ if [ -n "$INDEX_VIDEO" ]; then
 fi
 
 ### demo MP3s
-if [ -e .generate-demo -a -e tmplists/demo.mp3.tmplist ]; then
+if [ -n "$do_generate_demo" -a -e tmplists/demo.mp3.tmplist ]; then
     echo "... demo" >&2
     cat tmplists/demo.mp3.tmplist \
         > demo.mp3.urllist
 fi
 
 ### orchestra-only MP3s
-if [ -e .generate-orchestra -a -e tmplists/orchestra.mp3.tmplist ]; then
+if [ -n "$do_generate_orchestra" -a -e tmplists/orchestra.mp3.tmplist ]; then
     echo "... orchestra" >&2
     cat tmplists/orchestra.mp3.tmplist \
         > orchestra.mp3.urllist
 fi
-#if [ -e .generate-scenes -a -e tmplists/scenes.mp3.tmplist ]; then
+#if [ -n "$do_generate_scenes" -a -e tmplists/scenes.mp3.tmplist ]; then
 #    echo "... scenes (Red)" >&2
 #    cat tmplists/scenes.mp3.tmplist \
-#	| sed -e '/:I\.3/!{;/Gold/d;}' \
+#        | sed -e '/:I\.3/!{;/Gold/d;}' \
 #        > scenes-red.mp3.urllist
 #fi
 
