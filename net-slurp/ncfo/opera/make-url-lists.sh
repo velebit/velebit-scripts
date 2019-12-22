@@ -92,8 +92,36 @@ get_table_mp3_sections () {
     sed -e '/\.mp3$/I!d;s/	.*//' "$tlist" | sort | uniq
 }
 
-extract_table_section_columns () {
+get_table_section_column () {
     local tlist="$1"; shift
+    local section="$1"; shift
+    local column="$1"; shift
+
+    local skips=()
+    local i
+    for ((i=0; i<"$column"; ++i)); do
+        skips+=(-e 's/^[^~	]*[~	]//')
+    done
+
+    cat "$tlist" \
+        | sed -e '/\.mp3$/I!d;/^'"$section"'/I!d' \
+              -e 's/^[^	]*	//' \
+              -e 's/^[^	]*	//' \
+              "${skips[@]}" \
+              -e 's/[~	].*//' \
+              "$tlist" \
+        | sort | uniq
+}
+
+filter_table_column () {
+    local column="$1"; shift
+    local value="$1"; shift
+
+    column=$((column+3))  # first awk column is 1, first data column is awk 3
+    awk -F '[~	]' -v value="$value" '($'"$column"' == value)'
+}
+
+process_table_section_columns () {
     local section="$1"; shift
     local column="$1"; shift
     local files_prefix="$1"; shift
@@ -107,34 +135,33 @@ extract_table_section_columns () {
         files_suffix="$files_suffix "
     fi
 
-    cat "$tlist" \
-        | sed -e '/\.mp3$/I!d;/^'"$section"'/I!d' \
-              -e 's/^[^	]*	//' \
-              -e '/^'"$column"'	/!d' `# select columns to extract` \
-              -e 's,^\(3	\)\([^	]*	\),\1pan \2w ,' \
-              -e 's/^[^	]*	//' \
-              -e 's/^\(pan \)\?Act \([^	 ]*\) Scene \([^	 ]*\)/\1\2.\3/I' \
-              -e 's/^\(pan \)\?Scene \([^ 	]*\)/\1sc\2/I' \
-              -e 's/	/, /' \
-              -e 's/	/ /' \
-              -e 's/	/ /' \
-              -e 's/^\([^	]*	\)[^	]*	/\1/' \
-              -e 's/~/ /' \
-              -e 's/~/, /' \
-              -e 's/^\([^	]*\)[:\*\?"<>|~]/\1/' \
-              -e 's/^\([^	]*\)[:\*\?"<>|~]/\1/' \
-              -e 's/^\([^	]*\)[:\*\?"<>|~]/\1/' \
-              -e 's/^\([^	]*\)[:\*\?"<>|~]/\1/' \
-              -e 's/^\([^	]*\)[:\*\?"<>|~]/\1/' \
-              -e 's/^\([^	]*\)[’]/\1'\''/' \
-              -e 's/^\([^	]*\)[’]/\1'\''/' \
-              -e 's/^\([^	]*\)[’]/\1'\''/' \
-              -e 's/^\([^	]*\)(  */\1(/' \
-              -e 's/^\([^	]*\)  *)/\1)/' \
-              -e 's/   */ /g' -e 's/^  *//' -e 's/  *	/	/g' \
-              -e 's/, *,/,/;s/, *,/,/' -e 's/  *,/,/g' \
-              -e 's/^\([^	]*\)	\(.*\)$/\2	'"$out_tag:$files_prefix"'\1'"$files_suffix"'/' \
-              -e 's,\xe2\x80\x99,'\'',g'
+    sed -e '/\.mp3$/I!d;/^'"$section"'/I!d' \
+        -e 's/^[^	]*	//' \
+        -e '/^'"$column"'	/!d' `# select columns to extract` \
+        -e 's,^\(3	\)\([^	]*	\),\1pan \2w ,' \
+        -e 's/^[^	]*	//' \
+        -e 's/^\(pan \)\?Act \([^	 ]*\) Scene \([^	 ]*\)/\1\2.\3/I' \
+        -e 's/^\(pan \)\?Scene \([^ 	]*\)/\1sc\2/I' \
+        -e 's/	/, /' \
+        -e 's/	/ /' \
+        -e 's/	/ /' \
+        -e 's/^\([^	]*	\)[^	]*	/\1/' \
+        -e 's/~/ /' \
+        -e 's/~/, /' \
+        -e 's/^\([^	]*\)[:\*\?"<>|~]/\1/' \
+        -e 's/^\([^	]*\)[:\*\?"<>|~]/\1/' \
+        -e 's/^\([^	]*\)[:\*\?"<>|~]/\1/' \
+        -e 's/^\([^	]*\)[:\*\?"<>|~]/\1/' \
+        -e 's/^\([^	]*\)[:\*\?"<>|~]/\1/' \
+        -e 's/^\([^	]*\)[’]/\1'\''/' \
+        -e 's/^\([^	]*\)[’]/\1'\''/' \
+        -e 's/^\([^	]*\)[’]/\1'\''/' \
+        -e 's/^\([^	]*\)(  */\1(/' \
+        -e 's/^\([^	]*\)  *)/\1)/' \
+        -e 's/   */ /g' -e 's/^  *//' -e 's/  *	/	/g' \
+        -e 's/, *,/,/;s/, *,/,/' -e 's/  *,/,/g' \
+        -e 's/^\([^	]*\)	\(.*\)$/\2	'"$out_tag:$files_prefix"'\1'"$files_suffix"'/' \
+        -e 's,\xe2\x80\x99,'\'',g'
 }
 
 extract_table_section () {
@@ -144,8 +171,9 @@ extract_table_section () {
     local files_prefix="$1"; shift
     local files_suffix="$1"; shift
 
-    extract_table_section_columns \
-        "$tlist" "$section" '[23]' "$files_prefix" "$files_suffix" \
+    cat "$tlist" \
+    | process_table_section_columns \
+          "$section" '[23]' "$files_prefix" "$files_suffix" \
         > "$DIR"/"$file".mp3.tmplist
 }
 
@@ -278,6 +306,7 @@ if [ -n "$INDEX_CHORUS" ]; then
              > "$DIR"/"$f".mp3.tmplist
     done
 fi
+
 if [ -n "$INDEX_SOLO" ]; then
     extract_solo_section "$(tlist "$INDEX_SOLO")" "Lady Mary" "lady-mary"
     extract_solo_section "$(tlist "$INDEX_SOLO")" "Sir Digory Piper" "piper"
@@ -420,15 +449,29 @@ if [ -n "$do_generate_zip" ]; then
             | while read -r section; do
                 base="`echo "$section" \
                        | perl -CSDA -lpe 's/\b([A-Z]+)\b/\u\L\1/g;s,/,,g'`"
-                extract_table_section_columns "$(tlist "$i")" \
-                                              "$section" '.*' '' '' \
+                cat "$(tlist "$i")" \
+                    | process_table_section_columns "$section" '.*' '' '' \
                     | sed -e 's/	.*$//' \
                           > "$base".mp3zip.urllist
                 # some links may be repeated in the list, but that's OK
             done
         fi
     done
- fi
+
+    if [ -n "$INDEX_CHORUS" ]; then
+        section="SUPPORTING"
+        get_table_section_column "$(tlist "$INDEX_CHORUS")" "$section" 1 \
+        | while read -r who; do
+            base="$who"
+            cat "$(tlist "$INDEX_CHORUS")" \
+                | filter_table_column 1 "$who" \
+                | process_table_section_columns "$section" '.*' '' '' \
+                | sed -e 's/	.*$//' \
+                      > "$base".mp3zip.urllist
+            # some links may be repeated in the list, but that's OK
+        done
+    fi
+fi
 
 ### burning CDs
 if [ -n "$do_generate_cd" -a -n "$INDEX_CHORUS" ]; then
