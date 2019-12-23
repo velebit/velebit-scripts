@@ -70,6 +70,8 @@ sub fixed_gain ( $ ) {
     -f $out and (system('replaygain', '-f', $out)
 		 and print $MESSAGES "replaygain ($out) failed.\n");
     open STDOUT, '>&', $MESSAGES or die "Cannot dup STDERR to STDOUT: $!";
+    -f $out and (system('touch', '-r', $in, $out)
+		 and print $MESSAGES "Updating timestamp ($out) failed.\n");
   } else {
     print STDERR "$out: keeping.\n" unless $QUIET;
   }

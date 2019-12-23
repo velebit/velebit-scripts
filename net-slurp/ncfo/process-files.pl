@@ -45,16 +45,20 @@ sub process_file ( $$ ) {
       print STDERR "-!- $out\n";
     } else {
       print STDERR "-+- $out\n";
-      system('cp', $already_processed{$in}, $out) and die "cp failed.\n";
+      system('cp', '--preserve=timestamps', $already_processed{$in}, $out)
+	  and die "cp failed.\n";
     }
   } else {
     print STDERR "--- $out\n";
-    system('cp', $in, $out) and die "cp failed.\n";
+    system('cp', '--preserve=timestamps', $in, $out) and die "cp failed.\n";
     if (/\.mp3$/i) {
       $wipe_id3 and (system("./id3wipe", '-f', $out)
-		     and warn "id3wipe failed.\n");
+		     and warn "id3wipe ($out) failed.\n");
       $adjust_gain and (system('replaygain', '-f', $out)
-			and warn "replaygain failed.\n");
+			and warn "replaygain ($out) failed.\n");
+      ($wipe_id3 or $adjust_gain)
+	  and (system('touch', '-r', $in, $out)
+	       and warn "Updating timestamp ($out) failed.\n");
       $already_processed{$in} = $out;
     }
   }

@@ -50,7 +50,8 @@ update_tags_from_playlist () {
 	local cmd=($eyeD3 "${old_tag_args[@]}" "${new_tag_args[@]}" \
                           -t "$name" -a "$id3_artist" \
 			  -A "$id3_album_prefix$who$id3_album_suffix" \
-			  -n "$track" -N "$num_tracks" -Q "$file")
+			  -n "$track" -N "$num_tracks" -Q "$file" \
+			  --preserve-file-times)
 	if [ -n "$verbose" ]; then
 	    "${cmd[@]}"
 	else
