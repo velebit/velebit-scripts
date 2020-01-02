@@ -39,4 +39,4 @@ ln -s "download/video" "../$video_dir"
 
 #XXX
 ./playlists.sh -p "" -s ""
-./id3-tags.sh -a "NCFO Science Festival Chorus" -p "" -s "" -xx
+./id3_tags.py -a "NCFO Science Festival Chorus" -p "" -s "" -xx

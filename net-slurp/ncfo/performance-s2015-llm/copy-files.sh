@@ -82,4 +82,4 @@ performance="`basename "$performance" | sed -e 's/ performance$//'`"
 
 #XXX
 ./playlists.sh -p "$performance (" -s ")"
-./id3-tags.sh -a "NCFO Science Festival Chorus" -p "$performance (" -s ")" -xp
+./id3_tags.py -a "NCFO Science Festival Chorus" -p "$performance (" -s ")" -xp

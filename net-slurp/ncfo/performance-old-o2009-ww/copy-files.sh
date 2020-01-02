@@ -35,4 +35,4 @@ done
 
 #XXX
 ./playlists.sh -p "" -s ""
-./id3-tags.sh -a "North Cambridge Family Opera" -p "" -s "" -xx
+./id3_tags.py -a "North Cambridge Family Opera" -p "" -s "" -xx

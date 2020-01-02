@@ -83,4 +83,4 @@ performance="`basename "$performance" | sed -e 's/ performance$//'`"
 ./playlists.sh -p "$performance (" -s ")"
 mv ../"$performance ($mp3_dir)".m3u ../"$performance".m3u
 mv ../"$performance ($mp3_dir)".wpl ../"$performance".wpl
-./id3-tags.sh -a "NCFO Science Festival Chorus" -p '' -s '' -xx
+./id3_tags.py -a "NCFO Science Festival Chorus" -p '' -s '' -xx
