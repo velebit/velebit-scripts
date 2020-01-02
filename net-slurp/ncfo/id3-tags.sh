@@ -20,6 +20,10 @@ esac
 
 dir_prefix=
 
+nproc="`nproc`"
+num_processes="$(($nproc*2))"
+
+
 update_tags_from_playlist () {
     local playlist="$1"
     local who="`echo "$playlist" | sed -e 's/\..*//'`"
@@ -81,7 +85,7 @@ process_playlist () {
 cargs=()
 
 process_playlist_lines () {
-    xargs -r -d '\n' -P "`nproc`" -n 1 -I '{}' \
+    xargs -r -d '\n' -P "$num_processes" -n 1 -I '{}' \
 	  "$this_script" "${cargs[@]}" --process-playlist '{}'
 }
 process_playlist_args () {
@@ -109,6 +113,7 @@ while true; do
 	-3|-2.3) new_tag_args=(--to-v2.3); cargs+=("$1"); shift ;;
 	-4|-2.4) new_tag_args=(--to-v2.4); cargs+=("$1"); shift ;;
 	-d) dir_prefix="$dir_prefix$2/"; cargs+=("$1" "$2"); shift; shift ;;
+	-P) num_processes="$2"; cargs+=("$1" "$2"); shift; shift ;;
 	--process-playlist) process_playlist "$2"; exit 0 ;;
 	*)  break ;;
     esac
