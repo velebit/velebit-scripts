@@ -8,13 +8,14 @@ CF_ARGS=(--no-replace-any-prefix --prefix '')
 
 PF_ARGS=()
 
-GAIN_CACHE=(./gain-cache.pl -q -d mp3-gain --wipe)
+#GAIN_CACHE=(./gain-cache.pl -q -d mp3-gain --wipe)
 
 while true; do
     case "$1" in
         -f|--fast)
+	    # TODO update this?
             PF_ARGS=("${PF_ARGS[@]}" --no-gain --no-wipe)
-            GAIN_CACHE=(cat); shift ;;
+            shift ;;
         -*)
             echo "Unknown flag '$1'!" >&2 ; exit 1 ;;
         *)
@@ -46,7 +47,7 @@ if [ -e .copy-x ]; then set -- "$@" X*.mp3.urllist; fi
 ./urllist2process.pl "${U2P_MP3_ARGS[@]}" "$@" | inspect M1 \
     | ./extras2process.pl mp3-extras.* | inspect M2 \
     | ./enumerate.pl | inspect M2e \
-    | "${GAIN_CACHE[@]}" | inspect M3 \
+    | ./omit-if-missing.pl | inspect M3 \
     | ./canonicalize-filenames.pl "${CF_ARGS[@]}" | inspect M4 \
     | ./globally-uniq.pl --sfdd | inspect M5 \
     | ./playlists-from-process.pl | inspect M6 \
@@ -70,7 +71,7 @@ fi
 (d="`pwd`"; cd ../video && "$d"/split-into-subdirs.sh)
 
 word_idx="`(./canonicalize-filenames.pl --print-short;echo and_add_1) | wc -w`"
-./id3_tags.py -p "`./canonicalize-filenames.pl -ps` " -tn -xw"$word_idx"
+./id3_tags.py -p "`./canonicalize-filenames.pl -ps` " -tn -xw"$word_idx" --wipe
 if [ -n "$do_id3_zip" ]; then
     ./id3_tags.py -d zip/pretty -p '' -xx -s '' --wipe
 fi
