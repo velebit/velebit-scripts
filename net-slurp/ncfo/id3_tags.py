@@ -131,24 +131,34 @@ def get_tag_args(remove_version, out_version):
 
 def update_file_tags(data):
     with open(data['log'], 'a') as logfile:
-        print(f"Updating tags for {data['file']}...", file=logfile)
-        cmd=(('eyeD3', '-Q') +
-             get_tag_args(data['remove_version'], data['out_version']) +
-             ('-t', data['name'], '-a', data['artist'],
-              '-A', data['album'],
-              '-n', data['track'], '-N', data['num_tracks'],
-              '--no-color', '--preserve-file-times',
-              data['file']))
-        result = subprocess.run(
-            cmd, check=False, encoding='UTF-8',
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        print(result.stdout, end='', file=logfile)
-        print(result.stderr, end='', file=logfile)
-        if data['verbose'] >= 2:
-            print(result.stdout, end='', file=sys.stdout)
-        for line in re.split(r'(?<=\n)', result.stderr):
-            if not skip_error_line(line, data['verbose']):
-                print(line, end='', file=sys.stderr)
+        file = data['file']
+        print(f"Updating tags for {file}...", file=logfile)
+        orig_stat = os.stat(file)
+        if data['remove_version'] is not None:
+            eyed3.id3.Tag.remove(file, version=data['remove_version'])
+        id3file = eyed3.load(file)
+        if not id3file:
+            print(f"Could not load {file}!", file=logfile)
+            print(f"Could not load {file}!", file=sys.stderr)
+            return
+        if not id3file.tag:
+            id3file.initTag(version=data['out_version'])
+        assert id3file.tag
+        id3file.tag.title = data['name']
+        id3file.tag.artist = data['artist']
+        id3file.tag.album = data['album']
+        id3file.tag.track_num = (data['track'], data['num_tracks'])
+        id3file.tag.save(version=data['out_version'],
+                         encoding=None,  # or select based on out_version?
+                         max_padding=(64*1024))
+        os.utime(file, ns=(orig_stat.st_atime_ns, orig_stat.st_mtime_ns))
+        #print(result.stdout, end='', file=logfile)
+        #print(result.stderr, end='', file=logfile)
+        #if data['verbose'] >= 2:
+        #    print(result.stdout, end='', file=sys.stdout)
+        #for line in re.split(r'(?<=\n)', result.stderr):
+        #    if not skip_error_line(line, data['verbose']):
+        #        print(line, end='', file=sys.stderr)
 
 command_queue = []
 
@@ -170,9 +180,9 @@ def queue_tags_from_playlist(playlist, settings, log=os.devnull):
             if len(line) and not re.search(r'^[#<\s]', line):
                 tracks.append(line)
 
-    num_tracks = str(len(tracks))
+    num_tracks = len(tracks)
     for i in range(len(tracks)):
-        track = str(i+1)
+        track = i+1
         file = tracks[i]
         name = os.path.splitext(os.path.basename(file))[0]
         name = settings.id3_track_strip(name)
