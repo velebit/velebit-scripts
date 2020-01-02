@@ -5,6 +5,7 @@ import multiprocessing
 import os
 import os.path
 import re
+import shutil
 import subprocess
 import sys
 
@@ -76,17 +77,16 @@ def queue_file(inf, outf, settings):
             entry[3].append((print_stderr, (f"-!- {outf}",)))
         else:
             entry[3].append((print_stderr, (f"-+- {outf}",)))
-            entry[3].append((run_or_fail,
-                             (('cp', '--preserve=timestamps',
-                               entry[1], outf),) ))
+            entry[3].append((shutil.copyfile, (entry[1], outf) ))
+            entry[3].append((os.utime, (outf,), {'ns': (entry[4].st_atime_ns,
+                                                        entry[4].st_mtime_ns)}))
             entry[2].add(outf)
     else:
-        entry = (inf, outf, {outf}, [])
+        entry = (inf, outf, {outf}, [], os.stat(inf))
         command_list.append(entry)
         commands_for_input[inf] = entry
         entry[3].append((print_stderr, (f"--- {outf}",)))
-        entry[3].append((run_or_fail,
-                         (('cp', '--preserve=timestamps', inf, outf),) ))
+        entry[3].append((shutil.copyfile, (inf, outf) ))
         if re.search(inf, r'\.mp3$', re.IGNORECASE):
             if settings.wipe_id3:
                 entry[3].append((run_or_warn,
@@ -96,10 +96,8 @@ def queue_file(inf, outf, settings):
                 entry[3].append((run_or_warn,
                                  (('replaygain', '-f', outf),
                                   f"replaygain ({outf}) failed") ))
-            if settings.wipe_id3 or settings.adjust_gain:
-                entry[3].append((run_or_warn,
-                                 (('touch', '-r', inf, outf),
-                                  f"Updating timestamp ({outf}) failed") ))
+        entry[3].append((os.utime, (outf,), {'ns': (entry[4].st_atime_ns,
+                                                    entry[4].st_mtime_ns)}))
 
 def run_entry(entry):
     for cmd in entry[3]:
