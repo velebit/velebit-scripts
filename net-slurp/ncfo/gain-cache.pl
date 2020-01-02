@@ -17,6 +17,8 @@ our $QUIET;
 our $DIR_PATH;
 our $DIR_NAME;
 
+our @EYED3_ARGS = ('--to-v2.3');
+
 # ----------------------------------------------------------------------
 
 sub create_dir ( $ );
@@ -65,9 +67,10 @@ sub fixed_gain ( $ ) {
 	if $QUIET;
     open STDERR, '>', '/dev/null' or die "Cannot dup null to STDERR: $!"
 	if $QUIET;
-    -f $out and system('eyeD3', '-Q', '--to-v2.3', $out);
+    -f $out and system('eyeD3', '-Q', @EYED3_ARGS, $out);
     open STDERR, '>&', $MESSAGES or die "Cannot dup STDERR to STDERR: $!";
-    -f $out and (system('replaygain', '-f', $out)
+    # "Legacy" ID3 tags make eyeD3 --to-v2.3 choke later, so don't use them.
+    -f $out and (system('replaygain', '--mp3-format', 'replaygain.org', $out)
 		 and print $MESSAGES "replaygain ($out) failed.\n");
     open STDOUT, '>&', $MESSAGES or die "Cannot dup STDERR to STDOUT: $!";
     -f $out and (system('touch', '-r', $in, $out)
@@ -81,9 +84,13 @@ sub fixed_gain ( $ ) {
 # ----------------------------------------------------------------------
 
 GetOptions('quiet|q!' => \$QUIET,
+	   'wipe|w' => sub {
+	       # Specify an empty title because replaygain wants an ID3 header.
+	       @EYED3_ARGS = ('--remove-all', '-t', '', '--to-v2.3'); },
 	   'output-path|path|p=s' => \$DIR_PATH,
 	   'output-directory-name|d=s' => \$DIR_NAME,
-          ) or die "Usage: $0 [-p PATH] [-d DIRNAME[//]] [files...]\n";
+	  ) or die("Usage: $0 [-q] [-w] [-p PATH] [-d DIRNAME[//]]" .
+		   " [files...]\n");
 
 
 my @output;

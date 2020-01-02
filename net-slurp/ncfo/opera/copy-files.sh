@@ -8,7 +8,7 @@ CF_ARGS=(--no-replace-any-prefix --prefix '')
 
 PF_ARGS=()
 
-GAIN_CACHE=(./gain-cache.pl -q -d mp3-gain)
+GAIN_CACHE=(./gain-cache.pl -q -d mp3-gain --wipe)
 
 while true; do
     case "$1" in
@@ -70,7 +70,7 @@ fi
 (d="`pwd`"; cd ../video && "$d"/split-into-subdirs.sh)
 
 word_idx="`(./canonicalize-filenames.pl --print-short;echo and_add_1) | wc -w`"
-./id3_tags.py -p "`./canonicalize-filenames.pl -ps` " -tn -xw"$word_idx" --wipe
+./id3_tags.py -p "`./canonicalize-filenames.pl -ps` " -tn -xw"$word_idx"
 if [ -n "$do_id3_zip" ]; then
     ./id3_tags.py -d zip/pretty -p '' -xx -s '' --wipe
 fi

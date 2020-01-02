@@ -106,6 +106,10 @@ def keep_paren(text):
 def strip_number(text):
     return re.sub(r'^[0-9][0-9]*[ _-]?', '', text)
 
+def skip_error_line(line, settings):
+    return (settings.verbose < 1 and
+            re.search(r"Frame 'RVA2' is not yet supported", line))
+
 def update_tags_from_playlist(playlist, settings, logfile=None):
     who = os.path.splitext(os.path.basename(playlist))[0]
     who = settings.id3_playlist_strip(who)
@@ -145,10 +149,11 @@ def update_tags_from_playlist(playlist, settings, logfile=None):
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             if settings.verbose >= 2:
                 print(result.stdout, end='', file=sys.stdout)
-            print(result.stderr, end='', file=sys.stderr)
+            for line in re.split(r'(?<=\n)', result.stderr):
+                if not skip_error_line(line, settings):
+                    print(line, end='', file=sys.stderr)
             if logfile is not None:
-                if settings.verbose >= 0:
-                    print(result.stdout, end='', file=logfile)
+                print(result.stdout, end='', file=logfile)
                 print(result.stderr, end='', file=logfile)
 
 def default_playlists():
