@@ -8,13 +8,15 @@ CF_ARGS=(--no-replace-any-prefix --prefix '')
 
 PF_ARGS=()
 
+ID3_WIPE_ARGS=(--wipe)
+
 #GAIN_CACHE=(./gain-cache.pl -q -d mp3-gain --wipe)
 
 while true; do
     case "$1" in
         -f|--fast)
-	    # TODO update this?
             PF_ARGS=("${PF_ARGS[@]}" --no-gain --no-wipe)
+            ID3_WIPE_ARGS=(--keep)
             shift ;;
         -*)
             echo "Unknown flag '$1'!" >&2 ; exit 1 ;;
@@ -59,10 +61,10 @@ if [ "$#" -gt 0 -a -e "$1" ]; then
     do_id3_zip=yes
     mkdir -p ../zip/pretty
     ./urllist2process.pl "${U2P_MP3ZIP_ARGS[@]}" "$@" | inspect Z1 \
-	| ./omit-if-missing.pl | inspect Z3 \
-	| ./globally-uniq.pl --sfdd | inspect Z5 \
-	| ./playlists-from-process.pl -s '' | inspect Z6 \
-	| ./process-files.py "${PF_ARGS[@]}"
+        | ./omit-if-missing.pl | inspect Z3 \
+        | ./globally-uniq.pl --sfdd | inspect Z5 \
+        | ./playlists-from-process.pl -s '' | inspect Z6 \
+        | ./process-files.py "${PF_ARGS[@]}"
 fi
 
 ./urllist2process.pl "${U2P_VIDEO_ARGS[@]}" *.video.urllist | inspect V1 \
@@ -71,7 +73,8 @@ fi
 (d="`pwd`"; cd ../video && "$d"/split-into-subdirs.sh)
 
 word_idx="`(./canonicalize-filenames.pl --print-short;echo and_add_1) | wc -w`"
-./id3_tags.py -p "`./canonicalize-filenames.pl -ps` " -tn -xw"$word_idx" --wipe
+./id3_tags.py -p "`./canonicalize-filenames.pl -ps` " -tn -xw"$word_idx" \
+              "${ID3_WIPE_ARGS[@]}"
 if [ -n "$do_id3_zip" ]; then
-    ./id3_tags.py -d zip/pretty -p '' -xx -s '' --wipe
+    ./id3_tags.py -d zip/pretty -p '' -xx -s '' "${ID3_WIPE_ARGS[@]}"
 fi
