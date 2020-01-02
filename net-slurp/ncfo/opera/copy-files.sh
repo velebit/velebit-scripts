@@ -70,7 +70,7 @@ fi
 (d="`pwd`"; cd ../video && "$d"/split-into-subdirs.sh)
 
 word_idx="`(./canonicalize-filenames.pl --print-short;echo and_add_1) | wc -w`"
-./id3-tags.sh -p "`./canonicalize-filenames.pl -ps` " -tn -xw"$word_idx"
+./id3-tags.sh -p "`./canonicalize-filenames.pl -ps` " -tn -xw"$word_idx" --wipe
 if [ -n "$do_id3_zip" ]; then
-    ./id3-tags.sh -d zip/pretty -p '' -xx -s ''
+    ./id3-tags.sh -d zip/pretty -p '' -xx -s '' --wipe
 fi

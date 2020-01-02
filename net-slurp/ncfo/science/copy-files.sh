@@ -40,4 +40,4 @@ if [ -e .copy-x ]; then set -- "$@" X*.mp3.urllist; fi
     | ./process-files.pl "${PF_ARGS[@]}"
 
 word_idx="`(./canonicalize-filenames.pl --print-short;echo and_add_1) | wc -w`"
-./id3-tags.sh -p "`./canonicalize-filenames.pl -ps` " -tn -xw"$word_idx"
+./id3-tags.sh -p "`./canonicalize-filenames.pl -ps` " -tn -xw"$word_idx" --wipe

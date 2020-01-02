@@ -10,7 +10,7 @@ use File::Basename qw( dirname );
 # '--gain': do attempt to level the track gains using replaygain.
 our $adjust_gain = 0;
 # '--no-wipe': don't clear all ID3 tags from MP3 files (e.g. "Track 01" title).
-our $wipe_id3    = 1;
+our $wipe_id3    = undef;
 # '--no-remove': don't remove everything in the old destination directory.
 our $remove_old  = 1;
 
@@ -19,11 +19,15 @@ while (@ARGV and $ARGV[0] =~ /^-/) {
   $ARGV[0] eq '--no-gain' and $adjust_gain = 0, shift(@ARGV), next;
   $ARGV[0] eq '--gain' and $adjust_gain = 1, shift(@ARGV), next;
   $ARGV[0] eq '--no-wipe' and $wipe_id3 = 0, shift(@ARGV), next;
+  $ARGV[0] eq '--wipe' and $wipe_id3 = 1, shift(@ARGV), next;
   $ARGV[0] eq '--no-remove' and $remove_old = 0, shift(@ARGV), next;
+  $ARGV[0] eq '--remove' and $remove_old = 1, shift(@ARGV), next;
   die "Unknown argument '$ARGV[0]'";
 }
 #our $??? = shift @ARGV or die "too few args";
 @ARGV and die "too many args";
+
+! defined $wipe_id3 and $wipe_id3 = $adjust_gain;
 
 # ----------------------------------------------------------------------
 
