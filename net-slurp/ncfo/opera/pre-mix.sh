@@ -28,7 +28,7 @@ for source in X-all-voices.mp3.urllist \
 		  | grep -i "$pattern" \
 		  | sed -e 's@=.*/@=mix-sources/'"$dir/$track"'/@'
           done \
-	| ./process-files.pl
+	| ./process-files.py
 done
 
 for d in mix-sources/*/*; do

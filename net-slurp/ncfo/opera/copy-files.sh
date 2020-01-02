@@ -50,7 +50,7 @@ if [ -e .copy-x ]; then set -- "$@" X*.mp3.urllist; fi
     | ./canonicalize-filenames.pl "${CF_ARGS[@]}" | inspect M4 \
     | ./globally-uniq.pl --sfdd | inspect M5 \
     | ./playlists-from-process.pl | inspect M6 \
-    | ./process-files.pl "${PF_ARGS[@]}"
+    | ./process-files.py "${PF_ARGS[@]}"
 
 do_id3_zip=
 set -- *.mp3zip.urllist
@@ -61,11 +61,11 @@ if [ "$#" -gt 0 -a -e "$1" ]; then
 	| ./omit-if-missing.pl | inspect Z3 \
 	| ./globally-uniq.pl --sfdd | inspect Z5 \
 	| ./playlists-from-process.pl -s '' | inspect Z6 \
-	| ./process-files.pl "${PF_ARGS[@]}"
+	| ./process-files.py "${PF_ARGS[@]}"
 fi
 
 ./urllist2process.pl "${U2P_VIDEO_ARGS[@]}" *.video.urllist | inspect V1 \
-    | ./process-files.pl "${PF_ARGS[@]}"
+    | ./process-files.py "${PF_ARGS[@]}"
 
 (d="`pwd`"; cd ../video && "$d"/split-into-subdirs.sh)
 
