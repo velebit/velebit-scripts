@@ -386,6 +386,8 @@ if [ -n "$INDEX_CHORUS" ]; then
         -e '/Epiphany Cake/I,$!d' \
         -e '/Cornwall-sop-2/Id' \
         -e '/Epilogue-part2-sop/Id' \
+        -e '/Grooms/d;/Cabin Boys/d;/Seamstresses/d;/Lawyers/d' \
+        -e '/, \(w \)\?\(Cutlass \)\?Crew/d' \
         >> Katarina.mp3.urllist
 fi
 
@@ -397,6 +399,8 @@ if [ -n "$INDEX_CHORUS" ]; then
         -e '/Misrule-desc/Id' \
         -e '/Malley-sop-2-hi/Id' \
         -e '/Cornwall-desc/Id' \
+        -e '/Grooms/d;/Cabin Boys/d;/Seamstresses/d;/Lawyers/d' \
+        -e '/, \(w \)\?\(Cutlass \)\?Crew/d' \
         > Luka.mp3.urllist
     cat "$DIR"/henk.mp3.tmplist | sed \
         -e 's/\(out_file:\)\(.*\)Henk, /\1Henk \2/' \
@@ -410,6 +414,8 @@ if [ -n "$INDEX_CHORUS" ]; then
     cat "$DIR"/s-chorus.mp3.tmplist | sed \
         -e '/Ballad.*Reprise/I,$!d' \
         -e '/Epilogue-part2-desc/Id' \
+        -e '/Grooms/d;/Cabin Boys/d;/Seamstresses/d;/Lawyers/d;/Dowland/d' \
+        -e '/, \(w \)\?\(Cutlass \)\?Crew/d' \
         >> Luka.mp3.urllist
 fi
 
@@ -423,23 +429,20 @@ if [ -n "$INDEX_CHORUS" ]; then
         -e 's/\(out_file:\)\(.*\)Walter, /\1Walter \2/' \
         >> bert.mp3.urllist
     cat "$DIR"/t-chorus.mp3.tmplist | sed \
-        -e '/Grace O.Malley/I,$!d' \
+        -e '/Epiphany Cake/I,$!d' \
         -e '/Malley-tenor-2-lo/Id' \
+        -e '/Grooms/d;/Cabin Boys/d;/Lawyers/d' \
+        -e '/, \(w \)\?\(Cutlass \)\?Crew/d' \
         >> bert.mp3.urllist
 fi
 
 ### Abbe (???)
 # MP3s
-#if [ -n "$INDEX_CHORUS" ]; then
-#    cat "$DIR"/a-chorus.mp3.tmplist | sed \
-#        -e '/Droids/Id' \
-#        -e '/a cappella/Id' \
-#        -e '/Sandpeople/Id' \
-#        -e '/Ghosts/Id' \
-#        > Abbe+Luka.mp3.urllist
-#fi
 if [ -n "$INDEX_CHORUS" ]; then
-    cp "$DIR"/a-chorus.mp3.tmplist a-chorus.mp3.urllist
+    cat "$DIR"/a-chorus.mp3.tmplist | sed \
+        -e '/Grooms/d;/Cabin Boys/d;/Seamstresses/d;/Lawyers/d' \
+        -e '/, \(w \)\?\(Cutlass \)\?Crew/d' \
+        > Abbe.mp3.urllist
 fi
 
 ### generating zip files
