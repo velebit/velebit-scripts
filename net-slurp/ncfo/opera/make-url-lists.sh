@@ -142,6 +142,8 @@ process_table_section_columns () {
         -e 's/^[^	]*	//' \
         -e 's/^\(pan \)\?Act \([^	 ]*\) Scene \([^	 ]*\)/\1\2.\3/I' \
         -e 's/^\(pan \)\?Scene \([^ 	]*\)/\1sc\2/I' \
+        `# use the scene "#.#" number from filename if available:` \
+        -e 's/^\(pan \)\?sc\([1-9][0-9]*\)\([^0-9.].*\/[-_A-Za-z]*[-_]\)\(\2\.[1-9][0-9]*\)\([-_][^\/	]*\)$/\1sc\4\3\4\5/' \
         -e 's/	/, /' \
         -e 's/	/ /' \
         -e 's/	/ /' \
