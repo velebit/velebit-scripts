@@ -91,6 +91,9 @@ def keep_all(text):
     return text
 
 def make_keep_word(pos):
+    assert pos != 0
+    if pos > 0:
+        pos = pos - 1
     def keep_word_N(text):
         return text.split()[pos]
     return keep_word_N
