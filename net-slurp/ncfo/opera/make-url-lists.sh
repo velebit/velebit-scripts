@@ -391,7 +391,7 @@ if [ -n "$INDEX_CHORUS" ]; then
         >> Katarina.mp3.urllist
 fi
 
-### Luka (*enk/soprano 2)
+### Luka (Henk/soprano 2)
 # MP3s
 if [ -n "$INDEX_CHORUS" ]; then
     cat "$DIR"/s-chorus.mp3.tmplist | sed \
@@ -404,12 +404,6 @@ if [ -n "$INDEX_CHORUS" ]; then
         > Luka.mp3.urllist
     cat "$DIR"/henk.mp3.tmplist | sed \
         -e 's/\(out_file:\)\(.*\)Henk, /\1Henk \2/' \
-        >> Luka.mp3.urllist
-    cat "$DIR"/schenk.mp3.tmplist | sed \
-        -e 's/\(out_file:\)\(.*\)Schenk, /\1Schenk \2/' \
-        >> Luka.mp3.urllist
-    cat "$DIR"/denk.mp3.tmplist | sed \
-        -e 's/\(out_file:\)\(.*\)Denk, /\1Denk \2/' \
         >> Luka.mp3.urllist
     cat "$DIR"/s-chorus.mp3.tmplist | sed \
         -e '/Ballad.*Reprise/I,$!d' \
