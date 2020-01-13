@@ -104,6 +104,12 @@ if (@changing_dirs) {
     system 'cp', '-drp', "$dir/.", "LATEST/$dir"
       and die "cp -drp '$dir/.' 'LATEST/$dir': failed $?";
 
+    for my $old_zip (glob 'out/' . $dir . '_*.zip') {
+      my $dest = $old_zip;
+      $dest =~ s,^out/,out/OLD/, or die;
+      rename $old_zip, $dest or warn "rename($old_zip, $dest): $!, continuing";
+    }
+
     system 'zip', '-qr', $zip, $dir
       and die "zip -qr '$zip' '$dir': failed $?";
   }
