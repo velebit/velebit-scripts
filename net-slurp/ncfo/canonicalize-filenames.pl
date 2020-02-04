@@ -21,10 +21,13 @@ my $DEBUGGING = 0;
 
 sub add_replacement ( $@ ) {
   my ($string, %flags) = @_;
-  my ($regex, $replacement);
-  ($regex, $replacement) = ($string =~ /^(.*)=>\s*(.*?)$/)
-    or ($regex, $replacement) = ($string =~ /^(.*)=\s*(.*?)$/)
-      or die "Could not parse replacement string '$string'";
+  my ($regex, $replacement, $condition);
+  (($regex, $replacement, $condition) =
+   ($string =~ /^(.*)=>\s*(.*?)(?:\s+if\s+(.*?))?$/))
+    or (($regex, $replacement, $condition) =
+	($string =~ /^(.*)=\s*(.*?)(?:\s+if\s+(.*?))?$/))
+    or die "Could not parse replacement string '$string'";
+  $flags{if_matches} = $condition if defined $condition;
   $regex =~ s/\s+$//s;
   $regex = qr/$regex/i;
   push @EXTRA_REPLACEMENTS, [ $regex, $replacement, \%flags ];
@@ -151,13 +154,14 @@ sub canonicalize_file ( $ ) {
   printf STDERR "cf%02d> %s [2dn]\n", ++$stage, $file if $DEBUGGING > 0;
   my $replaced;
   ++$stage;
-  for (0..$#EXTRA_REPLACEMENTS)
-  {
+  for (0..$#EXTRA_REPLACEMENTS) {
     my $r = $EXTRA_REPLACEMENTS[$_];
     my $first = 1;
+    $r->[2] and exists $r->[2]{if_matches}
+      and ($file !~ /$r->[2]{if_matches}/) and next;
     ($replaced = 1, $first = 0)
       while ($first or $r->[2]{repeated})
-	and $file =~ s/$r->[0]/qq(qq($r->[1]))/ee;
+      and $file =~ s/$r->[0]/qq(qq($r->[1]))/ee;
     $DEBUGGING > 1 and printf STDERR "cf%02d> %s [xr$_]\n", $stage, $file;
   }
   printf STDERR "cf%02d> %s [xr]\n", $stage, $file if $DEBUGGING == 1;

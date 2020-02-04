@@ -1,10 +1,10 @@
 ^(?=.*Tears) => ISW01_
 ^(?=.*All.*About.*Senses) => ISW02_
-^(?=.*Animal.*Camouflage) => ISW03_1_
-^(?=.*Howler.*Monkey) => ISW03_2_
-^(?=.*in.*the.*Rain) => ISW03_3_
-^(?=.*Delicious) => ISW03_4_
-^(?=.*Signals.*with.*Senses) => ISW03_5_
+^(?=.*Animal.*Camouflage) => ISW03.1_
+^(?=.*Howler.*Monkey) => ISW03.2_
+^(?=.*in.*the.*Rain) => ISW03.3_
+^(?=.*Delicious) => ISW03.4_
+^(?=.*Signals.*with.*Senses) => ISW03.5_
 ^(?=.*Cataracts) => ISW04_
 ^(?=.*Corrective.*Lenses) => ISW05_
 ^(?=.*Evolutionary.*Eye) => ISW06_
@@ -24,3 +24,4 @@
 ^(?=.*Vestibular.*System) => ISW20_
 ^(?=.*See.*Butterfly) => ISW21_
 ^(?=.*World.*of.*Sound) => ISW22_
+_ => p_ if -pan\b
