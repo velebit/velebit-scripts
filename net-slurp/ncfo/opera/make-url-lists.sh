@@ -372,7 +372,7 @@ if [ -n "$DO_CHECK_LINKS" ]; then
     done
 fi
 
-### Katarina (Clement/soprano 1)
+### Katarina (Clement, Soprano 1, Ladies in Waiting, Dowland Chorus, Lawyers)
 # MP3s
 if [ -n "$INDEX_CHORUS" ]; then
     cat "$DIR"/s-chorus.mp3.tmplist | sed \
@@ -386,12 +386,13 @@ if [ -n "$INDEX_CHORUS" ]; then
         -e '/Epiphany Cake/I,$!d' \
         -e '/Cornwall-sop-2/Id' \
         -e '/Epilogue-part2-sop/Id' \
-        -e '/Grooms/d;/Cabin Boys/d;/Seamstresses/d;/Lawyers/d' \
+        -e '/Grooms/d;/Cabin Boys/d;/Seamstresses/d' \
         -e '/, \(w \)\?\(Cutlass \)\?Crew/d' \
+        -e '/Prosecution/{;/20-46/d;}' \
         >> Katarina.mp3.urllist
 fi
 
-### Luka (Henk/soprano 2)
+### Luka (Henk, Soprano 2, ?)
 # MP3s
 if [ -n "$INDEX_CHORUS" ]; then
     cat "$DIR"/s-chorus.mp3.tmplist | sed \
@@ -413,7 +414,7 @@ if [ -n "$INDEX_CHORUS" ]; then
         >> Luka.mp3.urllist
 fi
 
-### bert (Walter/tenor)
+### bert (Walter, Tenor, Men)
 # MP3s
 if [ -n "$INDEX_CHORUS" ]; then
     cat "$DIR"/t-chorus.mp3.tmplist | sed \
@@ -430,12 +431,13 @@ if [ -n "$INDEX_CHORUS" ]; then
         >> bert.mp3.urllist
 fi
 
-### Abbe (???)
+### Abbe (Alto, Ladies in Waiting, Dowland Chorus, Lawyers)
 # MP3s
 if [ -n "$INDEX_CHORUS" ]; then
     cat "$DIR"/a-chorus.mp3.tmplist | sed \
-        -e '/Grooms/d;/Cabin Boys/d;/Seamstresses/d;/Lawyers/d' \
+        -e '/Grooms/d;/Cabin Boys/d;/Seamstresses/d' \
         -e '/, \(w \)\?\(Cutlass \)\?Crew/d' \
+        -e '/Prosecution/{;/20-46/d;}' \
         > Abbe.mp3.urllist
 fi
 
