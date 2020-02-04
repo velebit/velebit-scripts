@@ -49,6 +49,9 @@ def parse_args():
     group.add_argument('-xp', '--id3-playlist-keep-parenthesized',
                        action='store_const', dest='id3_playlist_strip',
                        const=keep_paren, default=None)
+    group.add_argument('-x0', '--id3-playlist-keep-none',
+                       action='store_const', dest='id3_playlist_strip',
+                       const=keep_none, default=None)
     group = parser.add_mutually_exclusive_group()
     group.add_argument('-tx', '--id3-track-strip-none',
                        action='store_const', dest='id3_track_strip',
@@ -103,6 +106,9 @@ def keep_paren(text):
     if match is None:
         return ''
     return match.group(1)
+
+def keep_none(text):
+    return ""
 
 def strip_number(text):
     return re.sub(r'^[0-9][0-9]*[ _-]?', '', text)

@@ -57,12 +57,16 @@ for my $link (links_in '.') {
 
 my (@working_dirs, @changing_dirs);
 
-for my $src (sort { $a cmp $b } subdirs_in 'pretty') {
-  my $dst = unidecode $src;
-  $dst =~ s/\W+/_/g;
-  $dst = $prefix . $dst;
-  symlink "pretty/$src", $dst or die "symlink(pretty/$src, $dst): $!";
-  push @working_dirs, $dst;
+for my $subdir ('pretty', 'people') {
+    for my $src (sort { $a cmp $b } subdirs_in $subdir) {
+	my $dst = unidecode $src;
+	if ($subdir ne 'people') {
+	    $dst =~ s/\W+/_/g;
+	    $dst = $prefix . $dst;
+	}
+	symlink "$subdir/$src", $dst or die "symlink($subdir/$src, $dst): $!";
+	push @working_dirs, $dst;
+    }
 }
 
 -d 'LATEST' or mkdir 'LATEST' or die "mkdir(LATEST): $!";
@@ -73,7 +77,8 @@ for my $dir (@working_dirs) {
   if (! -d "LATEST/$dir") {
     $is_same = 0;
   } else {
-    my $cmd = "diff -q '\Q$dir\E/.' 'LATEST/\Q$dir\E' >/dev/null 2>&1";
+    my $qdir = $dir;  $qdir =~ s,','\\'',g;
+    my $cmd = "diff -q '$qdir/.' 'LATEST/$qdir' >/dev/null 2>&1";
     my $ret = system $cmd;
     $ret == -1 and die "system($cmd): $!";
     $ret & 0x7F and die "system($cmd): died with signal @{[$ret & 0x7F]}";

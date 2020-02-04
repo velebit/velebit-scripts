@@ -2,6 +2,7 @@
 
 U2P_MP3_ARGS=()
 U2P_MP3ZIP_ARGS=(-d ../zip/pretty/)
+U2P_MP3PEEP_ARGS=(-d ../zip/people/)
 U2P_VIDEO_ARGS=(-s video/ -d ../video/)
 
 CF_ARGS=(--no-replace-any-prefix --prefix '')
@@ -44,6 +45,7 @@ html_dir=html
                     --video "$html_dir/${video_uri##*/}.html" \
                     --pdf "$html_dir/${pdf_uri##*/}.html"
 
+shopt -s nullglob
 set -- [^X]*.mp3.urllist
 if [ -e .copy-x ]; then set -- "$@" X*.mp3.urllist;
 elif [ -e .copy-cd ]; then set -- "$@" X-cd-*.mp3.urllist; fi
@@ -67,6 +69,16 @@ if [ "$#" -gt 0 -a -e "$1" ]; then
         | ./playlists-from-process.pl -s '' | inspect Z6 \
         | ./process-files.py "${PF_ARGS[@]}"
 fi
+set -- *.mp3people.urllist
+if [ "$#" -gt 0 -a -e "$1" ]; then
+    do_id3_zip=yes
+    mkdir -p ../zip/people
+    ./urllist2process.pl "${U2P_MP3PEEP_ARGS[@]}" "$@" | inspect P1 \
+        | ./omit-if-missing.pl | inspect P3 \
+        | ./globally-uniq.pl --sfdd | inspect P5 \
+        | ./playlists-from-process.pl -s '' | inspect P6 \
+        | ./process-files.py "${PF_ARGS[@]}"
+fi
 
 ./urllist2process.pl "${U2P_VIDEO_ARGS[@]}" *.video.urllist | inspect V1 \
     | ./process-files.py "${PF_ARGS[@]}"
@@ -78,4 +90,7 @@ word_idx="`(./canonicalize-filenames.pl --print-short;echo and_add_1) | wc -w`"
               "${ID3_WIPE_ARGS[@]}"
 if [ -n "$do_id3_zip" ]; then
     ./id3_tags.py -d zip/pretty -p '' -xx -s '' "${ID3_WIPE_ARGS[@]}"
+    ./id3_tags.py -d zip/people -p '' -x0 \
+		  -s "`./canonicalize-filenames.pl --print-short` practice" \
+		  "${ID3_WIPE_ARGS[@]}"
 fi

@@ -164,7 +164,10 @@ process_table_section_columns () {
         -e 's/   */ /g' -e 's/^  *//' -e 's/  *	/	/g' \
         -e 's/, *,/,/;s/, *,/,/' -e 's/  *,/,/g;s/, *	/	/' \
         -e 's/^\([^	]*\)	\(.*\)$/\2	'"$out_tag:$files_prefix"'\1'"$files_suffix"'/' \
-        -e 's,\xe2\x80\x99,'\'',g'
+        -e 's,\xe2\x80\x99,'\'',g' \
+        `# ridiculous fix for bad website link:` \
+        -e '/Cornwall-sop-1\.mp3	.* pan /{;s/sop-1\./sop-1-pan./;}' \
+        -e ''
 }
 
 extract_table_section () {
@@ -441,7 +444,7 @@ if [ -n "$INDEX_CHORUS" ]; then
         > Abbe.mp3.urllist
 fi
 
-### generating zip files
+### generating generic zip files
 # for those, we keep David's original file names...
 
 if [ -n "$do_generate_zip" ]; then
@@ -475,8 +478,9 @@ if [ -n "$do_generate_zip" ]; then
     fi
 fi
 
-### burning CDs
-if [ -n "$do_generate_cd" -a -n "$INDEX_CHORUS" ]; then
+### burning CDs for people
+
+if [ -n "$do_generate_cd" -a -n "$INDEX_CHORUS" -a -n "$INDEX_SOLO" ]; then
     #cat "$DIR"/s-chorus.mp3.tmplist | sed \
     #    -e '/Misrule-sop/d;/Malley-sop-2/{;/2-hi/!d;};/Cornwall-sop-2/d' \
     #    -e '/Epilogue-part2-sop/d' \
@@ -513,7 +517,7 @@ if [ -n "$do_generate_cd" -a -n "$INDEX_CHORUS" ]; then
     #    -e '/Grooms/d;/Cabin Boys/d;/Seamstresses/d;/Ladies-in-Waiting/d' \
     #    -e '/Lawyers/d;/Dowland/d;/, \(w \)\?\(Cutlass \)\?Crew/d' \
     #    > XX-cd-b2-chorus.mp3.urllist
-    if true; then
+    if false; then
         cat "$DIR"/a-chorus.mp3.tmplist | sed \
             -e '/Master/I,$d' \
             -e '/Grooms/d;/Cabin Boys/d;/Ladies-in-Waiting/d' \
@@ -542,21 +546,45 @@ if [ -n "$do_generate_cd" -a -n "$INDEX_CHORUS" ]; then
             -e '/Lawyers/d;/Dowland/d;/, \(w \)\?\(Cutlass \)\?Crew/d' \
             >> X-cd-joanne-nicklas.mp3.urllist
     fi
-    if true; then
+    if false; then
         cat "$DIR"/s-chorus.mp3.tmplist | sed \
             -e '/Misrule-sop/d;/Malley-sop-2/{;/2-hi/!d;};/Cornwall-sop-2/d' \
-	    `# ridiculous fix for bad website link:` \
-            -e '/Cornwall-sop-1.mp3.*S pan /{;s/sop-1/sop-1-pan/;}' \
             -e '/Epilogue-part2-sop/d' \
             -e '/Grooms/d;/Seamstresses/d' \
             -e '/Lawyers/d;/Dowland/d;/, \(w \)\?\(Cutlass \)\?Crew/d' \
             > X-cd-leila-beit-aharon.mp3.urllist
     fi
-    if true; then
+    if false; then
         cat "$DIR"/a-chorus.mp3.tmplist | sed \
             -e '/Grooms/d;/Cabin Boys/d;/Ladies-in-Waiting/d' \
             -e '/Lawyers/d;/, \(w \)\?\(Cutlass \)\?Crew/d' \
             > X-cd-heather-barney.mp3.urllist
+    fi
+fi
+
+### generating zip files for people
+
+if [ -n "$do_generate_zip" -a -n "$INDEX_CHORUS" -a -n "$INDEX_SOLO" ]; then
+    if true; then
+	cat "$DIR"/s-chorus.mp3.tmplist | sed \
+            -e '/Grace O.Malley/I,$d' \
+            -e '/Misrule-sop/d' \
+	    > "$DIR"/Miriam_Beit-Aharon.mp3people.tmplist
+	cat "$DIR"/thomasina.mp3.tmplist | sed \
+            -e 's/\(out_file:\)\(.*\)Thomasina, /\1Thomasina \2/' \
+            >> "$DIR"/Miriam_Beit-Aharon.mp3people.tmplist
+	cat "$DIR"/s-chorus.mp3.tmplist | sed \
+            -e '/Epiphany Cake/I,$!d' \
+            -e '/Pendennis/I{;/Chorus soprano/d;}' \
+            -e '/Cornwall-sop-2/d' \
+            -e '/Epilogue-part2-sop/d' \
+            -e '/Grooms/d;/Seamstresses/d' \
+            -e '/, \(w \)\?\(Cutlass \)\?Crew/d' \
+            -e '/Prosecution/{;/20-46/d;}' \
+            >> "$DIR"/Miriam_Beit-Aharon.mp3people.tmplist
+        cat "$DIR"/Miriam_Beit-Aharon.mp3people.tmplist | sed \
+            -e 's/	.*$//' \
+	    >> Miriam_Beit-Aharon.mp3people.urllist
     fi
 fi
 
