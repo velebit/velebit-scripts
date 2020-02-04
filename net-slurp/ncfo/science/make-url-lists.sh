@@ -131,8 +131,8 @@ sed -e '/82\.mp3$/Id' \
 
 sed -e '/82\.mp3$/Id' \
     "$DIR"/tenor-adults.mp3.urllist > bert.mp3.urllist
-
-# no bert this year, sniff
+sed -ne '/82\.mp3$/Id;/Octopus.*Song/Ip;/See.*Butterfly/Ip' \
+    "$DIR"/bass-adults.mp3.urllist >> bert.mp3.urllist
 
 ln -s "$DIR"/demo.mp3.urllist demo.mp3.urllist
 #ln -s "$DIR"/score.pdf.urllist score.pdf.urllist
