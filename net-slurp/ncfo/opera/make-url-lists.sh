@@ -395,15 +395,15 @@ if [ -n "$INDEX_CHORUS" ]; then
         >> Katarina.mp3.urllist
 fi
 
-### Luka (Henk, Soprano 2, ?)
+### Luka (Henk, Soprano 2, Dowland Chorus, Lawyers)
 # MP3s
 if [ -n "$INDEX_CHORUS" ]; then
     cat "$DIR"/s-chorus.mp3.tmplist | sed \
         -e '/Aberdeen/I,$d' -e '/Ballad.*Reprise/I,$d' \
         -e '/Misrule-desc/d;/Malley-sop-2-hi/d;/Cornwall-desc/d' \
         -e '/Grooms/d;/Cabin Boys/d;/Seamstresses/d;/Ladies-in-Waiting/d' \
-        -e '/Lawyers/d;/Dowland/d' \
         -e '/, \(w \)\?\(Cutlass \)\?Crew/d' \
+        -e '/Prosecution/{;/20-46/d;}' \
         > Luka.mp3.urllist
     cat "$DIR"/henk.mp3.tmplist | sed \
         -e 's/\(out_file:\)\(.*\)Henk, /\1Henk \2/' \
@@ -412,8 +412,8 @@ if [ -n "$INDEX_CHORUS" ]; then
         -e '/Ballad.*Reprise/I,$!d' \
         -e '/Epilogue-part2-desc/d' \
         -e '/Grooms/d;/Cabin Boys/d;/Seamstresses/d;/Ladies-in-Waiting/d' \
-        -e '/Lawyers/d;/Dowland/d' \
         -e '/, \(w \)\?\(Cutlass \)\?Crew/d' \
+        -e '/Prosecution/{;/20-46/d;}' \
         >> Luka.mp3.urllist
 fi
 
