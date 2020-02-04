@@ -45,7 +45,8 @@ html_dir=html
                     --pdf "$html_dir/${pdf_uri##*/}.html"
 
 set -- [^X]*.mp3.urllist
-if [ -e .copy-x ]; then set -- "$@" X*.mp3.urllist; fi
+if [ -e .copy-x ]; then set -- "$@" X*.mp3.urllist;
+elif [ -e .copy-cd ]; then set -- "$@" X-cd-*.mp3.urllist; fi
 ./urllist2process.pl "${U2P_MP3_ARGS[@]}" "$@" | inspect M1 \
     | ./extras2process.pl mp3-extras.* | inspect M2 \
     | ./enumerate.pl | inspect M2e \

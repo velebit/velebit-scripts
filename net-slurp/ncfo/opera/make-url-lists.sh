@@ -377,15 +377,15 @@ fi
 if [ -n "$INDEX_CHORUS" ]; then
     cat "$DIR"/s-chorus.mp3.tmplist | sed \
         -e '/Grace O.Malley/I,$d' \
-        -e '/Misrule-sop/Id' \
+        -e '/Misrule-sop/d' \
        > Katarina.mp3.urllist
     cat "$DIR"/clement.mp3.tmplist | sed \
         -e 's/\(out_file:\)\(.*\)Clement, /\1Clement \2/' \
         >> Katarina.mp3.urllist
     cat "$DIR"/s-chorus.mp3.tmplist | sed \
         -e '/Epiphany Cake/I,$!d' \
-        -e '/Cornwall-sop-2/Id' \
-        -e '/Epilogue-part2-sop/Id' \
+        -e '/Cornwall-sop-2/d' \
+        -e '/Epilogue-part2-sop/d' \
         -e '/Grooms/d;/Cabin Boys/d;/Seamstresses/d' \
         -e '/, \(w \)\?\(Cutlass \)\?Crew/d' \
         -e '/Prosecution/{;/20-46/d;}' \
@@ -397,10 +397,9 @@ fi
 if [ -n "$INDEX_CHORUS" ]; then
     cat "$DIR"/s-chorus.mp3.tmplist | sed \
         -e '/Aberdeen/I,$d' -e '/Ballad.*Reprise/I,$d' \
-        -e '/Misrule-desc/Id' \
-        -e '/Malley-sop-2-hi/Id' \
-        -e '/Cornwall-desc/Id' \
-        -e '/Grooms/d;/Cabin Boys/d;/Seamstresses/d;/Lawyers/d' \
+        -e '/Misrule-desc/d;/Malley-sop-2-hi/d;/Cornwall-desc/d' \
+        -e '/Grooms/d;/Cabin Boys/d;/Seamstresses/d;/Ladies-in-Waiting/d' \
+        -e '/Lawyers/d;/Dowland/d' \
         -e '/, \(w \)\?\(Cutlass \)\?Crew/d' \
         > Luka.mp3.urllist
     cat "$DIR"/henk.mp3.tmplist | sed \
@@ -408,8 +407,9 @@ if [ -n "$INDEX_CHORUS" ]; then
         >> Luka.mp3.urllist
     cat "$DIR"/s-chorus.mp3.tmplist | sed \
         -e '/Ballad.*Reprise/I,$!d' \
-        -e '/Epilogue-part2-desc/Id' \
-        -e '/Grooms/d;/Cabin Boys/d;/Seamstresses/d;/Lawyers/d;/Dowland/d' \
+        -e '/Epilogue-part2-desc/d' \
+        -e '/Grooms/d;/Cabin Boys/d;/Seamstresses/d;/Ladies-in-Waiting/d' \
+        -e '/Lawyers/d;/Dowland/d' \
         -e '/, \(w \)\?\(Cutlass \)\?Crew/d' \
         >> Luka.mp3.urllist
 fi
@@ -477,10 +477,87 @@ fi
 
 ### burning CDs
 if [ -n "$do_generate_cd" -a -n "$INDEX_CHORUS" ]; then
-    : ##cp "$DIR"/s-chorus.mp3.tmplist s-chorus.mp3.urllist
-    : ##cp "$DIR"/a-chorus.mp3.tmplist a-chorus.mp3.urllist
-    : ##cp "$DIR"/t-chorus.mp3.tmplist t-chorus.mp3.urllist
-    : ##cp "$DIR"/b-chorus.mp3.tmplist b-chorus.mp3.urllist
+    #cat "$DIR"/s-chorus.mp3.tmplist | sed \
+    #    -e '/Misrule-sop/d;/Malley-sop-2/{;/2-hi/!d;};/Cornwall-sop-2/d' \
+    #    -e '/Epilogue-part2-sop/d' \
+    #    -e '/Grooms/d;/Cabin Boys/d;/Seamstresses/d;/Ladies-in-Waiting/d' \
+    #    -e '/Lawyers/d;/Dowland/d;/, \(w \)\?\(Cutlass \)\?Crew/d' \
+    #    > XX-cd-s1-chorus.mp3.urllist
+    #cat "$DIR"/s-chorus.mp3.tmplist | sed \
+    #    -e '/Misrule-desc/d;/Malley-sop-2-hi/d;/Cornwall-desc/d' \
+    #    -e '/Epilogue-part2-desc/d' \
+    #    -e '/Grooms/d;/Cabin Boys/d;/Seamstresses/d;/Ladies-in-Waiting/d' \
+    #    -e '/Lawyers/d;/Dowland/d;/, \(w \)\?\(Cutlass \)\?Crew/d' \
+    #    > XX-cd-s2-chorus.mp3.urllist
+    #cat "$DIR"/a-chorus.mp3.tmplist | sed \
+    #    -e '/Grooms/d;/Cabin Boys/d;/Seamstresses/d;/Ladies-in-Waiting/d' \
+    #    -e '/Lawyers/d;/Dowland/d;/, \(w \)\?\(Cutlass \)\?Crew/d' \
+    #    > XX-cd-a-chorus.mp3.urllist
+    #cat "$DIR"/t-chorus.mp3.tmplist | sed \
+    #    -e '/Malley-tenor-2-lo/d' \
+    #    -e '/Grooms/d;/Cabin Boys/d;/Seamstresses/d;/Ladies-in-Waiting/d' \
+    #    -e '/Lawyers/d;/Dowland/d;/, \(w \)\?\(Cutlass \)\?Crew/d' \
+    #    > XX-cd-t1-chorus.mp3.urllist
+    #cat "$DIR"/t-chorus.mp3.tmplist | sed \
+    #    -e '/Malley-tenor-2-hi/d' \
+    #    -e '/Grooms/d;/Cabin Boys/d;/Seamstresses/d;/Ladies-in-Waiting/d' \
+    #    -e '/Lawyers/d;/Dowland/d;/, \(w \)\?\(Cutlass \)\?Crew/d' \
+    #    > XX-cd-t2-chorus.mp3.urllist
+    #cat "$DIR"/b-chorus.mp3.tmplist | sed \
+    #    -e '/WomenOfWar-RevelerBassLo/d;/1583Reprise-Crew-bass-lo/d' \
+    #    -e '/Grooms/d;/Cabin Boys/d;/Seamstresses/d;/Ladies-in-Waiting/d' \
+    #    -e '/Lawyers/d;/Dowland/d;/, \(w \)\?\(Cutlass \)\?Crew/d' \
+    #    > XX-cd-b1-chorus.mp3.urllist
+    #cat "$DIR"/b-chorus.mp3.tmplist | sed \
+    #    -e '/WomenOfWar-RevelerBassHi/d;/1583Reprise-Crew-bass-hi/d' \
+    #    -e '/Grooms/d;/Cabin Boys/d;/Seamstresses/d;/Ladies-in-Waiting/d' \
+    #    -e '/Lawyers/d;/Dowland/d;/, \(w \)\?\(Cutlass \)\?Crew/d' \
+    #    > XX-cd-b2-chorus.mp3.urllist
+    if true; then
+        cat "$DIR"/a-chorus.mp3.tmplist | sed \
+            -e '/Master/I,$d' \
+            -e '/Grooms/d;/Cabin Boys/d;/Ladies-in-Waiting/d' \
+            -e '/Lawyers/d;/Dowland/d;/, \(w \)\?\(Cutlass \)\?Crew/d' \
+            > X-cd-joanne-nicklas.mp3.urllist
+        cat "$DIR"/jailers.mp3.tmplist | sed \
+            -e '/Crackity/I!d' \
+            -e '/, \(w \)\?\(Amphillis\|lower\)$/I!d' \
+            -e 's/Amphillis,/ Amphillis,/;s/  / /' \
+            -e 's/ \(Amphillis.*\), \(w \)\?\(Amphillis\|lower\)$/ \2\1/' \
+            >> X-cd-joanne-nicklas.mp3.urllist
+        cat "$DIR"/jailers.mp3.tmplist | sed \
+            -e '/Crackity/Id;/Prosecution/Id' \
+            -e '/, \(w \)\?\(jailers low\)$/I!d' \
+            >> X-cd-joanne-nicklas.mp3.urllist
+        #cat "$DIR"/a-chorus.mp3.tmplist | sed \
+        #    -e '/Prosecution/I,$!d;/Defense/I,$d' \
+        #    -e '/Lawyers/d' \
+        #    >> X-cd-joanne-nicklas.mp3.urllist
+        cat "$DIR"/jailers.mp3.tmplist | sed \
+            -e '/Prosecution/I!d' \
+            >> X-cd-joanne-nicklas.mp3.urllist
+        cat "$DIR"/a-chorus.mp3.tmplist | sed \
+            -e '/Defense/I,$!d' \
+            -e '/Grooms/d;/Cabin Boys/d;/Ladies-in-Waiting/d' \
+            -e '/Lawyers/d;/Dowland/d;/, \(w \)\?\(Cutlass \)\?Crew/d' \
+            >> X-cd-joanne-nicklas.mp3.urllist
+    fi
+    if true; then
+        cat "$DIR"/s-chorus.mp3.tmplist | sed \
+            -e '/Misrule-sop/d;/Malley-sop-2/{;/2-hi/!d;};/Cornwall-sop-2/d' \
+	    `# ridiculous fix for bad website link:` \
+            -e '/Cornwall-sop-1.mp3.*S pan /{;s/sop-1/sop-1-pan/;}' \
+            -e '/Epilogue-part2-sop/d' \
+            -e '/Grooms/d;/Seamstresses/d' \
+            -e '/Lawyers/d;/Dowland/d;/, \(w \)\?\(Cutlass \)\?Crew/d' \
+            > X-cd-leila-beit-aharon.mp3.urllist
+    fi
+    if true; then
+        cat "$DIR"/a-chorus.mp3.tmplist | sed \
+            -e '/Grooms/d;/Cabin Boys/d;/Ladies-in-Waiting/d' \
+            -e '/Lawyers/d;/, \(w \)\?\(Cutlass \)\?Crew/d' \
+            > X-cd-heather-barney.mp3.urllist
+    fi
 fi
 
 #####  video
