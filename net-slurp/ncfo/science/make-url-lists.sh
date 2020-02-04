@@ -123,17 +123,14 @@ fi
 
 ### specific URL lists for our family
 
-sed -e '/NothingForNow/Id' \
+sed -e '/82\.mp3$/Id' \
     "$DIR"/soprano-all-all.mp3.urllist > Katarina+Luka.mp3.urllist
-#sed -e '1,/AnnieJumpCannon/!d' \
-#    "$DIR"/soprano-high-kids.mp3.urllist > Katarina+Luka.mp3.urllist
-#sed -e '/AnnieJumpCannon/!d' \
-#    "$DIR"/solo.mp3.urllist >> Katarina+Luka.mp3.urllist
-#sed -e '1,/AnnieJumpCannon/d' \
-#    "$DIR"/soprano-high-kids.mp3.urllist >> Katarina+Luka.mp3.urllist
 
-sed -e '/NothingForNow/Id' \
+sed -e '/82\.mp3$/Id' \
     "$DIR"/alto-low-adults.mp3.urllist > Abbe.mp3.urllist
+
+sed -e '/82\.mp3$/Id' \
+    "$DIR"/tenor-adults.mp3.urllist > bert.mp3.urllist
 
 # no bert this year, sniff
 
