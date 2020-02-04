@@ -322,6 +322,37 @@ sub get_entries ( $$$;$ ) {
 }
 
 
+sub before_link ( @ ) {
+  my (@nodes) = @_;
+  my (@result);
+  while (@nodes) {
+    my $node = shift @nodes;
+    for my $tag ($node->look_down(_tag => 'a')) {
+      defined $tag->{href} or next;
+      push @result, get_in_between_nodes $node, $tag;
+      return @result;
+    }
+    push @result, $node;
+  }
+  return @result;
+}
+
+sub after_link ( @ ) {
+  my (@nodes) = @_;
+  my (@result);
+  while (@nodes) {
+    my $node = pop @nodes;
+    for my $tag (reverse $node->look_down(_tag => 'a')) {
+      defined $tag->{href} or next;
+      unshift @result, get_in_between_nodes $tag, $node;
+      return @result;
+    }
+    unshift @result, $node;
+  }
+  return @result;
+}
+
+
 # NB: this implementation matches plinks (or did at one point).
 sub nonempty ( @ ) {
   grep(($_->tag ne '~text' or $_->attr('text') !~ /^[\s\xA0]+$/s), @_);
@@ -614,7 +645,7 @@ if (has_field SAME_ENTRY_TEXT_BEFORE_LINK) {
     my $line = $link->{+CELL_LINE_NUMBER} if $SPLIT_AT_LINE_BREAKS;
     my ($text, $from, $to) = '';
     ($from, $to) = get_line_edges $link->{cell}, $line
-      and $text = get_text get_in_between_nodes $from, $link->{tag};
+      and $text = get_text before_link get_in_between_nodes $from, $link->{tag};
     $link->{+SAME_ENTRY_TEXT_BEFORE_LINK} = $text;
   }
   print STDERR "done.\n" if $VERBOSITY;
@@ -626,7 +657,7 @@ if (has_field SAME_ENTRY_TEXT_AFTER_LINK) {
     my $line = $link->{+CELL_LINE_NUMBER} if $SPLIT_AT_LINE_BREAKS;
     my ($text, $from, $to) = '';
     ($from, $to) = get_line_edges $link->{cell}, $line
-      and $text = get_text get_in_between_nodes $link->{tag}, $to;
+      and $text = get_text after_link get_in_between_nodes $link->{tag}, $to;
     $link->{+SAME_ENTRY_TEXT_AFTER_LINK} = $text;
   }
   print STDERR "done.\n" if $VERBOSITY;
