@@ -547,14 +547,6 @@ if [ -n "$do_generate_cd" -a -n "$INDEX_CHORUS" -a -n "$INDEX_SOLO" ]; then
             >> X-cd-joanne-nicklas.mp3.urllist
     fi
     if false; then
-        cat "$DIR"/s-chorus.mp3.tmplist | sed \
-            -e '/Misrule-sop/d;/Malley-sop-2/{;/2-hi/!d;};/Cornwall-sop-2/d' \
-            -e '/Epilogue-part2-sop/d' \
-            -e '/Grooms/d;/Seamstresses/d' \
-            -e '/Lawyers/d;/Dowland/d;/, \(w \)\?\(Cutlass \)\?Crew/d' \
-            > X-cd-leila-beit-aharon.mp3.urllist
-    fi
-    if false; then
         cat "$DIR"/a-chorus.mp3.tmplist | sed \
             -e '/Grooms/d;/Cabin Boys/d;/Ladies-in-Waiting/d' \
             -e '/Lawyers/d;/, \(w \)\?\(Cutlass \)\?Crew/d' \
@@ -584,7 +576,67 @@ if [ -n "$do_generate_zip" -a -n "$INDEX_CHORUS" -a -n "$INDEX_SOLO" ]; then
             >> "$DIR"/Miriam_Beit-Aharon.mp3people.tmplist
         cat "$DIR"/Miriam_Beit-Aharon.mp3people.tmplist | sed \
             -e 's/	.*$//' \
-	    >> Miriam_Beit-Aharon.mp3people.urllist
+	    > 'Miriam Beit-Aharon'.mp3people.urllist
+    fi
+    if true; then
+        cat "$DIR"/s-chorus.mp3.tmplist | sed \
+	    -e '/Battle.*Sexes/I,$d' \
+            -e '/Misrule-sop/d;/Malley-sop-2/{;/2-hi/!d;};/Cornwall-sop-2/d' \
+            -e '/Epilogue-part2-sop/d' \
+            -e '/Grooms/d;/Seamstresses/d' \
+            -e '/Lawyers/d;/Dowland/d;/, \(w \)\?\(Cutlass \)\?Crew/d' \
+	    -e '/Pendennis-sop/d' \
+            > "$DIR"/Leila_Beit-Aharon.mp3people.tmplist
+        cat "$DIR"/s-chorus.mp3.tmplist | sed \
+	    -e '/Battle.*Sexes/I,$!d;/1583-sop-2/,$d' \
+            -e '/Misrule-sop/d;/Malley-sop-2/{;/2-hi/!d;};/Cornwall-sop-2/d' \
+            -e '/Epilogue-part2-sop/d' \
+            -e '/Seamstresses/d' \
+            -e '/Lawyers/d;/Dowland/d;/, \(w \)\?\(Cutlass \)\?Crew/d' \
+            >> "$DIR"/Leila_Beit-Aharon.mp3people.tmplist
+        cat "$DIR"/reveler-3.mp3.tmplist | sed \
+	    -e '/Reprise/Id' \
+            >> "$DIR"/Leila_Beit-Aharon.mp3people.tmplist
+        cat "$DIR"/s-chorus.mp3.tmplist | sed \
+	    -e '/1583-sop-2/,$!d;/Lie.*Low/I,$d' \
+            -e '/Misrule-sop/d;/Malley-sop-2/{;/2-hi/!d;};/Cornwall-sop-2/d' \
+            -e '/Epilogue-part2-sop/d' \
+            -e '/Seamstresses/d' \
+            -e '/Lawyers/d;/Dowland/d;/, \(w \)\?\(Cutlass \)\?Crew/d' \
+            >> "$DIR"/Leila_Beit-Aharon.mp3people.tmplist
+        cat "$DIR"/reveler-3.mp3.tmplist | sed \
+	    -e '/Reprise/I!d' \
+            >> "$DIR"/Leila_Beit-Aharon.mp3people.tmplist
+        cat "$DIR"/s-chorus.mp3.tmplist | sed \
+	    -e '/Lie.*Low/I,$!d' \
+            -e '/Misrule-sop/d;/Malley-sop-2/{;/2-hi/!d;};/Cornwall-sop-2/d' \
+            -e '/Epilogue-part2-sop/d' \
+            -e '/Seamstresses/d' \
+            -e '/Lawyers/d;/Dowland/d;/, \(w \)\?\(Cutlass \)\?Crew/d' \
+            >> "$DIR"/Leila_Beit-Aharon.mp3people.tmplist
+        cat "$DIR"/Leila_Beit-Aharon.mp3people.tmplist | sed \
+            -e 's/	.*$//' \
+	    | uniq \
+	    > 'Leila+Becky Beit-Aharon'.mp3people.urllist
+    fi
+    if true; then
+	cat "$DIR"/b-chorus.mp3.tmplist | sed \
+            -e '/Grooms/I!d' \
+	    >> "$DIR"/Noah_Beit-Aharon.mp3people.tmplist
+	cat "$DIR"/b-chorus.mp3.tmplist | sed \
+            -e '/sc6/!d;/BassHi/d' \
+            -e '/Grooms/d;/Cabin Boys/d;/Lawyers/d' \
+            -e '/, \(w \)\?\(Cutlass \)\?Crew/d' \
+	    >> "$DIR"/Noah_Beit-Aharon.mp3people.tmplist
+	cat "$DIR"/caesar.mp3.tmplist | sed \
+            -e '/NOOP/d' \
+	    >> "$DIR"/Noah_Beit-Aharon.mp3people.tmplist
+	cat "$DIR"/b-chorus.mp3.tmplist | sed \
+            -e '/Encore/!d' \
+	    >> "$DIR"/Noah_Beit-Aharon.mp3people.tmplist
+        cat "$DIR"/Noah_Beit-Aharon.mp3people.tmplist | sed \
+            -e 's/	.*$//' \
+	    > 'Noah Beit-Aharon'.mp3people.urllist
     fi
 fi
 

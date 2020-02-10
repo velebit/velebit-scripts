@@ -62,8 +62,10 @@ my (@working_dirs, @changing_dirs);
 for my $subdir ('../pretty', '../people') {
   for my $src (sort { $a cmp $b } subdirs_in $subdir) {
     my $dst = unidecode $src;
-    if ($subdir !~ /people/) {
-      $dst =~ s/\W+/_/g;
+    if ($subdir =~ /people/) {
+      $dst =~ s/[^-\w]+/_/g;
+    } else {
+      $dst =~ s/\W+/_/g;  # historical
       $dst = $prefix . $dst;
     }
     symlink "$subdir/$src", $dst or die "symlink($subdir/$src, $dst): $!";
@@ -109,7 +111,6 @@ if (@changing_dirs) {
       system 'rm', '-rf', "../LATEST/$dir"
 	and die "rm -rf '../LATEST/$dir': failed $?";
     }
-    system 'ls', '-ld', "../LATEST/$dir";
     system 'cp', '-drp', "$dir/.", "../LATEST/$dir"
       and die "cp -drp '$dir/.' '../LATEST/$dir': failed $?";
 

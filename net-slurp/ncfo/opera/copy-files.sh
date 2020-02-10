@@ -90,7 +90,8 @@ word_idx="`(./canonicalize-filenames.pl --print-short;echo and_add_1) | wc -w`"
               "${ID3_WIPE_ARGS[@]}"
 if [ -n "$do_id3_zip" ]; then
     ./id3_tags.py -d zip/pretty -p '' -xx -s '' "${ID3_WIPE_ARGS[@]}"
-    ./id3_tags.py -d zip/people -p '' -x0 \
-		  -s "`./canonicalize-filenames.pl --print-short` practice" \
+    ./id3_tags.py -d zip/people \
+		  -p "`./canonicalize-filenames.pl --print-short` " \
+		  -xw"$word_idx" -s " practice" \
 		  "${ID3_WIPE_ARGS[@]}"
 fi
