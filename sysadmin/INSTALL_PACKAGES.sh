@@ -8,6 +8,7 @@ install='apt install --no-upgrade'
 $install \
     bash-completion \
     emacs \
+    xclip \
     smartmontools nvme-cli sysstat \
     discover hdparm \
     mdadm \
@@ -54,13 +55,13 @@ $install \
 
 ### media tools
 $install \
-    eyed3 atomicparsley \
+    eyed3 atomicparsley libmp3-tag-perl \
     python-rgain \
     picard \
     audacity \
     musescore \
     jhead libimage-exiftool-perl exiv2 \
-    libsox-fmt-all \
+    sox libsox-fmt-all \
     darktable \
     blender
 
@@ -78,6 +79,13 @@ $install \
 $install \
     devede
 # bombono? (not installable)
+
+#### CD/DVD burninating
+$install \
+    genisoimage xorriso \
+    wodim cdrskin cdrdao cue2toc \
+    k3b brasero xfburn \
+    cdck
 
 ### PDF tools
 $install \
