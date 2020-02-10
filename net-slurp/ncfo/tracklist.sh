@@ -1,18 +1,21 @@
 #!/bin/bash
 
-CUE_SHEET=
-SORT_BY_NUMBER=()
-SORT_BY_NAME=()
+shopt -s nullglob
+
+PREPARE_LIST=()
+INITIAL_SORT=()
+CANONICAL_SORT=()
 STRIP_PREFIX=()
 REPLACE_SPACES=()
 NUMBERING=()
+CUE_SHEET=
 while true; do
     case "$1" in
 	-s|--sort)
 	    # This sorts even playlist data and stdin.
-	    SORT_BY_NUMBER=(sort_tracks); shift ;;
+	    INITIAL_SORT=(sort_by_prefix); shift ;;
 	-S|--sort-name)
-	    SORT_BY_NAME=(sort); shift ;;
+	    CANONICAL_SORT=(sort); shift ;;
 	-p|--no-strip-prefix)
 	    STRIP_PREFIX=(cat); shift ;;
 	-w|--keep-word-separators)
@@ -27,11 +30,11 @@ while true; do
 	    break ;;
     esac
 done
-if [ -n "${SORT_BY_NUMBER[*]}" -a -n "${SORT_BY_NAME[*]}" ]; then
+if [ -n "${INITIAL_SORT[*]}" -a -n "${CANONICAL_SORT[*]}" ]; then
     echo "Error: --sort (-s) and --sort-name (-S) are mutually exclusive!" >&2
     exit 1
 fi
-if [ -n "${SORT_BY_NAME[*]}" -a -n "${STRIP_PREFIX[*]}" ]; then
+if [ -n "${CANONICAL_SORT[*]}" -a -n "${STRIP_PREFIX[*]}" ]; then
     echo "Error: --sort-name (-S) and --no-strip-prefix (-p) are mutually exclusive!" >&2
     exit 1
 fi
@@ -40,15 +43,14 @@ if [ -n "$CUE_SHEET" -a -n "${NUMBERING[*]}" ]; then
     exit 1
 fi
 
-sort_tracks () {
-#    sort -t "$sep" -k 2
-    perl -lne '$o=$_;s,.*/,,;s,[-_].*,,;print "$_\t$o"' \
+sort_by_prefix () {
+    perl -pe 's,^(.*/)?([0-9A-Z](?:\w*[0-9A-Z])?(?:[0-9](?:\.[0-9])?[a-z]?|\+[a-z]))([-_\s]),$2\t$1$2$3, or s,^,\t,' \
 	| sort -k 1,1 -k 2 \
 	| sed -e 's/.*	//'
 }
 
 strip_prefix () {
-    perl -pe 's/^[0-9A-Z](\w*[0-9A-Z])?(?:[0-9](\.[0-9])?[a-z]?|\+[a-z])[-_\s]//'
+    perl -pe 's,^.*/[0-9A-Z](?:\w*[0-9A-Z])?(?:[0-9](?:\.[0-9])?[a-z]?|\+[a-z])[-_\s],,'
 }
 
 strip_part () {
@@ -69,10 +71,10 @@ decimate_and_number () {
 	num=$(("$num"+1))
 	if [ "($decimate)" = "(1)" ]; then
 	    last="$num"
-	    printf '%2d %s\n' "$num" "$line"
+	    printf '%2d  %s\n' "$num" "$line"
 	elif [ "$(((num-1) % decimate))" -eq 0 ]; then
 	    last=$((num+decimate-1))
-	    printf '%2d-%-2d %s\n' "$num" "$last" "$line"
+	    printf '%2d-%-2d  %s\n' "$num" "$last" "$line"
 	fi
     done
     if [ "$num" -ne "$last" ]; then
@@ -80,18 +82,28 @@ decimate_and_number () {
     fi
 }
 
+get_m3u_files () {
+    # Files specified by arguments; if none, read from stdin.
+    sed -e '/^#/d;s/^[ 	]*//;/^$/d' "$@"
+}
+
+add_prefix () {
+    local prefix="$1"; shift
+    perl -e 'while (<STDIN>) { print "$ARGV[0]$_"; }' "$prefix"
+}
+
 show_tracks () {
     for arg in "$@"; do
 	if [ "$arg" = "-" ]; then
-	    sed -e '/^#/d;s/^[ 	]*//;/^$/d'   # read from stdin
+	    get_m3u_files    # read from stdin
 	elif [ -d "$arg" ]; then
-	    ls "$arg"/*.[mM][pP]3 | sort_tracks
+	    ls "$arg"/*.[mM][pP]3 "$arg"/*.[wW][aA][vV] | sort_by_prefix
 	elif [ -f "$arg" ]; then
 	    case "$arg" in
-		*.mp3|*.MP3)
+		*.mp3|*.MP3|*.wav|*.WAV)
 		    echo "$arg" ;;
 		*.m3u|*.M3U)
-		    sed -e '/^#/d;s/^[ 	]*//;/^$/d' "$arg" ;;
+		    get_m3u_files "$arg" | add_prefix "$(dirname "$arg")/" ;;
 		*)
 		    echo "Unknown file argument '$arg'!" >&2; exit 1 ;;
 	    esac
@@ -119,6 +131,22 @@ cue_track () {
 
 declare -A cue_pos
 
+guess_cue_file_type () {
+    local file="$1"; shift
+    case "$file" in
+	*.[mM][pP]3)
+	    echo "MP3" ;;
+	*.[wW][aA][vV])
+	    echo "WAVE" ;;
+	*.[aA][iI][fF][fF]|*.[aA][iI][fF])
+            echo "AIFF" ;;
+	*)
+	    #echo "BINARY" ;;   # raw little endian 16-bit binary data
+	    #echo "MOTOROLA" ;;   # raw big endian 16-bit binary data
+	    echo "???" ;;   # I give up
+    esac
+}
+
 make_cue_sheet () {
     local file
     while IFS='' read -r file; do
@@ -129,18 +157,19 @@ make_cue_sheet () {
 	    cue_header > "$dir"/tracks.cue
 	fi
 	cue_pos[$dir]=$(("${cue_pos[$dir]}"+1))
-	cue_track "$(basename "$file")" MP3 "$pretty" "${cue_pos[$dir]}" \
+	local type="$(guess_cue_file_type "$file")"
+	cue_track "$(basename "$file")" "$type" "$pretty" "${cue_pos[$dir]}" \
 		  >> "$dir"/tracks.cue
     done
 }
 
 process_tracks () {
-    sed -e 's,.*/,,;s/\.wav$//i;s/\.mp3$//i' \
-	| ${SORT_BY_NUMBER[@]:-cat} \
+    ${PREPARE_LIST[@]:-sed -e 's,.*/,,;s/\.wav$//i;s/\.mp3$//i'} \
+	| ${INITIAL_SORT[@]:-cat} \
 	| ${STRIP_PREFIX[@]:-strip_prefix} \
 	| strip_part \
 	| canonicalize_name \
-	| ${SORT_BY_NAME[@]:-cat} \
+	| ${CANONICAL_SORT[@]:-cat} \
 	| ${REPLACE_SPACES[@]:-sed -e 's/[-_][-_]*/ /g'}
 }
 
