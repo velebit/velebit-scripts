@@ -24,6 +24,7 @@ my @added;
 my %code_counts;
 my %code_desc;
 
+my $is_ok_if_file_missing = 0;
 open my $LOG, '<', $log or die "open($log): $!";
 while (<$LOG>) {
   s/[\r\n]+//g;
@@ -35,16 +36,24 @@ while (<$LOG>) {
       push @referenced, $file;
       push @added, $file if /^Saving to: /;
     }
+    $is_ok_if_file_missing = 0;
 
   } elsif (/^(?:--)?\d{4}-\d{2}-\d{2} /) {
     # Don't complain about `...' in date lines; just skip them.
+
+    # But mark robot.txt URLs so we know they don't HAVE to exist:
+    $is_ok_if_file_missing = (m,/robots\.txt$, ? 1 : 0);
 
   } elsif (/[`‘][^`'‘’]*['’]/) {
     warn "Unexpected quoted name seen in\n    $_\n ";
 
   } elsif (/^HTTP request sent.*\.\.\.\s*(\d+)\s*(.*)$/) {
-    ++$code_counts{$1};
+    ++$code_counts{$1} unless $1 eq '404' and $is_ok_if_file_missing;
     $code_desc{$1} = $2;
+    $is_ok_if_file_missing = 0;
+
+  } elsif (/^\s*$/) {
+    $is_ok_if_file_missing = 0;
   }
 }
 
