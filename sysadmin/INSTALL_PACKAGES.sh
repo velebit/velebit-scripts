@@ -55,7 +55,7 @@ $install \
 
 ### media tools
 $install \
-    eyed3 atomicparsley libmp3-tag-perl \
+    atomicparsley libmp3-tag-perl \
     python-rgain \
     picard \
     audacity \
@@ -64,6 +64,8 @@ $install \
     sox libsox-fmt-all \
     darktable \
     blender
+# Installed via Python because Debian version sometimes can't load data:
+#   eyed3
 
 #### video editing
 $install \

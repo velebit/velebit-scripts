@@ -4,4 +4,5 @@ py_install='pip3 install --disable-pip-version-check'
 
 $py_install \
     scipy numpy matplotlib \
+    eyed3 \
     unidecode
