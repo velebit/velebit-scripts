@@ -1,107 +1,39 @@
-#!/usr/bin/perl
-# dump ID3 tags from a file
-use warnings;
-use strict;
-use encoding 'UTF8';
+#!/usr/bin/python3 -B
+# Extract ID3 tags present in a file
 
-#BEGIN {
-#  use Config;
-#  my $usr_site_dir = $Config{sitelib};
-#  $usr_site_dir =~ s,^/usr/lib/,/home/bert/perl-lib/lib/,;
-#  #use lib $usr_site_dir;  # doesn't work?
-#  unshift @INC, $usr_site_dir;
-#}
-#use MP3::Info;
-#use Audio::Scan;
-use MP3::Tag;
+import argparse
+import eyed3
+import sys
 
-use Getopt::Long;
+from id3tools import all_props
 
-my @latinCharacterCodes =
-  ( 0x20 .. 0x7E,
-    # Croatian:
-    0x0106, 0x0107, 0x010C, 0x010D, 0x0110, 0x0111, 0x0160, 0x0161,
-    0x017D, 0x017E,
-    # French etc:
-    0x00C0, 0x00E0, 0x00C1, 0x00E1, 0x00C8, 0x00E8, 0x00C9, 0x00E9,
-    0x00CA, 0x00EA, 0x00CB, 0x00EB, 0x00CE, 0x00EE, 0x00D3, 0x00F3,
-    0x00DA, 0x00FA,
-    # Spanish:
-    0x00D1, 0x00F1,
-    # German:
-    0x00DF,           # eszett (lowercase only)
-    # punctuation:
-    0x00AB, 0x00BB,   # guillemets (French double_angle quotes)
-    0x00A1, 0x00BF,   # inverted exclamation and question mark
-    0x2018, 0x2019,   # single quotation marks (R "preferred" for apostrophe)
-    0x201C, 0x201D,   # double quotation marks
-    0x2013, 0x2014,   # en dash and em dash
-    0x2026,           # ellipsis
-  );
-my $latinCharacters = pack 'U*', @latinCharacterCodes;
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-a', '--ascii', '--unidecode',
+                        action='store_true', default=False)
+    parser.add_argument('-r', '--raw', action='store_true', default=False)
+    parser.add_argument('frame_id')
+    parser.add_argument('files', nargs='*')
+    settings = parser.parse_args()
+    return settings
 
+def show_file(file, settings):
+    id3file = eyed3.load(file)
+    if not id3file:
+        print(f"Could not load {file}!", file=sys.stderr)
+        return
+    if not id3file.tag:
+        print(f"No ID3 tag data in {file}!", file=sys.stderr)
+        return
+    for info in all_props(id3file.tag, ascii=settings.ascii, raw=settings.raw):
+       if info['id'] == settings.frame_id:
+           print(info['pretty'])
 
-our ($ONLY_IF_MATCHES, $USE_DUMPER);
-GetOptions('unicode|u'      => sub { $ONLY_IF_MATCHES = qr/[^\x20-\x7E]/ },
-	   'non-latin|l'    => sub { my $chars = $latinCharacters;
-				     $ONLY_IF_MATCHES = qr/[^\Q$chars\E]/ },
-	   'characters|c=s' => sub { my $chars = pack 'U*',
-				       map hex($_), split /,/, $_[1];
-				     $ONLY_IF_MATCHES = qr/[\Q$chars\E]/ },
-	   'dumper|d!'      => \$USE_DUMPER,
-	  ) or die;
+def main():
+    settings = parse_args()
+    for file in settings.files:
+        show_file(file, settings)
 
-@ARGV or die;
-my $fdesc = shift @ARGV;
+if __name__ == "__main__":
+    main()
 
-#die ">$ONLY_IF_MATCHES";
-
-
-sub qprint ( $ ) {
-  my ($text) = @_;
-  # The eval protects us from a crash if $text isn't valid utf8.
-  $ONLY_IF_MATCHES and eval { $text !~ $ONLY_IF_MATCHES } and return;
-  if ($ONLY_IF_MATCHES) {
-    printf "* \\x%04X %s\n",ord($_),$_ for grep /$ONLY_IF_MATCHES/, split //, $text;
-  }
-  $text =~ s/\\/\\\\/g;  # \n is shown as |\n|, but '\n' is shown as |\\n|
-  $text =~ s/\n/\\n/g;
-  $text =~ s/\r/\\r/g;
-  $text =~ s/\0/\\0/g;
-  print "$text\n";
-}
-
-sub dprint ( $ ) {
-  my ($data) = @_;
-
-  require Data::Dumper;
-  local $Data::Dumper::Indent;
-  $Data::Dumper::Indent = 0;
-  my $text = Data::Dumper::Dumper($data);
-  $text =~ s/^\$VAR1 = //;
-  $text =~ s/;$//;
-  qprint $text;
-}
-
-foreach my $file (@ARGV) {
-  my $tag = MP3::Tag->new($file);
-  $tag->get_tags;
-
-  if (exists $tag->{ID3v2}) {
-    for my $item ($tag->{ID3v2}->frame_list_by_descr($fdesc)) {
-      my $info = $item->[1];
-
-      if ($USE_DUMPER) {
-	dprint $info;
-      } elsif (! ref $info) {
-	qprint $info;
-      } elsif ($fdesc =~ /^(?:COMM|TXXX)/) {
-	qprint $info->{Text};
-      } elsif ($fdesc =~ /^(?:UFID)/) {
-	qprint "$info->{Text} $info->{_Data}";
-      } else {
-	qprint "<object: " . ref($info) . ">";  ##XXX
-      }
-    }
-  }
-}

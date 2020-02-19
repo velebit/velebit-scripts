@@ -1,29 +1,29 @@
-#!/usr/bin/perl
+#!/usr/bin/python3 -B
 # *Utterly erase* ID3 tags from a file
-use warnings;
-use strict;
 
-use Getopt::Long;
+import argparse
 
-our $BACKUP = 1;
-GetOptions('force|f'   => sub { $BACKUP = 0; },
-	  ) or die;
+from id3tools import make_backup, wipe_file
 
-foreach my $file (@ARGV) {
-  if ($BACKUP) {
-    my $backup = $file . '.bak';
-    unlink $backup;  # if it fails that's OK
-    rename $file, $backup
-      or die "rename($file -> $backup): $!";
-    system 'cp', $backup, $file
-      and warn("Copy failed"),
-	(rename $backup, $file or warn "rename($backup -> $file): $!"),
-	  exit 1;
-  }
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-f', '--force',
+                        action='store_false', dest='backup', default=True)
+    parser.add_argument('--backup',
+                        action='store_true', dest='backup', default=True)
+    parser.add_argument('files', nargs='*')
+    settings = parser.parse_args()
+    return settings
 
-  # '-Q' isn't actually very quiet.
-  open STDOUT, '>', '/dev/null';
-  open STDERR, '>', '/dev/null';
+def process_file(file, settings):
+    if settings.backup:
+        make_backup(file)
+    wipe_file(file)
 
-  system 'eyeD3', '-Q', '--remove-all', $file;
-}
+def main():
+    settings = parse_args()
+    for file in settings.files:
+        process_file(file, settings)
+
+if __name__ == "__main__":
+    main()

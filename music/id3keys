@@ -1,51 +1,51 @@
-#!/usr/bin/perl
-# dump ID3 tags from a file
-use warnings;
-use strict;
-use encoding 'UTF8';
+#!/usr/bin/python3 -B
+# Show ID3 tags present in a file
 
-#BEGIN {
-#  use Config;
-#  my $usr_site_dir = $Config{sitelib};
-#  $usr_site_dir =~ s,^/usr/lib/,/home/bert/perl-lib/lib/,;
-#  #use lib $usr_site_dir;  # doesn't work?
-#  unshift @INC, $usr_site_dir;
-#}
-#use MP3::Info;
-#use Audio::Scan;
-use MP3::Tag;
-use Getopt::Long;
+import argparse
+import eyed3
+import sys
 
-our $VERBOSE = 0;
-GetOptions('verbose|v+' => \$VERBOSE,
-	  ) or die;
+from id3tools import all_props, frame_props, abstract_props, key_info
 
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-v', '--verbose', action='count', default=0)
+    parser.add_argument('--frames', action='store_true', default=None)
+    parser.add_argument('--abstract', action='store_true', default=None)
+    parser.add_argument('files', nargs='*')
+    settings = parser.parse_args()
+    if settings.frames is None and settings.abstract is None:
+        settings.frames = settings.abstract = True
+    return settings
 
-sub uniq ( @ ) {
-  my %hash;
-  $hash{$_} = 1 for @_;
-  keys %hash;
-}
+def show_file(file, settings):
+    id3file = eyed3.load(file)
+    if not id3file:
+        print(f"Could not load {file}!", file=sys.stderr)
+        return
+    if not id3file.tag:
+        print(f"No ID3 tag data in {file}!", file=sys.stderr)
+        return
+    get_props=None
+    if settings.frames and settings.abstract:
+        get_props = all_props
+    elif settings.frames:
+        get_props = frame_props
+    elif settings.abstract:
+        get_props = abstract_props
+    else:
+        return
+    for info in key_info(get_props(id3file.tag)):
+        if settings.verbose > 0:
+            print("%-11s %s" % (info['id'], info['id_description']))
+        else:
+            print(info['id'])
 
-my $id2label;
-foreach my $file (@ARGV) {
-  my $tag = MP3::Tag->new($file);
-  $tag->get_tags;
+def main():
+    settings = parse_args()
+    for file in settings.files:
+        show_file(file, settings)
 
-  if (exists $tag->{ID3v2}) {
-    $id2label = $tag->{ID3v2}->supported_frames() unless $id2label;
-    my @desc = $tag->id3v2_frame_descriptors;
-    s/^([A-Z\d]{4})\d{2}$/$1/ for @desc;  # HACK: remove indexed descriptors
-    for my $desc (sort uniq @desc) {
-      #print "$file: ";
-      if (! $VERBOSE) {
-	print "$desc\n";
-      } else {
-	my $fid = $desc;  $fid =~ s/[][)(].*$//;
-	my $label = $id2label->{$fid};
-	$label = '?' unless defined $label;
-	print "$desc   ( $label )\n";
-      }
-    }
-  }
-}
+if __name__ == "__main__":
+    main()
+

@@ -1,166 +1,144 @@
-#!/usr/bin/perl
+#!/usr/bin/python3 -B
 # dump ID3 tags from a file
-use warnings;
-use strict;
-use encoding 'UTF8';
 
-#BEGIN {
-#  use Config;
-#  my $usr_site_dir = $Config{sitelib};
-#  $usr_site_dir =~ s,^/usr/lib/,/home/bert/perl-lib/lib/,;
-#  #use lib $usr_site_dir;  # doesn't work?
-#  unshift @INC, $usr_site_dir;
-#}
-#use MP3::Info;
-#use Audio::Scan;
-use MP3::Tag;
-use Getopt::Long;
+import argparse
+import eyed3
+import pprint
+import re
+import sys
 
-our ($RAW, $DUMP_DATA, $ALL_FRAMES, $TABLE);
-GetOptions('raw|r!'    => \$RAW,
-	   'dump|d!'   => \$DUMP_DATA,
-	   'frames|f!' => \$ALL_FRAMES,
-	   'table|t!'  => \$TABLE,
-	  ) or die;
-$TABLE = 1 if !defined($TABLE) and !$DUMP_DATA and !$ALL_FRAMES;
+from id3tools import frame_props, abstract_props_map
 
-sub uniq ( @ ) {
-  my %hash;
-  $hash{$_} = 1 for @_;
-  keys %hash;
-}
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-f', '--frames', action='store_true', default=False)
+    parser.add_argument('-t', '--table', action='store_true', default=False)
+    parser.add_argument('-c', '--compact', action='store_true', default=False)
+    parser.add_argument('-a', '--ascii', '--unidecode',
+                        action='store_true', default=False)
+    parser.add_argument('-r', '--raw', action='store_true', default=False)
+    parser.add_argument('-v', '--verbose', action='count', default=0)
+    parser.add_argument('files', nargs='*')
+    settings = parser.parse_args()
+    if not any((settings.frames, settings.table, settings.compact)):
+        settings.frames = True
+    assert not any((settings.ascii, settings.raw)) \
+        or any((settings.table, settings.compact)), "-a/-r require -t/-c"
+    return settings
 
-sub wfmt_dot ( $$ ) {
-  my ($width, $text) = @_;
-  my $len = length $text;
-  $len <= $width and return $text . (' ' x ($width - $len));
-  substr($text, 0, $width-3) . '...';
-}
+def wfmt_dot(width, text):
+    length = len(text)
+    if length <= width:
+        return text + (' ' * (width - length))
+    return text[0:(width-3)] + '...'
 
-sub wfmt_trunc ( $$ ) {
-  my ($width, $text) = @_;
-  my $len = length $text;
-  $len <= $width and return $text . (' ' x ($width - $len));
-  substr($text, 0, $width);
-}
+def wfmt_trunc(width, text):
+    length = len(text)
+    if length <= width:
+        return text + (' ' * (width - length))
+    return text[0:width]
 
-sub field ( $$ ) {
-  my ($width, $val) = @_;
-  $val = '' if !defined $val;
-  return $val if $RAW;
-  wfmt_dot $width, $val;
-}
+def field(fixed, width, val, *, truncate=None):
+    if val is None:
+        val = ''
+    if not fixed:
+        return val
+    if truncate is None:
+        truncate = (width < 6)
+    if truncate:
+        return wfmt_trunc(width, val)
+    else:
+        return wfmt_dot(width, val)
 
-sub version ( $ ) {
-  my ($tag) = @_;
+def version(tag):
+    return 'ID3' + eyed3.id3.versionToString(tag.version)
 
-  my @ver;
-  if (exists $tag->{ID3v2}) {
-    push @ver, (exists $tag->{ID3v2}{version}
-		? 'ID3v2.' . $tag->{ID3v2}{version}
-		: 'ID3v2.x');
-  }
-  if (exists $tag->{ID3v1}) {
-    push @ver, 'ID3v1.x';
-  }
-  return join '/', @ver;
-}
+def compact_version(tag):
+    return re.sub(r'[\s\.]', '',
+                  re.sub(r'/.*', '+',
+                         re.sub(r'^v', '',
+                                eyed3.id3.versionToString(tag.version))))
 
-sub dump_ID3v1 ( $ ) {
-  my ($tag) = @_;
+def varsify(obj, *, depth=1):
+    if depth <= 0:
+        return obj
+    try:
+        top = vars(obj)
+    except TypeError:
+        return obj
+    return { '<self>': obj, **{k: varsify(v, depth=(depth-1))
+                               for k, v in top.items()} }
 
-  my %clone = %{$tag->{ID3v1}};        # shallow copy
-  $clone{parent} = '...removed...'
-    if exists $clone{parent};
-  $clone{mp3} = { %{ $clone{mp3} } }   # "deepen" a branch of the shallow copy
-    if exists $clone{mp3};
-  $clone{mp3}{parent} = '...removed...'
-    if exists $clone{mp3} and exists $clone{mp3}{parent};
+def pretty_format(obj, *, initial_indent=4, width=80, **kwargs):
+    return re.sub(r'(?m)^', (' ' * initial_indent),
+                  pprint.pformat(obj, compact=False,
+                                 width=(width-initial_indent), **kwargs))
 
-  require Data::Dumper;
-  print Data::Dumper->Dump([\%clone], ['ID3v1']);
-}
+def show_frames(tag, settings):
+    for info in frame_props(tag, ascii=settings.ascii, raw=settings.raw):
+        info = dict(info)  # shallow copy
+        what = info.pop('id')
+        desc = info.pop('id_description')
+        if 'language' in info:
+            what += '(' + info['language'] + ')'
+        if 'key' in info:
+            what += '[' + info.pop('key') + ']'
+        info.pop('value', None)
+        info.pop('pretty', None)
+        info.pop('raw_encoding', None)
+        info.pop('data', None)
+        frame = info.pop('frame', None)
+        print("%-23s ( %s )" % (what, desc))
+        if True:
+            print(pretty_format(info, initial_indent=4, indent=2))
+        if settings.verbose >= 1:
+            print(pretty_format(varsify(frame, depth=2),
+                                initial_indent=8, indent=2))
 
-sub dump_ID3v2 ( $ ) {
-  my ($tag) = @_;
+def get_fields(obj, *keys):
+    for k in keys:
+        if obj is None:
+            return None
+        obj = obj.get(k)
+    return obj
 
-  my %clone = %{$tag->{ID3v2}};        # shallow copy
-  $clone{parent} = '...removed...'
-    if exists $clone{parent};
-  $clone{mp3} = { %{ $clone{mp3} } }   # "deepen" a branch of the shallow copy
-    if exists $clone{mp3};
-  $clone{mp3}{parent} = '...removed...'
-    if exists $clone{mp3} and exists $clone{mp3}{parent};
-  $clone{raw_data} = '...removed...'
-    if exists $clone{raw_data} and !$RAW;
-  $clone{tag_data} = '...removed...'
-    if exists $clone{tag_data} and !$RAW;
+def show_table(tag, fixed, settings):
+    props = abstract_props_map(tag, ascii=settings.ascii, raw=settings.raw)
+    if 'track_num' in props:
+        track = ("%2s" % (props['track_num']['value'],))
+        #track = track[-2:]
+    else:
+        track = '  '
+    ver = compact_version(tag)
+    print(field(fixed, 20, get_fields(props, 'artist', 'value')) + '|' +
+	  field(fixed, 26, get_fields(props, 'title', 'value')) + '|' +
+	  track + '|' +
+	  field(fixed, 22, get_fields(props, 'album', 'value')) + '<' +
+	  'v' + field(fixed, 4, ver, truncate=True))
 
-  require Data::Dumper;
-  print Data::Dumper->Dump([\%clone], ['ID3v2']);
-}
+def show_file(file, show_func, *args):
+    id3file = eyed3.load(file)
+    if not id3file:
+        print(f"Could not load {file}!", file=sys.stderr)
+        return
+    if not id3file.tag:
+        print(f"No ID3 tag data in {file}!", file=sys.stderr)
+        return
+    show_func(id3file.tag, *args)
 
-#sub show_ID3v1 ( $ ) { ... }
+def main():
+    settings = parse_args()
+    if settings.frames:
+        for file in settings.files:
+            print(f"* {file} *")
+            if settings.frames:
+                show_file(file, show_frames, settings)
+    if settings.compact:
+        for file in settings.files:
+            show_file(file, show_table, False, settings)
+    if settings.table:
+        for file in settings.files:
+            show_file(file, show_table, True, settings)
 
-sub show_ID3v2 ( $ ) {
-  my ($tag) = @_;
-
-  require Data::Dumper;
-
-#  my $id3v2     = $tag->{ID3v2};
-#  my @frame_ids = sort keys %{ $id3v2->get_frame_ids };
-#
-#  for my $fid (@frame_ids) {
-#    my $truename = $id3v2->get_frame_descr($fid);
-#    $truename = '?' . $fid unless defined $truename;
-#    my ($frame, $desc) = $id3v2->get_frame($fid);
-#    $desc = '?' unless defined $desc;
-#    print "$truename   ( $desc )\n";
-#    print '        ' . Data::Dumper->Dump([$frame], ['$data']);
-#  }
-
-  my @frame_descriptors = $tag->id3v2_frame_descriptors;
-  s/^([A-Z\d]{4})\d{2}$/$1/ for @frame_descriptors;  # remove indexed descr.s
-  @frame_descriptors = sort(uniq(@frame_descriptors));
-
-  for my $fdesc (@frame_descriptors) {
-    my $fid = $fdesc;  $fid =~ s/[][)(].*$//;
-    my $label = $tag->{ID3v2}->supported_frames()->{$fid};
-    $label = '?' unless defined $label;
-    print "$fdesc   ( $label )\n";
-    my @frames = $tag->{ID3v2}->frame_list_by_descr($fdesc);
-    ($fdesc eq 'UFID' or $fdesc eq 'PRIV')
-      and @frames = sort { $a->[1]{Text} cmp $b->[1]{Text} } @frames;
-    print '        ' . Data::Dumper->Dump([$_->[1]], ['$data'])
-      for @frames;
-  }
-}
-
-foreach my $file (@ARGV) {
-  my $tag = MP3::Tag->new($file);
-  $tag->get_tags;
-
-  print "* $file *\n" if $DUMP_DATA or $ALL_FRAMES;
-
-  if ($DUMP_DATA) {
-    dump_ID3v2 $tag if exists $tag->{ID3v2};
-    dump_ID3v1 $tag if exists $tag->{ID3v1};
-  }
-  if ($ALL_FRAMES) {
-    show_ID3v2 $tag if exists $tag->{ID3v2};
-    #show_ID3v1 $tag if exists $tag->{ID3v1};
-  }
-
-  if ($TABLE) {
-    my ($track) = $tag->track1;  # just the track, no number of tracks...
-    $track = $track ? sprintf("%2d", $track) : '  ';
-    my $ver = version $tag;
-    $ver =~ s/^ID3v?//;  $ver =~ s!/.*!+!;  $ver =~ s/[\s\.]//g;
-
-    print(field(20, $tag->performer), '|',
-	  field(26, $tag->title),     '|',
-	  $track,                     '|',
-	  field(22, $tag->album),     '<',
-	  'v' . wfmt_trunc(4, $ver), "\n");
-  }
-}
+if __name__ == "__main__":
+    main()
