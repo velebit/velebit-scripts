@@ -1,7 +1,7 @@
 #!/bin/bash
 
 mp3_links_dir='../for-lo-fi/NCFO practice'
-video_out_dir='../video/lo-fi/'
+video_out_dir='../video/lo-fi'
 
 case "`/bin/pwd`" in
     */performance/*)
@@ -21,6 +21,15 @@ case "`/bin/pwd`" in
 esac
 
 ######################################################################
+
+symlink () {
+    local target_path="$1"; shift
+    local symlink_path="$1"; shift
+    #echo "$symlink_path -> $target_path"
+    echo "$symlink_path -> $(basename "$target_path")"
+    rm -f "$symlink_path"
+    ln -s "$target_path" "$symlink_path"
+}
 
 rpath () {
     local path="$1"; shift
@@ -79,9 +88,8 @@ back_link () {
 
     local dir="$(dirname "$path")"
     local back="$(back_path "$dir" "$wd")/$(basename "$path")"
-    rm -f "$path"
-    #ln -s "$(rlpath "$back" "" "$dir")" "$path"
-    ln -s "$back" "$path"
+    #symlink "$(rlpath "$back" "" "$dir")" "$path"
+    symlink "$back" "$path"
 }
 
 ######################################################################
@@ -105,8 +113,7 @@ for i in ../*.m3u; do
 	echo "** $src: duplicate." >&2
 	continue
     else
-	echo "$mp3_links_dir/$dst -> $src"
-	ln -s ../../"$src" "$mp3_links_dir"/"$dst"
+	symlink ../../"$src" "$mp3_links_dir"/"$dst"
     fi
 done
 back_link "$(dirname "$mp3_links_dir")"/convert-mp3-lo-fi.sh
