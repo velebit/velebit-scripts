@@ -70,7 +70,7 @@ plist () {
     local plist="${index##*/}"; plist="$DIR/${plist%%.html}.p.tmplist"
     if [ ! -e "$plist" ]; then
         echo "... $plist" >&2
-        ./plinks.pl -hb -li -plt -lt -lb -t -la \
+        ./plinks.pl -hb -li -plt -lt -lb -t -la -ml \
                     --base "$base_uri" "$index" > "$plist"
     fi
     echo "$plist"
@@ -81,7 +81,7 @@ tlist () {
     local tlist="${index##*/}"; tlist="$DIR/${tlist%%.html}.t.tmplist"
     if [ ! -e "$tlist" ]; then
         echo "... $tlist" >&2
-        ./print-table-links.pl -hb -nc -rb -eb -t -ea -ra -sep '~' -ol \
+        ./print-table-links.pl -hb -nc -rb -eb -t -ea -ra -sep '~' -ol -ml \
                                --base "$base_uri" "$index" > "$tlist"
     fi
     echo "$tlist"
@@ -165,8 +165,6 @@ process_table_section_columns () {
         -e 's/, *,/,/;s/, *,/,/' -e 's/  *,/,/g;s/, *	/	/' \
         -e 's/^\([^	]*\)	\(.*\)$/\2	'"$out_tag:$files_prefix"'\1'"$files_suffix"'/' \
         -e 's,\xe2\x80\x99,'\'',g' \
-        `# ridiculous fix for bad website link:` \
-        -e '/Cornwall-sop-1\.mp3	.* pan /{;s/sop-1\./sop-1-pan./;}' \
         -e ''
 }
 
@@ -228,6 +226,8 @@ extract_demorch () {
               -e 's/   */ /g' -e 's/^  *//' -e 's/  *	/	/g' \
               -e 's/^\([^	]*\)	\(.*\)$/\2	'"$out_tag:$files_prefix"'\1'"$files_suffix"'/' \
               -e 's,\xe2\x80\x99,'\'',g' \
+              `# Hack: do not include music for bows` \
+              -e '/walkdown/Id' \
               > "$DIR"/"$file".mp3.tmplist
 }
 

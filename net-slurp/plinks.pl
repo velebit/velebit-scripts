@@ -1,5 +1,6 @@
 #!/usr/bin/perl
 # Show all links in a given page (file).
+# print-table-links and extract-column-links share some code via cut+paste.
 use warnings;
 use strict;
 use open ':std', ':encoding(UTF-8)';
@@ -23,10 +24,12 @@ Arguments and general options:
   --verbose              (-v)  Print additional status messages to stderr.
                                Can be repeated.
   --base BASE_URI              Use BASE_URI as the base for relative links.
-  --ascii-text           (-7)  Print text (but not the URI!) as ASCII, without accents etc.
+  --ascii-text           (-7)  Print text (but not the URI!) as ASCII, without
+                               accents etc.
 Data selection options:
   --table-level LEVEL   (-tl)  Only show links within LEVEL nested tables.
   --not-in-table               Shorthand for `--table-level 0'.
+  --merge-links         (-ml)  Treat adjacent links to same URI as one link.
 Output options (extra fields printed before URI, separated by tabs):
   --show-heading         (-h)  Show text of preceding <h#> or <title> tag.
   --show-bold-or-heading
@@ -65,6 +68,7 @@ use constant TEXT => 'text';
 
 our @fields;
 
+# NB: this implementation matches print-table-links (or did at one point).
 sub add_rm_field ( $$ ) {
   my ($name, $add) = @_;
   if ($add) {
@@ -74,21 +78,25 @@ sub add_rm_field ( $$ ) {
   }
 }
 
+# NB: this implementation matches print-table-links (or did at one point).
 sub has_field ( $ ) {
   my ($name) = @_;
   scalar grep $_ eq $name, @fields;
 }
 
+# NB: this implementation matches print-table-links (or did at one point).
 sub unique ( @ ) {
   my (%seen);
   grep !($seen{$_}++), @_;
 }
 
+# NB: this implementation matches print-table-links (or did at one point).
 sub get_matching_fields ( $ ) {
   my ($prefix) = @_;
   unique grep $_ =~ qr/^\Q$prefix\E/, @fields;
 }
 
+# NB: this implementation matches print-table-links (or did at one point).
 sub strip_prefix ( $$ ) {
   my ($value, $prefix) = @_;
   $value =~ s/^\Q$prefix\E// or return;
@@ -100,6 +108,7 @@ our $VERBOSITY = 0;
 our $TABLE_LEVEL;
 our $BASE_URI;
 our $TEXT_AS_ASCII = 0;
+our $MERGE_LINKS = 0;
 
 our $WHITESPACE_MAX_IGNORED = 1;
 our $WHITESPACE_DELTA_IGNORED = 0;
@@ -111,6 +120,7 @@ GetOptions('verbose|v+' => \$VERBOSITY,
            'ascii-text|7!' => \$TEXT_AS_ASCII,
            'table-level|tl=i' => \$TABLE_LEVEL,
            'not-in-table' => sub { $TABLE_LEVEL = 0 },
+           'merge-links|ml!' => \$MERGE_LINKS,
            'show-heading|h!' =>
            sub { add_rm_field HEADING, $_[1] },
            'show-bold-or-heading|hb!' =>
@@ -148,6 +158,7 @@ $tree->objectify_text();
 print STDERR "done.\n" if $VERBOSITY;
 
 
+# NB: this implementation matches p-t-l/e-c-l (or did at one point).
 sub get_raw_text ( @ ) {
   my (@nodes) = @_;
   @nodes = grep defined, @nodes;
@@ -158,6 +169,7 @@ sub get_raw_text ( @ ) {
 }
 
 
+# NB: this implementation matches p-t-l/e-c-l (or did at one point).
 sub get_text ( @ ) {
   my (@nodes) = @_;
   my $text = get_raw_text(@nodes);
@@ -190,15 +202,25 @@ sub get_leading_whitespace_amount ( @ ) {
 }
 
 
-sub get_in_between_nodes ( $$ ) {
+# NB: this implementation matches p-t-l/e-c-l (or did at one point).
+sub get_divergent_lineage ( $$ ) {
   my ($from, $to) = @_;
+  croak if !defined $from or !defined $to;
   my @fparents = ($from, $from->lineage);
   my @tparents = ($to, $to->lineage);
-  $fparents[-1] == $tparents[-1] or return ();  # not same root -> span is ()
   pop(@fparents), pop(@tparents)
     while @fparents and @tparents and $fparents[-1] == $tparents[-1];
-  my $ftop = pop(@fparents);
-  my $ttop = pop(@tparents);
+  return (\@fparents, \@tparents);
+}
+
+
+# NB: this implementation matches p-t-l/e-c-l (or did at one point).
+sub get_in_between_nodes ( $$ ) {
+  my ($from, $to) = @_;
+  $from->root == $to->root or return ();  # not same root -> span is ()
+  my ($fparents, $tparents) = get_divergent_lineage($from, $to) or return ();
+  my $ftop = pop(@$fparents);
+  my $ttop = pop(@$tparents);
   $ftop or $ttop or return ();  # same node -> span is ()
   if ($ftop and $ttop) {
       $ftop->parent == $ttop->parent or croak;  # inconsistent lineage -> error
@@ -206,7 +228,7 @@ sub get_in_between_nodes ( $$ ) {
         and return ();  # nodes are in reverse order -> span is ()
   }
   my @span;
-  push @span, $_->right for @fparents;
+  push @span, $_->right for @$fparents;
   if (! $ftop) {
     push @span, $ttop->left;
   } elsif (! $ttop) {
@@ -215,8 +237,52 @@ sub get_in_between_nodes ( $$ ) {
     push @span,
       @{$ftop->parent->content}[($ftop->pindex+1)..($ttop->pindex-1)];
   }
-  push @span, $_->left for reverse @tparents;
+  push @span, $_->left for reverse @$tparents;
   return @span;
+}
+
+
+# NB: this implementation matches print-table-links (or did at one point).
+sub try_merging_nodes ( $$;$$ ) {
+  my ($first, $second, $good_nodes, $bad_nodes) = @_;
+  defined $good_nodes or $good_nodes = qr/^(?:em|strong|b|i|div|span|~text)$/;
+  defined $bad_nodes or $bad_nodes = qr/^(?:table|tr|th|td|br|hr|img)$/;
+
+  my $can_merge = 1;
+  my @lineages = get_divergent_lineage $first, $second
+    or $can_merge = 0;
+  (shift(@{$lineages[0]}) == $first or die) if @lineages;
+  (shift(@{$lineages[1]}) == $second or die) if @lineages;
+  my @in_between = get_in_between_nodes $first, $second;
+
+  for my $e ([[map @$_, @lineages], 'parent'],
+	     [[map $_, @in_between], 'in-between'],
+	     [[map $_->descendants, @in_between], 'in-between child']) {
+    my ($nodes, $kind) = @$e;
+    for my $node (@$nodes) {
+      my $tag = $node->tag;
+      if ($tag =~ $bad_nodes) {
+	$can_merge = 0;
+      } elsif ($tag !~ $good_nodes) {
+	warn("warning: while merging, $kind node '$tag' is neither" .
+	     " good nor bad! (ignoring)");
+	$node->dump(\*STDERR);
+      }
+    }
+  }
+  return 0 unless $can_merge;
+
+  # The in-between nodes should not contain any non-whitespace text.
+  for my $node (@in_between) {
+    get_text($node) eq ''
+      or return 0;
+  }
+
+  # Attach all of the relevant nodes to the end of the *first* node.
+  $_->detach for @in_between;
+  $first->push_content(@in_between, $second->detach_content);
+  $second->destroy();
+  return 1;
 }
 
 
@@ -258,6 +324,7 @@ sub look_rightward_down ( $@ ) {
 }
 
 
+# NB: this implementation matches extract-column-links (or did at one point).
 sub look_leftward_siblings_down ( $@ ) {
   my ($node, @terms) = @_;
   while (1) {
@@ -267,6 +334,7 @@ sub look_leftward_siblings_down ( $@ ) {
   }
 }
 
+# NB: this implementation matches extract-column-links (or did at one point).
 sub look_rightward_siblings_down ( $@ ) {
   my ($node, @terms) = @_;
   while (1) {
@@ -277,6 +345,7 @@ sub look_rightward_siblings_down ( $@ ) {
 }
 
 
+# NB: this implementation matches extract-column-links (or did at one point).
 sub get_same_line_siblings ( $ ) {
   my ($node) = @_;
   return () unless $node;
@@ -366,17 +435,20 @@ sub get_same_line_after_link ( $ ) {
 }
 
 
+# NB: this implementation matches print-table-links (or did at one point).
 sub nonempty ( @ ) {
   grep(($_->tag ne '~text' or $_->attr('text') !~ /^[\s\xA0]+$/s), @_);
 }
 
 
+# NB: this implementation matches print-table-links (or did at one point).
 sub get_markup_headings ( $ ) {
   my ($node) = @_;
   return unless $node;
   $node->look_down(_tag => qr/^(?:title|h\d)$/);
 }
 
+# NB: this implementation matches print-table-links (or did at one point).
 sub is_valid_display_heading ( $ ) {
   my ($node) = @_;
   return unless $node;
@@ -398,6 +470,7 @@ sub is_valid_display_heading ( $ ) {
   0;
 }
 
+# NB: this implementation matches print-table-links (or did at one point).
 sub get_display_headings ( $ ) {
   my ($node) = @_;
   return unless $node;
@@ -412,6 +485,7 @@ sub clear_headings_cache () {
 
 sub traverse_to_heading ( $$ );
 
+# NB: this implementation matches print-table-links (or did at one point).
 sub traverse_to_heading ( $$ ) {
   my ($node, $get_headings) = @_;
   return unless $node;
@@ -428,6 +502,7 @@ sub traverse_to_heading ( $$ ) {
   $headings_cache{$node} = traverse_to_heading($node->parent, $get_headings);
 }
 
+# NB: this implementation matches print-table-links (or did at one point).
 sub find_heading ( $$ ) {
   my ($node, $get_headings) = @_;
   my (@headings) = $get_headings->($node);
@@ -437,17 +512,20 @@ sub find_heading ( $$ ) {
   traverse_to_heading($node, $get_headings);
 }
 
+# NB: this implementation matches print-table-links (or did at one point).
 sub find_heading_text ( $$ ) {
   my ($node, $get_headings) = @_;
   my ($heading) = find_heading($node, $get_headings);
   $heading ? get_text($heading) : '';
 }
 
+# NB: this implementation matches print-table-links (or did at one point).
 sub get_table_level ( $ ) {
   my ($node) = @_;
   scalar(@{[$node->look_up(_tag => 'table')]});
 }
 
+# NB: this implementation matches print-table-links (or did at one point).
 sub absolute_uri ( $;$ ) {
     my ($uri, $base) = @_;
     $uri = URI->new_abs($uri, $base) unless $uri =~ /^#/;
@@ -460,6 +538,21 @@ printf STDERR "    %-67s ", "Traversing <a> tags..." if $VERBOSITY;
 my @links = grep defined $_->{href},
   map +{ tag => $_, href => $_->attr('href') }, $tree->look_down(_tag => 'a');
 print STDERR "done.\n" if $VERBOSITY;
+
+if ($MERGE_LINKS) {
+  printf STDERR "    %-67s ", "Merging <a> tags..." if $VERBOSITY;
+  my $prev;
+  for my $link (@links) {
+    if ($prev and $prev->{href} eq $link->{href}) {
+      # adjacent links to same URI, not sure if can merge
+      try_merging_nodes($prev->{tag}, $link->{tag})
+        and delete $link->{tag};
+    }
+    $prev = $link if exists $link->{tag};
+  }
+  @links = grep exists $_->{tag}, @links;
+  print STDERR "done.\n" if $VERBOSITY;
+}
 
 if (defined $TABLE_LEVEL) {
   printf STDERR "    %-67s ", "Limiting by table level..." if $VERBOSITY;

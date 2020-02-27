@@ -1,4 +1,6 @@
 #!/usr/bin/perl
+# Show links in tables in a page, by column.
+# Based on plinks (for framework); shares some code with print-table-links.
 use warnings;
 use strict;
 use open ':std', ':encoding(UTF-8)';
@@ -6,6 +8,9 @@ use open ':std', ':encoding(UTF-8)';
 use Getopt::Long;
 use HTML::TreeBuilder;
 use Carp qw( carp croak );
+use Unicode::Normalize ();
+
+$| = 1;
 
 # ----------------------------------------------------------------------
 
@@ -177,7 +182,7 @@ sub slurp_from_handle ( $ ) {
   $d;
 }
 
-# NB: this implementation matches plinks (or did at one point).
+# NB: this implementation matches plinks/p-t-l (or did at one point).
 sub get_raw_text ( @ ) {
   my (@nodes) = @_;
   @nodes = grep defined, @nodes;
@@ -188,36 +193,47 @@ sub get_raw_text ( @ ) {
 }
 
 
-# NB: this implementation matches plinks (or did at one point).
+# NB: this implementation matches plinks/p-t-l (or did at one point).
 sub get_text ( @ ) {
   my (@nodes) = @_;
   my $text = get_raw_text(@nodes);
+  $text = Unicode::Normalize::NFKC($text);
   # 0xA0 is a non-breaking space in Latin-1 and Unicode.
-  # 0xC2 0xA0 is the UTF-8 representation of U+00A0; this is a horrible hack.
+  # 0xC2 0xA0 is the UTF-8 representation of U+00A0; this is a horrible hack
+  # (which may no longer be needed; not bothering to test.)
   $text =~ s/[\s\xA0\xC2]+/ /sg;
   $text =~ s/^ //;  $text =~ s/ $//;
+  #$text = unidecode($text) if $TEXT_AS_ASCII;
   $text;
 }
 
 
-# NB: this implementation matches plinks (or did at one point).
-sub get_in_between_nodes ( $$ ) {
+# NB: this implementation matches plinks/p-t-l (or did at one point).
+sub get_divergent_lineage ( $$ ) {
   my ($from, $to) = @_;
   my @fparents = ($from, $from->lineage);
   my @tparents = ($to, $to->lineage);
-  $fparents[-1] == $tparents[-1] or return ();  # not same root -> span is ()
   pop(@fparents), pop(@tparents)
     while @fparents and @tparents and $fparents[-1] == $tparents[-1];
-  my $ftop = pop(@fparents);
-  my $ttop = pop(@tparents);
+  return (\@fparents, \@tparents);
+}
+
+
+# NB: this implementation matches plinks/p-t-l (or did at one point).
+sub get_in_between_nodes ( $$ ) {
+  my ($from, $to) = @_;
+  $from->root == $to->root or return ();  # not same root -> span is ()
+  my ($fparents, $tparents) = get_divergent_lineage($from, $to) or return ();
+  my $ftop = pop(@$fparents);
+  my $ttop = pop(@$tparents);
   $ftop or $ttop or return ();  # same node -> span is ()
   if ($ftop and $ttop) {
       $ftop->parent == $ttop->parent or croak;  # inconsistent lineage -> error
       $ftop->pindex >= $ttop->pindex
-	  and return ();  # nodes are in reverse order -> span is ()
+        and return ();  # nodes are in reverse order -> span is ()
   }
   my @span;
-  push @span, $_->right for @fparents;
+  push @span, $_->right for @$fparents;
   if (! $ftop) {
     push @span, $ttop->left;
   } elsif (! $ttop) {
@@ -226,7 +242,7 @@ sub get_in_between_nodes ( $$ ) {
     push @span,
       @{$ftop->parent->content}[($ftop->pindex+1)..($ttop->pindex-1)];
   }
-  push @span, $_->left for reverse @tparents;
+  push @span, $_->left for reverse @$tparents;
   return @span;
 }
 

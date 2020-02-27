@@ -7,8 +7,9 @@ use open ':std', ':encoding(UTF-8)';
 
 use Getopt::Long;
 use HTML::TreeBuilder;
-# Doesn't use HTML::TableExtract in 'tree' mode because it doesn't seem to let us access the whole tree.
-# Doesn't use other existing modules for a wide variety of reasons, including I can't look through all of them.
+# Doesn't use HTML::TableExtract in 'tree' mode because it doesn't seem to
+# let us access the whole tree.  Doesn't use other existing modules for a
+# wide variety of reasons, including I can't look through all of them.
 use URI;
 use Carp qw( carp croak );
 use Unicode::Normalize ();
@@ -35,6 +36,7 @@ Data selection options:
   --ignore-breaks      (-ibr)  Don't use line breaks as "sub-row" delimiters.
                                By default, an "entry" is a break-delimited line
                                within a cell.  With -ibr, an "entry" is a cell.
+  --merge-links         (-ml)  Treat adjacent links to same URI as one link.
 Data ordering options:
   --sort-by-line        (-sl)  Order links by row *and line* before column.
   --output-by-line      (-ol)  Do --sort-by-line and repeat single-line links.
@@ -143,6 +145,7 @@ our $VERBOSITY = 0;
 our $TABLE_LEVEL;
 our $BASE_URI;
 our $TEXT_AS_ASCII = 0;
+our $MERGE_LINKS = 0;
 
 our $SPLIT_AT_LINE_BREAKS = 1;
 our $CELL_SEPARATOR = ' // ';
@@ -155,6 +158,7 @@ GetOptions('verbose|v+' => \$VERBOSITY,
            'separator=s' => \$CELL_SEPARATOR,
            'table-level|tl=i' => \$TABLE_LEVEL,
            'ignore-breaks|ibr!' => sub { $SPLIT_AT_LINE_BREAKS = ! $_[1] },
+           'merge-links|ml!' => \$MERGE_LINKS,
            'sort-by-line|sl!' => \$REORDER_BY_LINE,
            'output-by-line|by-line|ol!' =>
            sub { $REORDER_BY_LINE = $REPEAT_SINGLE_LINE = $_[1] },
@@ -200,7 +204,7 @@ $tree->objectify_text();
 print STDERR "done.\n" if $VERBOSITY;
 
 
-# NB: this implementation matches plinks (or did at one point).
+# NB: this implementation matches plinks/e-c-l (or did at one point).
 sub get_raw_text ( @ ) {
   my (@nodes) = @_;
   @nodes = grep defined, @nodes;
@@ -211,7 +215,7 @@ sub get_raw_text ( @ ) {
 }
 
 
-# NB: this implementation matches plinks (or did at one point).
+# NB: this implementation matches plinks/e-c-l (or did at one point).
 sub get_text ( @ ) {
   my (@nodes) = @_;
   my $text = get_raw_text(@nodes);
@@ -226,16 +230,24 @@ sub get_text ( @ ) {
 }
 
 
-# NB: this implementation matches plinks (or did at one point).
-sub get_in_between_nodes ( $$ ) {
+# NB: this implementation matches plinks/e-c-l (or did at one point).
+sub get_divergent_lineage ( $$ ) {
   my ($from, $to) = @_;
   my @fparents = ($from, $from->lineage);
   my @tparents = ($to, $to->lineage);
-  $fparents[-1] == $tparents[-1] or return ();  # not same root -> span is ()
   pop(@fparents), pop(@tparents)
     while @fparents and @tparents and $fparents[-1] == $tparents[-1];
-  my $ftop = pop(@fparents);
-  my $ttop = pop(@tparents);
+  return (\@fparents, \@tparents);
+}
+
+
+# NB: this implementation matches plinks/e-c-l (or did at one point).
+sub get_in_between_nodes ( $$ ) {
+  my ($from, $to) = @_;
+  $from->root == $to->root or return ();  # not same root -> span is ()
+  my ($fparents, $tparents) = get_divergent_lineage($from, $to) or return ();
+  my $ftop = pop(@$fparents);
+  my $ttop = pop(@$tparents);
   $ftop or $ttop or return ();  # same node -> span is ()
   if ($ftop and $ttop) {
       $ftop->parent == $ttop->parent or croak;  # inconsistent lineage -> error
@@ -243,7 +255,7 @@ sub get_in_between_nodes ( $$ ) {
         and return ();  # nodes are in reverse order -> span is ()
   }
   my @span;
-  push @span, $_->right for @fparents;
+  push @span, $_->right for @$fparents;
   if (! $ftop) {
     push @span, $ttop->left;
   } elsif (! $ttop) {
@@ -252,8 +264,52 @@ sub get_in_between_nodes ( $$ ) {
     push @span,
       @{$ftop->parent->content}[($ftop->pindex+1)..($ttop->pindex-1)];
   }
-  push @span, $_->left for reverse @tparents;
+  push @span, $_->left for reverse @$tparents;
   return @span;
+}
+
+
+# NB: this implementation matches plinks (or did at one point).
+sub try_merging_nodes ( $$;$$ ) {
+  my ($first, $second, $good_nodes, $bad_nodes) = @_;
+  defined $good_nodes or $good_nodes = qr/^(?:em|strong|b|i|div|span|~text)$/;
+  defined $bad_nodes or $bad_nodes = qr/^(?:table|tr|th|td|br|hr|img)$/;
+
+  my $can_merge = 1;
+  my @lineages = get_divergent_lineage $first, $second
+    or $can_merge = 0;
+  (shift(@{$lineages[0]}) == $first or die) if @lineages;
+  (shift(@{$lineages[1]}) == $second or die) if @lineages;
+  my @in_between = get_in_between_nodes $first, $second;
+
+  for my $e ([[map @$_, @lineages], 'parent'],
+	     [[map $_, @in_between], 'in-between'],
+	     [[map $_->descendants, @in_between], 'in-between child']) {
+    my ($nodes, $kind) = @$e;
+    for my $node (@$nodes) {
+      my $tag = $node->tag;
+      if ($tag =~ $bad_nodes) {
+	$can_merge = 0;
+      } elsif ($tag !~ $good_nodes) {
+	warn("warning: while merging, $kind node '$tag' is neither" .
+	     " good nor bad! (ignoring)");
+	$node->dump(\*STDERR);
+      }
+    }
+  }
+  return 0 unless $can_merge;
+
+  # The in-between nodes should not contain any non-whitespace text.
+  for my $node (@in_between) {
+    get_text($node) eq ''
+      or return 0;
+  }
+
+  # Attach all of the relevant nodes to the end of the *first* node.
+  $_->detach for @in_between;
+  $first->push_content(@in_between, $second->detach_content);
+  $second->destroy();
+  return 1;
 }
 
 
@@ -451,14 +507,16 @@ sub absolute_uri ( $;$ ) {
 }
 
 
-# first look at <a ...> tags inside <table ...> tags
+# first, look at <a ...> tags inside <table ...> tags
 printf STDERR "    %-67s ", "Traversing <a> and <table> tags..." if $VERBOSITY;
-my (@links, %links, @tables, %tables);
+my (@links, %links, @tables, %tables, @prev);
+LINK:
 for my $tag ($tree->look_down(_tag => 'a')) {
     defined $tag->{href} or next;
-    my $table_tag = $tag->look_up(_tag => 'table') or next;
+    my $table_tag = $tag->look_up(_tag => 'table') or (@prev=(), next);
     # limit by $TABLE_LEVEL here if set
-    defined $TABLE_LEVEL and get_table_level($tag) != $TABLE_LEVEL and next;
+    defined $TABLE_LEVEL and get_table_level($tag) != $TABLE_LEVEL
+      and (@prev=(), next);
 
     if (! exists $tables{$table_tag}) {
       push @tables, +{ tag => $table_tag, links => [] };
@@ -466,9 +524,15 @@ for my $tag ($tree->look_down(_tag => 'a')) {
     }
     my $table = $tables{$table_tag} or croak;
     my $link = { tag => $tag, href => $tag->attr('href'), table => $table };
+    if ($MERGE_LINKS and @prev and $prev[0]->{href} eq $link->{href}) {
+      # adjacent links to same URI, not sure if can merge
+      try_merging_nodes($prev[0]->{tag}, $link->{tag})
+        and next LINK;
+    }
     push @links, $link;
     $links{$tag} = $link;
     push @{ $table->{links} }, $link;
+    @prev = ($link);
 }
 print STDERR "done.\n" if $VERBOSITY;
 

@@ -13,7 +13,7 @@ t='	'
 c='[^'"$t"']'
 
 FULL="$DIR/raw0.tmplist"
-./plinks.pl -hb -lt -ll -t "$INDEX" \
+./plinks.pl -hb -lt -ll -t -ml "$INDEX" \
     > "$FULL"
 for voice in soprano alto tenor bass; do
     LEVEL1="$DIR/raw1-$voice.tmplist"
