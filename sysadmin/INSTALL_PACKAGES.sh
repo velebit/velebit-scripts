@@ -87,6 +87,7 @@ $install \
     genisoimage xorriso \
     wodim cdrskin cdrdao cue2toc \
     k3b brasero xfburn \
+    libcdio-utils \
     cdck
 
 ### PDF tools
