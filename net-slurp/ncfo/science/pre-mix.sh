@@ -16,7 +16,7 @@ inspect() {
 }
 
 longest_common_prefix() {
-    sed -e 'x;1g;G;s/^\(.*\).*\n\1.*$/\1/;h' \
+    sed -e '1h;G;s/^\(.*\).*\n\1.*$/\1/;h' \
         | tail -1
 }
 
