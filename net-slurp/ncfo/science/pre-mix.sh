@@ -15,6 +15,11 @@ inspect() {
     fi
 }
 
+longest_common_prefix() {
+    sed -e 'x;/./!g;G;s/^\(.*\).*\n\1.*$/\1/;h' \
+        | tail -1
+}
+
 
 ./make-url-lists.sh
 
@@ -23,24 +28,30 @@ set -- tmplists/soprano-all-all.mp3.urllist tmplists/alto-all-all.mp3.urllist \
 
 ./urllist2process.pl "$@" | inspect PMa1 \
     | ./canonicalize-filenames.pl "${CF_ARGS[@]}" | inspect PMa4 \
-    | sed -e 's,.*=,,;s,.*/,,;s/_.*//;/zz$/d;/p$/d' | sort | uniq \
-    > tmplists/pre-mix.prefixes.txt
+    | sed -e '\,=\([^/]*/\)*[^/_]*\(zz\|p\)[^/]*$,d;/82\.mp3$/d' \
+    > tmplists/pre-mix.input.proc
+cat tmplists/pre-mix.input.proc \
+    | sed -e 's,.*=,,;s,.*/,,' | sort | uniq \
+    > tmplists/pre-mix.filenames.txt
 prefixes=()
-while read p; do prefixes+=("$p"); done < tmplists/pre-mix.prefixes.txt
+for short_repeated_prefix in \
+    $(cat tmplists/pre-mix.filenames.txt \
+          | sed -e 's/_.*/_/' | uniq -c \
+          | sed -e '/^ *1 /d;s/^ *[1-9][0-9]*  *//')
+do
+    prefixes+=("$(cat tmplists/pre-mix.filenames.txt \
+                     | sed -e 's/^/^^^/' \
+                     | fgrep "^^^$short_repeated_prefix" \
+                     | sed -e 's/^\^\^\^//' \
+                     | longest_common_prefix \
+                     | sed -e 's/[-_]$//;s/-final$//')")
+done
 
 for prefix in "${prefixes[@]}"; do
-    ## echo "T> '$prefix'" >&2
-    pattern="/${prefix}_"
-    ## echo "P> '$pattern'" >&2
-    ./urllist2process.pl "$@" \
-        | ./canonicalize-filenames.pl "${CF_ARGS[@]}" \
-        | grep "$pattern" | grep -v '82\.mp3$' \
+    cat tmplists/pre-mix.input.proc \
+        | fgrep "/$prefix" \
         | sed -e 's@=.*/@=mix-sources/'"$prefix"'/@' \
         | ./globally-uniq.pl --sfdd \
-	> tmplists/pre-mix."$prefix".proc
-    files="$(wc -l pre-mix."$prefix".proc | sed -e 's/ .*//')"
-    if [ "$files" -gt 1 ]; then
-	cat tmplists/pre-mix."$prefix".proc
-    fi
+        | inspect PM."$prefix"
 done \
     | ./process-files.py
