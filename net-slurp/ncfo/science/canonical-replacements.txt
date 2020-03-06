@@ -25,5 +25,5 @@
 ^(?=.*Topsy.*Turvy.*Vision) => ISW19_
 ^(?=.*See.*Butterfly) => ISW20_
 ^(?=.*World.*of.*Sound) => ISW21_
-^(?=.*Hidden.*Ear) => ISWzz_
+^(?=.*Faraway.*Near) => ISW22_
 _ => p_ if -pan\b
