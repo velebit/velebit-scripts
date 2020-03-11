@@ -2,7 +2,8 @@
 
 found=()
 links=()
-linked=()
+linked_files=()
+linked_paths=()
 
 while read -r path; do
     found+=("$path")
@@ -12,7 +13,9 @@ done < <( find mixed from-midi \
 
 while read -r path; do
     links+=("$path")
-    linked+=("$(basename "$(readlink "$path")")")
+    lp="$(readlink "$path")"
+    linked_paths+=("$lp")
+    linked_files+=("$(basename "$lp")")
 done < <( find mp3-extras.* -type l -print | sort )
 
 in_list () {
@@ -32,13 +35,21 @@ for i in "${links[@]}"; do
     fi
 done
 for i in "${found[@]}"; do
-    if ! in_list "$(basename "$i")" "${linked[@]}"; then
+    if ! in_list "$(basename "$i")" "${linked_files[@]}"; then
 	for dir in mp3; do
 	    if [ -e "$dir/$(basename "$i")" ]; then
-		echo "Exists in $dir: $i"
+		echo "Exists in $dir (likely OK): $i"
 		continue 2
 	    fi
 	done
 	echo "Unused file: $i"
     fi
+done
+for i in "${linked_paths[@]}"; do
+    for dir in mp3; do
+	file="$(basename "$i")"
+	if [ -e "$dir/$file" -a "($dir/$file)" != "($i)" ]; then
+	    echo "Linked, but exists in $dir: $file"
+	fi
+    done
 done
