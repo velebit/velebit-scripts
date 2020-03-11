@@ -33,6 +33,12 @@ for i in "${links[@]}"; do
 done
 for i in "${found[@]}"; do
     if ! in_list "$(basename "$i")" "${linked[@]}"; then
+	for dir in mp3; do
+	    if [ -e "$dir/$(basename "$i")" ]; then
+		echo "Exists in $dir: $i"
+		continue 2
+	    fi
+	done
 	echo "Unused file: $i"
     fi
 done
