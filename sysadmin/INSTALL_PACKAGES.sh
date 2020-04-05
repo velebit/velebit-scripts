@@ -92,6 +92,7 @@ $install \
 
 ### PDF tools
 $install \
+    pdftk-java \
     xournal
 
 #### 32-bit compat (for e.g. Brother binaries)
