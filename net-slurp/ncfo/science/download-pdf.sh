@@ -9,15 +9,16 @@ if [ -f "$dir"/index.html ]; then
 cp -p "$dir/$file" "$dir/$file".orig
 wget --load-cookies cookies.txt \
     -nd -P "$dir" -N --restrict-file-names=windows \
-    -A .pdf,.PDF,"$file",index.html -r -l 1 \
+    -r -l 1 -A .pdf,.PDF,"$file",index.html \
     -R \*SponsorshipBrochure\*.pdf,\*SponsorshipBrochure\*-booklet.pdf \
+    --reject-regex '^http://www.familyopera.org/drupal/$' \
     --progress=bar:force \
     http://www.familyopera.org/drupal/"$page" \
   2>&1 | tee "$log"
 if [ -f "$dir/$file" ]; then
     rm -f "$dir"/index.html "$dir/$file".orig
     mv "$dir/$file" "$dir"/index.html
-    ./clean-up.pl -i "$file" "$log"
+    ./clean-up.pl -i "$file" -i index.html "$log"
 elif [ -f "$dir/$file".orig ]; then
     rm -f "$dir"/index.html "$dir/$file"
     mv "$dir/$file".orig "$dir"/index.html
