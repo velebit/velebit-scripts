@@ -61,6 +61,7 @@ $install \
     audacity \
     musescore \
     jhead libimage-exiftool-perl exiv2 \
+    paprefs \
     sox libsox-fmt-all \
     darktable \
     blender
