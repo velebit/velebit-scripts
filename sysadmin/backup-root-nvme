@@ -17,4 +17,4 @@ fi
 
 "$script" $verbose --write-times /common/backups/last_backup.root_nvme \
           --root \
-          -X .cache LABEL="root" LABEL="backup_root"
+          -X .cache -X .gvfs LABEL="root" LABEL="backup_root"

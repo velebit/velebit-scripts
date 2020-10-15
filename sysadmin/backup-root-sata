@@ -17,6 +17,6 @@ fi
 
 "$script" $verbose --write-times /common/backups/last_backup.root_sata \
           --root \
-          -X .cache LABEL="root" LABEL="hg_root" \
+          -X .cache -X .gvfs LABEL="root" LABEL="hg_root" \
           --data \
           LABEL="EFI_SYS" LABEL="HG_EFI_SYS"
