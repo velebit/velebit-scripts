@@ -30,6 +30,7 @@ Flags:
   --no-check-mode     Do not check the file/directory mode.
   --no-check-owner    Do not check the file/directory ownership (UID or GID).
   --no-check-nlinks   Do not check the file/directory hard link count.
+  --no-check-data     Do not check the contents of files.
 
   --block-size SIZE   Use the specified block size.  (Default: 1M)
                       Can be specified as <NUM> (bytes), <NUM>K or <NUM>M.
@@ -45,6 +46,7 @@ our $CHECK_SIZE_BEFORE_CONTENTS = 1;
 our $CHECK_MODE = 1;
 our $CHECK_OWNERSHIP = 1;
 our $CHECK_NLINKS = 1;
+our $CHECK_CONTENTS = 1;
 our $FILE_READ_LEN = 1024*1024;  # 1MB
 
 Getopt::Long::Configure qw( bundling );
@@ -59,6 +61,8 @@ GetOptions('help|h|?'           => \&Usage,
            'check-mode|mode!'   => \$CHECK_MODE,
            'check-owner|owner!' => \$CHECK_OWNERSHIP,
            'check-nlinks|nlinks!' => \$CHECK_NLINKS,
+           'check-data|check-contents|data|contents!'
+                                => \$CHECK_CONTENTS,
 	   'block-size|bs=s'    => \$FILE_READ_LEN,
           ) or Usage;
 
@@ -269,6 +273,7 @@ sub tdiff_type_entries ( $$@ ) {
 
   # all entries have to be the same type (all directories, all symlinks, etc)
   my $type = $stat[0]->mode & S_IFMT;
+  ($_->mode & S_IFMT) != $type and die for @stat;
 
   ## check number of hard links
   if ($CHECK_NLINKS and $type != S_IFDIR) {
@@ -346,6 +351,8 @@ sub tdiff_files ( $$@ ) {
   } else {
     @info_groups = [ @info ];
   }
+
+  $CHECK_CONTENTS or return;
 
   my @buffers = ();
  INFO_GROUP:
