@@ -1,8 +1,24 @@
-#!/bin/sh
+#!/bin/bash
 
-py_install='pip3 install --disable-pip-version-check'
+py_install='pip3 install --disable-pip-version-check -U'
 
-$py_install \
+packages=()
+
+packages+=( \
     scipy numpy matplotlib \
+)
+packages+=( \
+    imageio imageio-ffmpeg \
     eyed3 \
-    unidecode
+)
+packages+=( \
+    regex \
+)
+packages+=( \
+    unidecode \
+)
+packages+=( \
+    speedtest-cli
+)
+
+$py_install "${packages[@]}"
