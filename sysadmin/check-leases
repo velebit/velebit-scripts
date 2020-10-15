@@ -1,30 +1,46 @@
 #!/usr/bin/perl
 use warnings;
 use strict;
+use Getopt::Long;
+use File::Basename qw( basename );
 
 our $host_info = '/etc/dhcp/dhcpd.conf';
 our @lease_info = ( '/var/lib/dhcp/dhcpd.leases' );
+our $do_mac_lookup;
+our $show_hosts;
+our $show_addr;
+our $show_mac_dashes;
 
-@ARGV and $ARGV[0] eq '-d' and (shift, $host_info = shift);
+Getopt::Long::Configure('no_ignore_case');
+GetOptions('dhcp|d=s' => \$host_info,
+           'mac|m!' => \$do_mac_lookup,
+           'M' => sub { $do_mac_lookup = 0 },
+           'hosts|h!' => \$show_hosts,
+           'addr|ip|i!' => \$show_addr,
+           'I' => sub { $show_addr = 0 },
+           'dash|minus|router|r!' => \$show_mac_dashes,
+          ) or die ("Usage: " . basename($0) .
+                    " [-m|-M][-h][-i|-I][-r] [-d DHCP_CONF] [LEASES...]\n");
+
 @ARGV and @lease_info = @ARGV;
 
 {
-  package Hosts;
+  package DhcpHosts;
 
   sub new ( $@ ) {
     my ($pkg, @files) = @_;
     ref $pkg and die;
-    my $self = bless +{ files => \@files, data => +{} }, $pkg;
+    my $self = bless +{ files => \@files, by_mac => +{}, by_addr => +{} }, $pkg;
     $self->_read();
     $self;
   }
 
-  sub get ( $ ) {
+  sub get_map_by_mac ( $ ) {
     my ($self) = @_;
     ref $self or die;
-    %{$self->{data}}
+    %{$self->{by_mac}}
       or warn "Warning: no host data was found in @{$self->{files}}.\n";
-    %{$self->{data}};
+    map +($_ => +{%{$self->{by_mac}{$_}}}), keys %{$self->{by_mac}};
   }
 
   sub _read ( $ ) {
@@ -34,12 +50,15 @@ our @lease_info = ( '/var/lib/dhcp/dhcpd.leases' );
       local (@ARGV) = ($file);
       while (<>) {
         s/[\r\n]+$//;
-        /^(?:\#(\#?))?\s*host\s+(\S+)\s*\{/
-          and $self->_host_set(($1 || '') . $2), next;
-        /^\s*\#?\s*host\b/ and $self->_warn_host_parse($_), next;
-        /\s((?:(?:[0-9a-f]{2}:){5}|(?:[0-9a-f]{2}-){5})[0-9a-f]{2})[\s;]/
-          and $self->_mac_set($1), $self->_ship, next;
-        /\}/ and $self->_close_scope(), next;
+        /^(\#{0,2})\s*host\s+(\S+)\s*\{/
+          and $self->_close_scope(), $self->_host_set($1 . $2), next;
+        /^(?:\s*\#){0,2}\s*host\b/
+          and $self->_close_scope(), $self->_warn_host_parse($_), next;
+        /\s((?:(?:[0-9a-f]{2}:){5}|(?:[0-9a-f]{2}-){5})[0-9a-f]{2})[\s;]/i
+          and $self->_mac_set($1), next;
+        /^(\#{0,2})\s*fixed-address\s+(\d+\.\d+\.\d+\.\d+)[\s;]/
+          and $self->_addr_set($2), next;
+        /^[^"]*[\{\}]/ and $self->_close_scope(), next;
       }
       $self->_close_scope();
     }
@@ -47,47 +66,67 @@ our @lease_info = ( '/var/lib/dhcp/dhcpd.leases' );
 
   sub _host_set ( $$ ) {
     my ($self, $host) = @_;
-    exists $self->{host} and defined $self->{host}
-      and warn "Warning: no MAC address found for host $self->{host}.\n";
-    $self->{host} = $host;
+    exists $self->{entry}
+      and warn("Warning: Setting host within an existing entry" .
+               " for $self->{entry}->{host}.\n");
+    $self->{entry}->{host} = $host;
+  }
+  sub _addr_set ( $$ ) {
+    my ($self, $addr) = @_;
+    exists $self->{entry}->{addr} and defined $self->{entry}->{addr}
+      and warn("Warning: Duplicate IP address in an entry" .
+               " for $self->{entry}->{host}.\n");
+    $self->{entry}->{addr} = $addr;
   }
   sub _mac_set ( $$ ) {
     my ($self, $mac) = @_;
-    exists $self->{mac} and defined $self->{mac}
-      and warn "Warning: no host found for MAC address $self->{mac}.\n";
-    $self->{mac} = $mac;
+    exists $self->{entry}->{mac} and defined $self->{entry}->{mac}
+      and warn("Warning: Duplicate MAC address in an entry" .
+               " for $self->{entry}->{host}.\n");
+    $self->{entry}->{mac} = $mac;
   }
 
   sub _ship ( $ ) {
     my ($self) = @_;
-    my $has_host = (exists $self->{host} and defined $self->{host});
-    my $has_mac = (exists $self->{mac} and defined $self->{mac});
-    ! $has_host and ! $has_mac and return;
-    $has_host
-      or (warn("Warning: no host found for MAC address $self->{mac}.\n"),
-          $self->{host} = $self->{mac} = undef,
-          return);
-    $has_mac
-      or (warn("Warning: no MAC address found for host $self->{host}.\n"),
-          $self->{host} = $self->{mac} = undef,
-          return);
-    exists $self->{data}->{$self->{mac}}
-      and (warn("Warning: >1 host found for MAC address $self->{mac}.\n"),
-           $self->{host} = $self->{mac} = undef,
-           return);
-    $self->{data}->{$self->{mac}} = $self->{host};
-    $self->{host} = $self->{mac} = undef;
+    ! $self->{entry} and return;
+    my $has_host = (exists $self->{entry}->{host}
+                    and defined $self->{entry}->{host});
+    my $has_mac = (exists $self->{entry}->{mac}
+                   and defined $self->{entry}->{mac});
+    !$has_host and !$has_mac
+      and warn("Warning: no host found in entry.\n");
+    !$has_host and $has_mac
+      and warn("Warning: no host found for MAC address" .
+               " $self->{entry}->{mac}.\n");
+    !$has_mac and $has_host and $self->{entry}->{host} !~ /^#/
+      and warn("Warning: no MAC address found for host" .
+               " $self->{entry}->{host}.\n");
+    $has_mac and exists $self->{by_mac}->{$self->{entry}->{mac}}
+      and warn("Warning: >1 host found for MAC address" .
+                " $self->{entry}->{mac}.\n");
+    for my $key (qw( mac addr )) {
+      exists $self->{entry}->{$key} or next;
+      my $value = ($self->{entry}->{$key} || '');
+      length $value or next;
+      if (! exists $self->{"by_$key"}->{$value}) {
+        $self->{"by_$key"}->{$value} = $self->{entry};
+      } elsif (exists $self->{entry}->{date}
+               and defined $self->{entry}->{date}) {
+        my $old = $self->{"by_$key"}->{$value};
+        if (exists $old->{date} and defined $old->{date}
+            and $old->{date} ge $self->{entry}->{date}) {
+          # old entry is newer
+        } else {
+          $self->{"by_$key"}->{$value} = $self->{entry};
+        }
+      }
+    }
+    delete $self->{entry};
   }
 
   sub _close_scope ( $ ) {
     my ($self) = @_;
-    my $has_host = (exists $self->{host} and defined $self->{host});
-    my $has_mac = (exists $self->{mac} and defined $self->{mac});
-    $has_mac and 1
-      and warn("Warning: no host found for MAC address $self->{mac}.\n");
-    $has_host and 0
-      and warn("Warning: no MAC address found for host $self->{host}.\n");
-    $self->{host} = $self->{mac} = undef;
+    $self->_ship();
   }
 
   sub _warn_host_parse ( $$ ) {
@@ -102,17 +141,17 @@ our @lease_info = ( '/var/lib/dhcp/dhcpd.leases' );
   sub new ( $@ ) {
     my ($pkg, @files) = @_;
     ref $pkg and die;
-    my $self = bless +{ files => \@files, data => +{} }, $pkg;
+    my $self = bless +{ files => \@files, by_mac => +{}, by_addr => +{} }, $pkg;
     $self->_read();
     $self;
   }
 
-  sub get ( $ ) {
+  sub get_map_by_mac ( $ ) {
     my ($self) = @_;
     ref $self or die;
-    %{$self->{data}}
-      or warn "Warning: no host data was found in @{$self->{files}}.\n";
-    %{$self->{data}};
+    %{$self->{by_mac}}
+      or warn "Warning: no lease data was found in @{$self->{files}}.\n";
+    map +($_ => +{%{$self->{by_mac}{$_}}}), keys %{$self->{by_mac}};
   }
 
   sub _read ( $ ) {
@@ -122,11 +161,13 @@ our @lease_info = ( '/var/lib/dhcp/dhcpd.leases' );
       local (@ARGV) = ($file);
       while (<>) {
         s/[\r\n]+$//;
+        /^lease\s+(\S+)\s*\{/
+          and $self->_close_scope(), $self->_addr_set($1), next;
 #        /^\s*starts\s+\d+\s+(\S+\s+\S+);/
 #          and $self->_date_set($1), next;
         /^\s*ends\s+\d+\s+(\S+\s+\S+);/
           and $self->_date_set($1), next;
-        /\s((?:(?:[0-9a-f]{2}:){5}|(?:[0-9a-f]{2}-){5})[0-9a-f]{2})[\s;]/
+        /\s((?:(?:[0-9a-f]{2}:){5}|(?:[0-9a-f]{2}-){5})[0-9a-f]{2})[\s;]/i
           and $self->_mac_set($1), next;
         /^\s*set\s+vendor-class-identifier\s*=\s*"(.*)";/
           and $self->_vendor_set($1), next;
@@ -136,38 +177,53 @@ our @lease_info = ( '/var/lib/dhcp/dhcpd.leases' );
     }
   }
 
+  sub _addr_set ( $$ ) {
+    my ($self, $addr) = @_;
+    exists $self->{entry}
+      and warn("Warning: Setting address within an existing entry" .
+               " for $self->{entry}->{addr}.\n");
+    $self->{entry}->{addr} = $addr;
+  }
   sub _date_set ( $$ ) {
     my ($self, $date) = @_;
     exists $self->{entry}->{date} and defined $self->{entry}->{date}
-      and warn "Warning: Duplicate date in a lease.\n";
+      and warn("Warning: Duplicate date in a lease" .
+               " for $self->{entry}->{addr}.\n");
     $self->{entry}->{date} = $date;
   }
   sub _mac_set ( $$ ) {
     my ($self, $mac) = @_;
     exists $self->{entry}->{mac} and defined $self->{entry}->{mac}
-      and warn "Warning: Duplicate MAC address in a lease.\n";
+      and warn("Warning: Duplicate MAC address in a lease" .
+               " for $self->{entry}->{addr}.\n");
     $self->{entry}->{mac} = $mac;
   }
   sub _vendor_set ( $$ ) {
     my ($self, $vendor) = @_;
     exists $self->{entry}->{vendor} and defined $self->{entry}->{vendor}
-      and warn "Warning: Duplicate vendor in a lease.\n";
+      and warn("Warning: Duplicate vendor in a lease" .
+               " for $self->{entry}->{addr}.\n");
     $self->{entry}->{vendor} = $vendor;
   }
 
   sub _ship ( $ ) {
     my ($self) = @_;
     ! $self->{entry} and return;
-    my $mac = ($self->{entry}->{mac} || '');
-    if (! exists $self->{data}->{$mac}) {
-      $self->{data}->{$mac} = $self->{entry};
-    } elsif (exists $self->{entry}->{date} and defined $self->{entry}->{date}) {
-      my $old = $self->{data}->{$mac};
-      if (exists $old->{date} and defined $old->{date}
-          and $old->{date} ge $self->{entry}->{date}) {
-        # old entry is newer
-      } else {
-        $self->{data}->{$mac} = $self->{entry};
+    for my $key (qw( mac addr )) {
+      exists $self->{entry}->{$key} or next;
+      my $value = ($self->{entry}->{$key} || '');
+      length $value or next;
+      if (! exists $self->{"by_$key"}->{$value}) {
+        $self->{"by_$key"}->{$value} = $self->{entry};
+      } elsif (exists $self->{entry}->{date}
+               and defined $self->{entry}->{date}) {
+        my $old = $self->{"by_$key"}->{$value};
+        if (exists $old->{date} and defined $old->{date}
+            and $old->{date} ge $self->{entry}->{date}) {
+          # old entry is newer
+        } else {
+          $self->{"by_$key"}->{$value} = $self->{entry};
+        }
       }
     }
     delete $self->{entry};
@@ -194,29 +250,79 @@ sub word ( $$ ) {
   (grep defined, split /\s+/, $text)[$index] || '';
 }
 
-sub col ( $$ ) {
-  my ($wid, $text) = @_;
-  (!defined $text or !length $text) and $text = '???';
-  length($text) > $wid and $text = substr($text, 0, $wid-3) . '...';
-  $text . (' ' x ($wid - length $text));
-}
-
 sub min ( @ ) { (sort {$a <=> $b} @_)[0]; }
 sub max ( @ ) { (sort {$a <=> $b} @_)[-1]; }
 sub clamp ( $$$ ) { min(max($_[0], $_[1]), $_[2]); }
 
-my $columns = $ENV{COLUMNS} || 80;
-my $width_hosts = 8 + clamp(int(($columns - 44) / 3), 0, 22);
-my $width_info = max($columns - (17+2+$width_hosts+1+10+1), 8);
+sub col ( $$ ) {
+  my ($text, $wid) = @_;
+  (!defined $text or !length $text) and $text = '???';
+  length($text) > $wid and $text = substr($text, 0, $wid-3) . '...';
+  $text . (' ' x max($wid - length $text, 0));
+}
 
-my %hosts = Hosts->new($host_info)->get;
+sub sp_col ( $$;$ ) {
+  my ($text, $wid, $sp) = @_;
+  $sp = 1 if !defined $sp;
+  $wid > 0 ? ((' ' x $sp) . col($text, $wid)) : '';
+}
+
+sub sp_wid ( $;$ ) {
+  my ($wid, $sp) = @_;
+  $sp = 1 if !defined $sp;
+  $wid > 0 ? ($sp + $wid) : 0;
+}
+
+my $columns = $ENV{COLUMNS} || 80;
+my $width_mac = 17;
+my $width_addr = 0;
+$width_addr = 15 if $show_addr;
+my $width_host = 0;
+$width_host = 8 + clamp(int(($columns - 44) / 3), 0, 22) if $do_mac_lookup;
+my $width_date = 10;
+my $width_info = max(8, $columns - ($width_mac + 1 + sp_wid($width_addr) +
+                                    sp_wid($width_host) +
+                                    sp_wid($width_date) + 1));
+
+my %hosts = DhcpHosts->new($host_info)->get_map_by_mac;
 {
-  my %leases = Leases->new(@lease_info)->get;
-  for my $mac (sort {($leases{$b}{date} || '') cmp ($leases{$a}{date} || '')}
+  my %leases = Leases->new(@lease_info)->get_map_by_mac;
+  for my $mac (keys %hosts) {
+    $leases{$mac} = $hosts{$mac}, next
+      if $show_hosts
+      and !exists $leases{$mac} and $hosts{$mac}->{host} !~ /^##/;
+    # If both a lease and an uncommented host entry exist, show (but mark)
+    # the host entry's address
+    $leases{$mac}->{addr} = '+' . $hosts{$mac}->{addr}
+      if exists $leases{$mac}
+      and exists $hosts{$mac}->{addr} and defined $hosts{$mac}->{addr}
+      and $hosts{$mac}->{host} !~ /^#/;
+  }
+
+  for my $key (sort {($leases{$b}{date} || '') cmp ($leases{$a}{date} || '')
+                       or $a cmp $b}
                keys %leases) {
-    my $info = get_mac_info $mac;
-    my $date = $leases{$mac}->{date} if exists $leases{$mac}->{date};
-    printf "%-17s  %s %s %s\n", $mac, col($width_hosts, $hosts{$mac}),
-      col(10, word(0, $date) || ''), col($width_info, $info);
+    my $mac = $key;
+    $mac =~ s/:/-/g, $mac = uc $mac if $show_mac_dashes;
+    my $host = ($hosts{$key}->{host} || '');  $host =~ s/^#//;
+    my $addr = $leases{$key}->{addr} if exists $leases{$key}->{addr};
+    my $date = ($leases{$key}->{date} || '-');
+    my $info = '';
+    if ($width_host) {
+      $info = get_mac_info($key);
+    } elsif (length($host)) {
+      $info = '  ' . $host;
+    } elsif (defined $do_mac_lookup and ! $do_mac_lookup) {
+      $info = '???';
+    } else {
+      $info = '[' . (get_mac_info($key) || '???') . ']';
+    }
+
+    printf "%s %s%s%s%s\n",
+      col($mac, $width_mac),
+      sp_col($addr, $width_addr),
+      sp_col($host, $width_host),
+      sp_col(word(0, $date) || '', $width_date),
+      sp_col($info, $width_info);
   }
 }
