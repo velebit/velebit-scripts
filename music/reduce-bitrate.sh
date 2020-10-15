@@ -41,6 +41,8 @@ audio_ext=.mp3
 video_ext=.mp4
 xargs_parallel=
 child_flags=
+update_all=
+update_older=
 
 while [ "$#" -gt 0 ]; do
     arg="$1"; shift
@@ -48,13 +50,13 @@ while [ "$#" -gt 0 ]; do
 	-P)  xargs_parallel="-P $1 -l3"; shift ;;
 	-P*) xargs_parallel="-P `echo "$arg" | sed -e 's/^..//'` -l3" ;;
 	-r)  audio_rate="$1"; shift;
-             child_flags="$child_flags -r '$1'" ;;
+             child_flags="$child_flags -r '$audio_rate'" ;;
 	-r*) audio_rate="`echo "$arg" | sed -e 's/^..//'`";
-             child_flags="$child_flags -r '$1'" ;;
+             child_flags="$child_flags -r '$audio_rate'" ;;
 	-R)  video_rate="$1"; shift;
-             child_flags="$child_flags -R '$1'" ;;
+             child_flags="$child_flags -R '$video_rate'" ;;
 	-R*) video_rate="`echo "$arg" | sed -e 's/^..//'`";
-             child_flags="$child_flags -R '$1'" ;;
+             child_flags="$child_flags -R '$video_rate'" ;;
 	-n)  run='echo $'; child_flags="$child_flags -n" ;;
 	-v)  verbose=yes; child_flags="$child_flags -v" ;;
 	-Vv) log_level='-v verbose -stats'; child_flags="$child_flags -Vv" ;;
@@ -62,6 +64,8 @@ while [ "$#" -gt 0 ]; do
 	-Ve) log_level='-v error -nostats'; child_flags="$child_flags -Ve" ;;
 	--audio)  mode=audio; child_flags="$child_flags --audio" ;;
 	--video)  mode=video; child_flags="$child_flags --video" ;;
+	-f|--force) update_all=yes; child_flags="$child_flags $arg" ;;
+	-o|--older) update_older=yes; child_flags="$child_flags $arg" ;;
 	-*)  echo "Unknown flag '$arg'!" >&2; exit 1 ;;
 	/*|[a-zA-Z]:[\\/]*)
 	    echo "Absolute path '$arg' will be ignored!" >&2 ;;
@@ -84,11 +88,26 @@ while [ "$#" -gt 0 ]; do
 		    $run mkdir_p "$out_dir" "$new_dir"
 		fi
 		if [ ! -d "$out_dir/$new_dir" -a -z "$run" ]; then continue; fi
-		if [ -f "$out_dir/$new_dir/$new_file" ]; then
+
+		run_conversion=
+		if [ ! -f "$out_dir/$new_dir/$new_file" ]; then
+		    run_conversion=yes
+		elif [ -n "$update_all" ]; then
+		    run_conversion=yes
+		elif [ -n "$update_older" ]; then
+		    if [ "$out_dir/$new_dir/$new_file" -nt "$arg" ]; then
+			if [ -n "$run" -o -n "$verbose" ]; then
+			    echo ". $arg [skipped: is already newer]" >&2
+			fi
+		    else
+			run_conversion=yes
+		    fi
+		else
 		    if [ -n "$run" -o -n "$verbose" ]; then
 			echo ". $arg [skipped: already exists]" >&2
 		    fi
-		else
+		fi
+		if [ -n "$run_conversion" ]; then
 		    echo "> $new_dir/$new_file" >&2
 		    $run $ffmpeg $log_level -y \
 			-i "$arg" -vn -b:a "$audio_rate" \
