@@ -1,0 +1,448 @@
+#!/bin/bash
+# Back up the RAID to remote storage using Restic.
+#
+# NOTE: This is currently EXPERIMENTAL and has not been tested with
+#   any "real" Restic backend.
+
+PATH="/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:$PATH"
+
+COLOR_NONE=$'\033[0m'
+COLOR_FAIL=$'\033[31m'
+COLOR_STAT=$'\033[33m'
+COLOR_GOOD=$'\033[32m'
+COLOR_DATE=$'\033[36m'
+
+no_colors () {
+    COLOR_NONE=''
+    COLOR_FAIL=''
+    COLOR_STAT=''
+    COLOR_GOOD=''
+    COLOR_DATE=''
+}
+if [ ! -t 1 ]; then no_colors; fi
+
+arg_fail () {
+    echo "${COLOR_FAIL}$*${COLOR_NONE}" >&2
+    exit 1
+}
+
+status () {
+    local date="`date +'%Y-%m-%d %H:%M:%S'`"
+    echo "-- ${COLOR_DATE}[$date]${COLOR_NONE} -- ${COLOR_STAT}$*${COLOR_NONE}"
+}
+
+status_ok () {
+    local date="`date +'%Y-%m-%d %H:%M:%S'`"
+    echo "-- ${COLOR_DATE}[$date]${COLOR_NONE} -- ${COLOR_GOOD}$*${COLOR_NONE}"
+}
+
+status_fail () {
+    local date="`date +'%Y-%m-%d %H:%M:%S'`"
+    echo "-- ${COLOR_DATE}[$date]${COLOR_NONE} -- ${COLOR_FAIL}$*${COLOR_NONE}"
+}
+
+fail () {
+    status_fail "$@"
+    exit 1
+}
+
+#XXX TODO ADD REMOTE INFO
+backup=/common/restic
+restic_cmd=(restic --verbose -r "$backup")
+#XXX TODO add `rclone size`
+
+#XXX full_backup="common/users common/shared common/scratch home"
+full_backup=(common/users common/scratch home)
+full_backup=("${full_backup[@]}" root boot common)
+tar_backup=()
+ignore=(proc sys dev run media common/backups common/restic common/scratch/VMs)
+ignore+=(common/shared)  #XXX
+check_ignore_only=()
+last_backup=/common/backups
+
+# ignore cache directories (to back up while logged in and to reduce size)
+for i in /var/cache /root/.cache /home/*/.cache; do
+    if [ -d "$i" ]; then
+        ignore+=("${i#/}")
+    fi
+done
+
+dryrun=
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+       -n)  dryrun=yes ;;
+       -c)  partition_check=yes ;;
+       -d)  show_disk_setup=yes ;;
+       -?|-h)
+            cat <<EOF
+Usage: $(basename "$0") [-n] [-c] [-d] [-e|-i]
+Options:
+  -n    Dry run; print commands but don't run them.  Does not require root.
+  -c    Check backup configuration, print unconfigured or missing dirs.
+  -d    Print detailed information about all NVME and SATA disks.
+  -? -h Print this help message.
+EOF
+            exit 0 ;;
+       -*)  arg_fail "Unknown flag '$1'" ;;
+        *)  arg_fail "Unexpected argument '$1'" ;;
+    esac
+    shift
+done
+
+Run () {
+    if [ -n "$dryrun" ]; then
+        echo "${COLOR_STAT}WOULD run:${COLOR_NONE}      $*" >&2
+    else
+        echo "# $*" >&2  # NB: this does go to the log file
+        "$@"
+    fi
+}
+TimeRun () {
+    if [ -n "$dryrun" ]; then
+        echo "${COLOR_STAT}WOULD run:${COLOR_NONE} time $*" >&2
+    else
+        echo "# time $*" >&2  # NB: this does go to the log file
+        time "$@"
+    fi
+}
+
+TestBad () {
+    if [ -n "$dryrun" ]; then false;  else test "$@";  fi
+}
+TestGood () {
+    if [ -n "$dryrun" ]; then true;   else test "$@";  fi
+}
+
+CheckSpace () {
+    sleep 1
+    echo "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
+    "${restic_cmd[@]}" --quiet stats --mode=raw-data | grep 'Total'
+    #XXX TODO add `rclone size`?
+    echo "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
+}
+
+#units_to_bytes () {
+#    awk '{for(i=1;i<=NF;++i){a=$i;if(a~/T$/){a=a*1024 "G"};if(a~/G$/){a=a*1024 "M"};if(a~/M$/){a=a*1024 "K"};if(a~/K$/){a=a*1024};printf "%s%.0f",((i>1)?" ":""),a};printf "\n"}'
+#}
+#bytes_to_units () {
+#    awk '{for(i=1;i<=NF;++i){a=$i;s=1;u="";if(a<0){a=-a;s=-1};if(a>1024){a/=1024;u="K";if(a>1024){a/=1024;u="M";if(a>1024){a/=1024;u="G";if(a>1024){a/=1024;u="T"}}}};printf "%s%.1f%s",((i>1)?" ":""),s*a,u};printf "\n"}'
+#}
+kb_to_units () {
+    # numfmt?
+    awk '{for(i=1;i<=NF;++i){a=$i;s=1;u="K";if(a<0){a=-a;s=-1};if(a>1024){a/=1024;u="M";if(a>1024){a/=1024;u="G";if(a>1024){a/=1024;u="T"}}};printf "%s%.1f%s",((i>1)?" ":""),s*a,u};printf "\n"}'
+}
+
+list_excludes () {
+    local dir="$1"
+    local prefix="$2"
+    local suffix="$3"
+
+    local dir_slash="${dir%%/}/"
+    local i path relative
+
+    for i in "${full_backup[@]}" "${tar_backup[@]}" "${ignore[@]}"; do
+        path="`partition_path $i`"
+        case "$path" in
+            "$dir_slash"?*)
+                relative="${path#$dir_slash}"
+                echo "$prefix$relative$suffix"
+                ;;
+        esac
+    done
+}
+
+excludes_for_restic () {
+    local dir="$1"
+    list_excludes "$dir" "--exclude ${dir%%/}/" "" | sort
+}
+
+run_backup () {
+    local src="$1"
+    local i
+
+    status "Backing up $src to $dst..."
+    for ((i=5; i >= 0; i--)); do
+        if TimeRun "${restic_cmd[@]}" backup \
+                   --one-file-system $(excludes_for_restic "$src") \
+                   "$src/." "$dst"; then
+            break
+        else
+            if [ "$i" -gt 0 ]; then
+                status_fail "The updating went kaboom; retrying."
+                sleep 5
+            else
+                fail "The updating went kaboom; giving up."
+            fi
+        fi
+    done
+    status_ok "...done."
+    CheckSpace
+}
+
+partition_path () {
+    if [ "$1" = "root" ]; then echo "/"; else echo "/$1"; fi
+}
+partition_name () {
+    echo "$1" | sed -e 's,^/,,' -e 's/^$/root/'
+}
+
+run_all_backups () {
+    CheckSpace
+
+    local i
+    for i in "${full_backup[@]}"; do
+        run_backup "`partition_path $i`"
+    done
+
+    for i in "${tar_backup[@]}"; do
+        status_fail "WARNING: Tar backups not available, running full for $i"
+        run_backup "`partition_path $i`"
+    done
+
+    if true; then
+        status "Forgetting old snapshots from $HOSTNAME"
+        for ((i=5; i >= 0; i--)); do
+            if TimeRun "${restic_cmd[@]}" --verbose forget \
+                                          --host "$HOSTNAME" \
+                                          --group-by 'host,paths,tags' \
+                                          --keep-last 1; then
+                break
+            else
+                if [ "$i" -gt 0 ]; then
+                    status_fail "The forgetting went kaboom; retrying."
+                    sleep 5
+                else
+                    status_fail "The forgetting went kaboom; skipping."
+		    CheckSpace
+                    return 1
+                fi
+            fi
+        done
+        if true; then
+            status "Pruning unreferenced data"
+            for ((i=5; i >= 0; i--)); do
+                if TimeRun "${restic_cmd[@]}" --verbose prune; then
+                    break
+                else
+                    if [ "$i" -gt 0 ]; then
+                        status_fail "The pruning went kaboom; retrying."
+                        sleep 5
+                    else
+                        status_fail "The pruning went kaboom; skipping."
+			CheckSpace
+                        return 1
+                    fi
+                fi
+            done
+        fi
+    fi
+
+    CheckSpace
+}
+
+backup_start="`date +'%Y-%m-%d %H:%M:%S'`"
+
+generate_last_backup () {
+    local backup_file="$1"
+    local backup_end="`date +'%Y-%m-%d %H:%M:%S'`"
+    echo "$backup_file" && \
+        echo "# Started: $backup_start" && \
+        echo "# Ended:   $backup_end" && \
+        true
+}
+
+mark_last_backup () {
+    backup_file="$1"
+    set -- REMOTE_B2
+    last_backup_file="$last_backup"/last_backup."$1".txt
+    if [ -n "$dryrun" ]; then
+        status "Would update $last_backup_file"
+    else
+        if [ ! -e "$last_backup" ]; then mkdir "$last_backup"; fi
+        if generate_last_backup "$backup_file" > "$last_backup_file"; then
+            status "Updated $last_backup_file"
+        else
+            status "Failed to update $last_backup_file"
+        fi
+    fi
+}
+
+check_partition_list () {
+    local header='Backed up partitions/subdirs MISSING:'
+    local i
+    for i in "${full_backup[@]}" "${tar_backup[@]}"; do
+        if [ ! -d "/$i" ]; then
+            if [ -n "$header" ]; then
+                echo "${COLOR_FAIL}$header${COLOR_NONE}"; header=''
+            fi
+            echo "    $i"
+        fi
+    done
+    if false && [ -n "$header" ]; then
+        echo "${COLOR_GOOD}All backed up directories exist.${COLOR_NONE}"
+    fi
+
+    header='Ignored partitions/subdirs missing:'
+    for i in "${ignore[@]}" "${check_ignore_only[@]}"; do
+        if [ ! -d "/$i" ]; then
+            if [ -n "$header" ]; then
+                echo "${COLOR_STAT}$header${COLOR_NONE}"; header=''
+            fi
+            echo "    $i"
+        fi
+    done
+    if false && [ -n "$header" ]; then
+        echo "${COLOR_GOOD}All ignored directories exist.${COLOR_NONE}"
+    fi
+}
+
+check_partition_coverage () {
+    local header='Mounted partitions/subdirs NOT configured for full backups:'
+    local mountpoints="`mount | awk '{print $3}'`"
+    local path name i
+    for path in $mountpoints; do
+        name="`partition_name "$path"`"
+        for i in "${full_backup[@]}" "${tar_backup[@]}" "${ignore[@]}"; do
+            case "$name" in
+                "$i")    continue 2 ;;
+                "$i"/*)  continue 2 ;;
+                lost+found)    continue 2 ;;
+                */lost+found)  continue 2 ;;
+            esac
+        done
+        for i in "${check_ignore_only[@]}"; do
+            case "$name" in
+                "$i")    continue 2 ;;
+            esac
+        done
+        if [ -n "$header" ]; then
+            echo "${COLOR_FAIL}$header${COLOR_NONE}"; header=''
+        fi
+        echo "    $name"
+    done
+    if [ -n "$header" ]; then
+        echo "${COLOR_GOOD}All relevant mounted partitions" \
+            "are configured for backups.${COLOR_NONE}"
+    fi
+}
+
+dump_disk_setup () {
+    echo "--------------------- BASIC DISK INFORMATION ---------------------" \
+        | sed -ne 's/-/*/g;h;s/./*/g;p;x;p;x;p;s/.*//;p'
+    local d n p
+    for d in /dev/nvme[0-9]; do
+        if [ -e "$d" ]; then
+            echo "--------------------------- $d ---------------------------" \
+                | sed -ne 'h;s/./-/g;p;x;p'
+            echo "# smartctl -i $d"
+            smartctl -i "$d"
+            for n in "$d"n[0-9]; do
+                echo "# parted $n unit s p"
+                parted "$n" unit s p
+                for p in "$n"p[0-9]*; do
+                    if [ -e "$p" ]; then
+                        echo "# mdadm -Q $p"
+                        mdadm -Q "$p"
+                    fi
+                done
+            done
+        fi
+    done
+    for d in /dev/[hs]d[a-z]; do
+        if [ -e "$d" ]; then
+            echo "--------------------------- $d ---------------------------" \
+                | sed -ne 'h;s/./-/g;p;x;p'
+            echo "# smartctl -i $d"
+            smartctl -i "$d"
+            echo "# parted $d unit s p"
+            parted "$d" unit s p
+            for p in "$d"[0-9]*; do
+                if [ -e "$p" ]; then
+                    echo "# mdadm -Q $p"
+                    mdadm -Q "$p"
+                fi
+            done
+        fi
+    done
+
+    echo "-------------------------- RAID STATUS --------------------------" \
+        | sed -ne 'x;p;p;x;s/-/*/g;h;s/./*/g;p;x;p;x;p;s/.*//;p'
+    echo "# cat /proc/mdstat"
+    cat /proc/mdstat
+    for d in /dev/md[0-9]* /dev/md/*; do
+        if [ -e "$d" ]; then
+            case "`readlink "$d"`" in
+                */md[0-9]*|*/md/*) continue ;;
+            esac
+            echo "--------------------------- $d ---------------------------" \
+                | sed -ne 'h;s/./-/g;p;x;p'
+            echo "# mdadm --detail $d"
+            mdadm --detail "$d"
+        fi
+    done
+
+    echo "---------------- DETAILED S.M.A.R.T. INFORMATION ----------------" \
+        | sed -ne 'x;p;p;x;s/-/*/g;h;s/./*/g;p;x;p;x;p;s/.*//;p'
+    for d in /dev/nvme[0-9]; do
+        if [ -e "$d" ]; then
+            echo "--------------------------- $d ---------------------------" \
+                | sed -ne 'h;s/./-/g;p;x;p'
+            echo "# nvme smart-log $d"
+            nvme smart-log "$d"
+            #echo "# nvme smart-log-add $d"
+            #nvme smart-log-add "$d"
+            echo "# smartctl -x $d"
+            smartctl -x "$d"
+        fi
+    done
+    for d in /dev/[hs]d[a-z]; do
+        if [ -e "$d" ]; then
+            echo "--------------------------- $d ---------------------------" \
+                | sed -ne 'h;s/./-/g;p;x;p'
+            echo "# smartctl -x $d"
+            smartctl -x "$d"
+        fi
+    done
+}
+
+if [ -n "$partition_check" ]; then
+    check_partition_coverage
+    check_partition_list
+    exit 0
+fi
+
+if [ -n "$show_disk_setup" ]; then
+    dump_disk_setup
+    exit 0
+fi
+
+if [ -t 1 ]; then
+    # Only create a log file if the output is being sent to a terminal,
+    # and if this isn't a dry run.
+    log="log.`date +'%Y-%m-%d'`.txt"
+    if [ -e "$last_backup/remote/$log" ]; then
+        log="log.`date +'%Y-%m-%d.%H-%M'`.txt"
+        if [ -e "$last_backup/remote/$log" ]; then
+            for x in a b c d e f g h i j k l m n o p q r s t u v w x y z; do
+                log="log.`date +'%Y-%m-%d.%H-%M'`.$x.txt"
+                if [ ! -e "$last_backup/remote/$log" ]; then break; fi
+            done
+        fi
+    fi
+    setup="setup.${log#log.}"
+    if [ -z "$dryrun" ]; then
+        status "Will write log to $last_backup/remote/$log"
+        run_all_backups 2>&1 | tee "$last_backup/remote/$log"
+        dump_disk_setup > "$last_backup/remote/$setup"
+    else
+        status "Would write log to $last_backup/remote/$log"
+        run_all_backups
+        status "Would write log to $last_backup/remote/$log"
+        status "Would write setup to $last_backup/remote/$setup"
+    fi
+    mark_last_backup "$last_backup/remote/$log"
+else
+    no_colors
+    run_all_backups
+fi
