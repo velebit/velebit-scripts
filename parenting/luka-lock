@@ -1,0 +1,55 @@
+#!/bin/bash
+
+case "$1" in
+    --child)    shift ;;
+    *)          exec sudo "$0" --child "$@" ; exit 1 ;;
+esac
+
+source "$(dirname "$(realpath "$0")")"/ll-functions.bash
+
+user=luka
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        -n)     run=(echo '>'); shift ;;
+        -q)     log=(true); shift ;;
+        -u)     user="$2"; shift; shift ;;
+        *)      echo "Unknown argument '$1'" >&2; exit 1 ;;
+    esac
+done
+
+lock_account "$user"
+
+# lock the session
+session_found=
+for s in $(get_user_sessions "$user"); do
+    session_found=yes
+    case "$s" in
+        lxqt-session)
+            "${log[@]}" "Trying to lock the screen..." >&2
+            if ! run_as_user "$user" \
+                     lxqt-leave --lockscreen; then
+                "${log[@]}" "...FAILED." >&2
+            else
+                "${log[@]}" "...done." >&2
+            fi
+            ;;
+        *)
+            "${log[@]}" "Unknown session '$s', locking skipped." >&2
+            ;;
+    esac
+done
+if [ -z "$session_found" ]; then
+    "${log[@]}" "$(user2name "$user") does not seem to be logged in." >&2
+fi
+
+# lock binaries for ALL users
+lock_dir /opt/minecraft-launcher
+lock_dir /opt/multimc
+lock_flatpak_graphics io.mrarm.mcpelauncher
+
+kill_flatpak_user_app "$user" 'com.discordapp.Discord'
+
+clear_relock_queue
+
+"${log[@]}" "(Note: Minecraft apps, if any, were not killed.)" >&2

@@ -1,0 +1,32 @@
+#!/bin/bash
+
+case "$1" in
+    --child)    shift ;;
+    *)          exec sudo "$0" --child "$@" ; exit 1 ;;
+esac
+
+source "$(dirname "$(realpath "$0")")"/ll-functions.bash
+
+user=luka
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        -n)     run=(echo '>'); shift ;;
+        -q)     log=(true); shift ;;
+	-u)     user="$2"; shift; shift ;;
+        *)      echo "Unknown argument '$1'" >&2; exit 1 ;;
+    esac
+done
+
+unlock_account "$user"
+
+# lock binaries for ALL users
+lock_dir /opt/minecraft-launcher
+lock_dir /opt/multimc
+lock_flatpak_graphics io.mrarm.mcpelauncher
+
+lock_at_bedtime_only "$user"
+
+"${log[@]}" "(Note: timed unlocking is still not implemented.)" >&2
+"${log[@]}" "(Note: Minecraft apps are LOCKED.)" >&2
+"${log[@]}" "(Note: Minecraft apps, if any, were not killed.)" >&2
