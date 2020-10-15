@@ -1,0 +1,40 @@
+#!/usr/bin/perl
+use warnings;
+use strict;
+
+our @files = ( '/etc/dhcp/dhcpd.conf' );
+our $match = qr/\.(?:|[1-6])\d$/;
+
+ARG:
+while (@ARGV) {
+  my $arg = shift @ARGV;
+  $arg !~ /^-/ and @files = ($arg, @ARGV), last ARG;
+  $arg eq '--' and @files = @ARGV, last ARG;
+  $arg eq '-r' and (@ARGV or die "-r requires an argument!\n"),
+                   $match = shift(@ARGV), $match = qr/$match/, next;
+  $arg eq '-R' and $match = undef, next;
+  die "Unknown flag '$arg'!\n";
+}
+
+my %ip_hosts;
+@ARGV = @files;
+
+while (<>) {
+    s/\r?\n//g;
+    /^\#/ and next;
+    /fixed-address/ || next;
+    my ($addr123, $addr4) = /^\s*fixed-address\s+((?:\d+\.){3})(\d+)\s*;\s*$/
+      or die "Unparseable line: '$_'\n ";
+    $match and ($addr123 . $addr4) !~ $match and next;
+    push @{$ip_hosts{$addr123}}, $addr4;
+}
+
+%ip_hosts or warn("Warning: no fixed-adddress hosts found.\n"), exit 1;
+
+my @ip_addrs;
+for my $net (sort {$a cmp $b} keys %ip_hosts) {
+    push @ip_addrs, map "$net$_", sort {$a <=> $b} @{$ip_hosts{$net}};
+}
+@ip_addrs or die warn("Error: hosts disappeared during sorting!\n"), exit 2;
+
+print join(" ", @ip_addrs), "\n";
