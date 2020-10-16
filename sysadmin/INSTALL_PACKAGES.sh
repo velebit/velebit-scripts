@@ -118,6 +118,7 @@ add_if always               libhtml-element-extended-perl \
                                 libhtml-tableextract-perl
 add_if always               libtext-unidecode-perl libtext-unaccent-perl
 add_if "$is_primary_os"     sonic-pi
+add_if "$is_primary_os"     sloccount
 
 ### file versioning, comparison and whatnot
 add_if always               git git-svn subversion
