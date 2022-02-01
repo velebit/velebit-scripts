@@ -484,7 +484,7 @@ while [ "$#" -gt 0 ]; do
         -R|--root)
             cmd=sync_root
             affects_boot=yes
-            exclude+=(--exclude tmp)
+            exclude+=(--exclude /tmp/ --exclude /var/tmp/ --exclude /media/)
             shift ;;
         -D|--data|--no-root|--not-root)
             cmd=sync_partition

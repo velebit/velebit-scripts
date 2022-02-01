@@ -47,7 +47,7 @@ fail () {
 }
 
 #XXX TODO ADD REMOTE INFO
-backup=/common/restic
+backup=/common/tmp/restic
 restic_cmd=(restic --verbose -r "$backup")
 #XXX TODO add `rclone size`
 
@@ -55,7 +55,7 @@ restic_cmd=(restic --verbose -r "$backup")
 full_backup=(common/users common/scratch home)
 full_backup=("${full_backup[@]}" root boot common)
 tar_backup=()
-ignore=(proc sys dev run media common/backups common/restic common/scratch/VMs)
+ignore=(proc sys dev run media common/backups common/tmp/restic common/scratch/VMs)
 ignore+=(common/shared)  #XXX
 check_ignore_only=()
 last_backup=/common/backups

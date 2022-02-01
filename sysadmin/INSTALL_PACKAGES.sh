@@ -43,64 +43,91 @@ add_if () {
     fi
 }
 
-is_primary_os=yes
-is_remote=yes
-is_server=yes
-is_media=yes
-is_bert_desktops=yes
-is_multiuser=
+file="$(hostname | sed -e 's,\..*,,')/host-settings.sh"
+if [ -r "$(dirname "$0")/../$file" ]; then
+    source "$(dirname "$0")/../$file"
+elif [ -r "$(dirname "$0")/$file" ]; then
+    source "$(dirname "$0")/$file"
+elif [ -r "../$file" ]; then
+    source "../$file"
+elif [ -r "./$file" ]; then
+    source "./$file"
+else
+    echo "Error: $file not found!" >&2
+    exit 1
+fi
 
-drv_nvidia=
-drv_nvidia_opti=
+#XXX!!!XXX
+#firmware-iwlwifi
 
 ## OS, desktop environment, system maintainenace and diagnostics
+add_if "!$is_vm"            efibootmgr
 add_if always               bash-completion
-add_if always               emacs
-add_if always               xclip
+add_if "!$is_headless"      emacs
+add_if "$is_headless"       emacs-nox
+add_if "!$is_headless"      xclip
 add_if always               sysstat
 add_if "$is_primary_os"     firmware-linux   # in non-free!
 add_if "$is_primary_os"     smartmontools nvme-cli
 add_if "$is_primary_os"     discover hdparm
 add_if "$is_primary_os"     mdadm
+add_if "$is_primary_os"     f3    # flash memory capacity
+add_if "$is_primary_os"     fio iozone3  # flash memory (etc) performance
 add_if "$is_primary_os"     cryptsetup-bin cryptsetup-run keyutils
+add_if "$is_primary_os"     kpartx
+add_if "$is_primary_os"     archivemount
+add_if "$is_primary_os"     squashfs-tools
 add_if always               perl perl-doc
 add_if always               python3 ipython3 python3-pip
-add_if always               python3-tk
-add_if always               graphviz
+add_if "!$is_headless"      python3-tk
+add_if "!$is_headless"      graphviz
 add_if always               iputils-ping traceroute
-add_if always               telnet netcat-traditional
-add_if always               tcpdump dhcpdump wireshark tshark nmap
+add_if always               telnet ncat
+add_if always               wget curl
+add_if always               tcpdump dhcpdump tshark nmap
+add_if "!$is_headless"      wireshark
 add_if always               lsof iotop
-add_if always               task-desktop
+add_if always               bsdextrautils
+add_if "!$is_headless"      task-desktop
 add_if "$is_remote"         task-ssh-server
-add_if "$is_server"         task-print-server foomatic-db-engine
+##add_if "$is_server"         task-print-server # removed in bullseye
+add_if "$is_server"         cups cups-client cups-bsd
+add_if "$is_server"         foomatic-db-engine
 add_if "$is_server"         printer-driver-all openprinting-ppds
 add_if "$is_primary_os"     cups printer-driver-cups-pdf
-add_if always               task-cinnamon-desktop
-add_if "$is_bert_desktops"  task-xfce-desktop
+add_if "!$is_headless"      task-cinnamon-desktop
+add_if "$is_bert_desktop"   task-xfce-desktop
 add_if "$is_multiuser"      task-mate-desktop
 add_if "$is_multiuser"      task-lxqt-desktop
-add_if "$is_primary_os"     gconf-editor
+##XXX TODO add_if "!$is_headless"      xfce4-session # xflock4 -> ?
+##add_if "$is_primary_os"     gconf-editor # removed in bullseye
 add_if "$is_multiuser"      libnotify-bin
 
 add_if "$is_server"         restic
 add_if "$is_primary_os"     rclone
 
 add_if "$is_server"         isc-dhcp-server
-add_if "$is_server"         samba
+add_if "$is_server"         samba samba-vfs-modules
 add_if always               rsync
 add_if always               jigdo-file
 add_if always               screen
-add_if always               flatpak
+add_if "!$is_vm"            flatpak
 
 add_if "$is_server"         virt-manager
 add_if "$is_server"         qemu-system-x86
 add_if "$is_server"         qemu-system-arm
 add_if "$is_server"         qemu-block-extra vde2
-add_if always               fatresize
+add_if "!$is_vm"            fatresize
 
-add_if always               gnome-terminal
-# mate-terminal
+add_if "!$is_headless"      gnome-terminal
+#add_if "!$is_headless"      mate-terminal
+#add_if "$is_server"         inadyn
+
+add_if "$is_mc_srv"         default-jre-headless  # currently OpenJDK 11
+add_if "$is_mc_srv"         default-jdk-headless  # currently OpenJDK 11
+# Note: Java 16 is also installed, from AdoptOpenJDK
+##add_if "$is_mc_srv"         mono-core mono-winforms  # for NBTExplorer, pre-bullseye
+add_if "$is_mc_srv"         mono-complete  # for NBTExplorer
 
 add_if "$drv_nvidia"                    nvidia-driver
 add_if "$drv_nvidia_opti+$drv_nvidia"   bumblebee-nvidia primus
@@ -112,37 +139,43 @@ add_if "$drv_nvidia_opti+$is_multiuser" mate-optimus
 # no need for crypt disk setup at boot (cryptsetup, cryptsetup-initramfs)
 
 ## development and the like
-add_if always               gcc g++
+add_if "!$is_vm"            gcc g++
 add_if always               strace
 add_if always               libhtml-element-extended-perl \
-                                libhtml-tableextract-perl
+                            libhtml-tableextract-perl
 add_if always               libtext-unidecode-perl libtext-unaccent-perl
 add_if "$is_primary_os"     sonic-pi
 add_if "$is_primary_os"     sloccount
 
+### OpenWRT ImageBuilder dependencies
+#add_if "$is_server"         libncurses5-dev libncursesw5-dev  # <- transitional
+add_if "$is_server"         libncurses-dev
+add_if "$is_server"         zlib1g-dev
+add_if "$is_server"         libssl-dev
+add_if "$is_server"         xsltproc
+add_if always               gawk
+add_if always               unzip
+add_if "$is_server"         gettext
+
 ### file versioning, comparison and whatnot
 add_if always               git git-svn subversion
-add_if always               meld
+add_if "!$is_headless"      meld
 
 ### local network and maintenance tools
 add_if always               sshfs
 
 ### Internet tools
-add_if always               chromium
-add_if always               whois dnsutils
+add_if "!$is_headless"      chromium
+add_if always               whois bind9-dnsutils
 # youtube-dl is installed from upstream because Debian version is very old
 
 ### media tools
-add_if always               atomicparsley libmp3-tag-perl
-add_if always               python-rgain
-add_if always               picard
-add_if always               audacity
-add_if always               musescore
-add_if always               jhead libimage-exiftool-perl exiv2
-add_if always               paprefs
-add_if always               sox libsox-fmt-all
-add_if always               darktable
-add_if always               blender
+add_if "!$is_vm"            atomicparsley libmp3-tag-perl
+add_if "!$is_headless"      audacity
+add_if "!$is_headless"      musescore
+add_if "!$is_vm"            jhead libimage-exiftool-perl exiv2
+add_if "!$is_headless"      paprefs
+add_if "!$is_vm"            sox libsox-fmt-all
 add_if "$is_media"          vlc libavcodec-extra
 add_if "$is_media"          ffmpeg
 #add_if "$is_media"          kodi
@@ -165,23 +198,29 @@ add_if "$is_media"          ffmpeg
 # avidemux? (flatpak)
 
 #### DVD creation
-add_if always               devede
+add_if "!$is_headless"      devede
 # bombono? (not installable)
 
 #### CD/DVD burninating
-add_if always               genisoimage xorriso
-add_if always               wodim cdrskin cdrdao cue2toc
-add_if always               k3b brasero xfburn
-add_if always               libcdio-utils
-add_if always               cdck
+add_if "!$is_vm"            genisoimage xorriso
+add_if "!$is_vm"            wodim cdrskin cdrdao cue2toc
+add_if "!$is_headless"      k3b brasero xfburn
+add_if "!$is_vm"            libcdio-utils
+add_if "!$is_vm"            cdck
+
+#### CD ripping and encoding
+
+add_if "$is_media"          abcde
+add_if "$is_media"          cdparanoia
+add_if "$is_media"          lame fdkaac
 
 ### PDF tools
-add_if always               pdftk-java
-add_if "$is_bert_desktops"  texlive-extra-utils  # pdfjam, pdfbook and friends
-add_if always               xournal
+add_if "!$is_vm"            pdftk-java
+add_if "$is_bert_desktop"   texlive-extra-utils  # pdfjam, pdfbook and friends
+add_if "!$is_headless"      xournal
 
 ### other document tools
-add_if "$is_bert_desktops"  pandoc
+add_if "$is_bert_desktop"   pandoc
 
 #### 32-bit compat (for e.g. Brother binaries)
 #if is_selected "$is_server"; then
@@ -192,7 +231,8 @@ add_if "$is_server"         libc6:i386
 
 # Minecraft and MultiMC deps
 add_if "$is_multiuser"      libcurl4
-add_if "$is_multiuser"      qt5-default
+# removed in bullseye, no longer needed by recent MultiMC:
+##add_if "$is_multiuser"      qt5-default
 # extracted locally: jdk-8u###-ojdkbuild-linux-x64
 add_if "$is_multiuser"      acct  # needed to track L
 add_if "$is_multiuser"      at  # needed to manage L
@@ -201,3 +241,4 @@ add_if "$is_multiuser"      at  # needed to manage L
 # Brother: hll8350cdwlpr hll8350cdwcupswrapper
 
 $apt_install "${packages[@]}"
+#for i in "${packages[@]}"; do echo "+++ $i"; $apt_install "$i"; done

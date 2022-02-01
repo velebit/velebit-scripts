@@ -48,7 +48,7 @@ backup=
 
 full_backup="common/users common/shared common/scratch home"
 tar_backup="root boot common"
-ignore="proc sys dev run media common/backups"
+ignore="proc sys dev run media common/backups common/tmp"
 check_ignore_only=""
 tar_type=".tar.gz"
 last_backup=/common/backups

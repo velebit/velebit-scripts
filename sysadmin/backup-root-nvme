@@ -1,7 +1,13 @@
 #!/bin/bash
 # Back up a root partition to another partition on the NVME SSD.
 
-script="`dirname "$0"`/backup-partition"
+script="$(dirname $(realpath "$0"))/backup-partition"
+if [ ! -e "$script" ]; then
+    script="$(dirname $(realpath "$0"))/../linux/backup-partition"
+fi
+if [ ! -e "$script" ]; then
+    echo "Could not find backup-partition script" >&2; exit 1
+fi
 HOSTNAME="${HOSTNAME-$(hostname)}"
 
 verbose=

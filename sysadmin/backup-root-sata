@@ -1,7 +1,13 @@
 #!/bin/bash
-# Back up a root partition to another partition.
+# Back up a root partition to another partition on a SATA SSD.
 
-script="`dirname "$0"`/backup-partition"
+script="$(dirname $(realpath "$0"))/backup-partition"
+if [ ! -e "$script" ]; then
+    script="$(dirname $(realpath "$0"))/../linux/backup-partition"
+fi
+if [ ! -e "$script" ]; then
+    echo "Could not find backup-partition script" >&2; exit 1
+fi
 HOSTNAME="${HOSTNAME-$(hostname)}"
 
 verbose=
@@ -17,6 +23,6 @@ fi
 
 "$script" $verbose --write-times /common/backups/last_backup.root_sata \
           --root \
-          -X .cache -X .gvfs LABEL="root" LABEL="hg_root" \
+          -X .cache -X .gvfs LABEL="root" LABEL="sata_root" \
           --data \
-          LABEL="EFI_SYS" LABEL="HG_EFI_SYS"
+          LABEL="EFI_SYS" LABEL="SATA_EFISYS"

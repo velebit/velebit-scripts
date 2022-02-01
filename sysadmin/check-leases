@@ -1,4 +1,5 @@
 #!/usr/bin/perl
+# This is the ISC DHCPD version of check-leases.
 use warnings;
 use strict;
 use Getopt::Long;
@@ -9,6 +10,7 @@ our @lease_info = ( '/var/lib/dhcp/dhcpd.leases' );
 our $do_mac_lookup;
 our $show_hosts;
 our $show_addr;
+our $use_expiration;
 our $show_mac_dashes;
 
 Getopt::Long::Configure('no_ignore_case');
@@ -25,7 +27,7 @@ GetOptions('dhcp|d=s' => \$host_info,
 @ARGV and @lease_info = @ARGV;
 
 {
-  package DhcpHosts;
+  package DhcpHosts::Dhcpd;
 
   sub new ( $@ ) {
     my ($pkg, @files) = @_;
@@ -136,7 +138,7 @@ GetOptions('dhcp|d=s' => \$host_info,
 }
 
 {
-  package Leases;
+  package Leases::Dhcpd;
 
   sub new ( $@ ) {
     my ($pkg, @files) = @_;
@@ -163,9 +165,9 @@ GetOptions('dhcp|d=s' => \$host_info,
         s/[\r\n]+$//;
         /^lease\s+(\S+)\s*\{/
           and $self->_close_scope(), $self->_addr_set($1), next;
-#        /^\s*starts\s+\d+\s+(\S+\s+\S+);/
-#          and $self->_date_set($1), next;
-        /^\s*ends\s+\d+\s+(\S+\s+\S+);/
+	/^\s*starts\s+\d+\s+(\S+\s+\S+);/ and !$use_expiration
+          and $self->_date_set($1), next;
+        /^\s*ends\s+\d+\s+(\S+\s+\S+);/ and $use_expiration
           and $self->_date_set($1), next;
         /\s((?:(?:[0-9a-f]{2}:){5}|(?:[0-9a-f]{2}-){5})[0-9a-f]{2})[\s;]/i
           and $self->_mac_set($1), next;
@@ -237,6 +239,7 @@ GetOptions('dhcp|d=s' => \$host_info,
 
 sub get_mac_info ( $ ) {
   local ($_) = @_;
+  return 'KVM/QEMU' if /^52:54:00:/i;
   s/:/-/;
   s/:/-/;
   s/:.*/-00-00-00/;
@@ -284,9 +287,9 @@ my $width_info = max(8, $columns - ($width_mac + 1 + sp_wid($width_addr) +
                                     sp_wid($width_host) +
                                     sp_wid($width_date) + 1));
 
-my %hosts = DhcpHosts->new($host_info)->get_map_by_mac;
+my %hosts = DhcpHosts::Dhcpd->new($host_info)->get_map_by_mac;
 {
-  my %leases = Leases->new(@lease_info)->get_map_by_mac;
+  my %leases = Leases::Dhcpd->new(@lease_info)->get_map_by_mac;
   for my $mac (keys %hosts) {
     $leases{$mac} = $hosts{$mac}, next
       if $show_hosts

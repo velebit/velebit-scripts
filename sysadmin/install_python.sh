@@ -6,6 +6,7 @@ packages=()
 
 packages+=( \
     scipy numpy matplotlib \
+    sympy \
 )
 packages+=( \
     imageio imageio-ffmpeg \
@@ -18,7 +19,16 @@ packages+=( \
     unidecode \
 )
 packages+=( \
-    speedtest-cli
+    speedtest-cli \
+)
+packages+=( \
+    beautifulsoup4 \
+)
+packages+=( \
+    youtube-dl yt-dlp \
+)
+packages+=( \
+    rgain \
 )
 
 $py_install "${packages[@]}"
