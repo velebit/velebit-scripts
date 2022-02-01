@@ -11,7 +11,10 @@ lst2comma () {
 dms () {
     ps -C sddm,lightdm -o pid=
 }
-parents () {
+screenlockers () {
+    ps -C xscreensaver,xflock4 -o pid=
+}
+children () {
     ps --ppid "$(lst2comma "$@")" -o pid=
 }
 users_cmds () {
@@ -44,13 +47,16 @@ get_user_sessions () {
         local ret=
         for s in $(users_cmds "${pids[@]}"); do
             case "$s" in
-                "$who":*)   echo "${s#$who:}"; ret=0 ;;         # 0 = true
+                "$who":*-session*)
+                    echo "${s#$who:}"; ret=0 ;;         # 0 = true
+                "$who":*)   ;;
                 root:*)     ;;
-                *:*)        if [ -z "$ret" ]; then ret=1; fi ;; # default false
+                *:*)
+                    if [ -z "$ret" ]; then ret=1; fi ;; # default false
             esac
         done
         if [ -n "$ret" ]; then return $ret; fi
-        pids=( $(parents "${pids[@]}") )
+        pids=( $(children "${pids[@]}") )
     done
     return 1   # false
 }
@@ -216,6 +222,15 @@ kill_flatpak_user_app () {
     else
         "${log[@]}" "$(user2name "$user") does not seem to be running $app." >&2
     fi
+}
+
+notify () {
+    local user="$1"; shift
+    local message="$1"; shift
+    local summary="Time warning"
+    local icon="alarm"
+    run_as_user "$user" notify-send -c im \
+                -t 0 -i alarm "$summary" "$message"
 }
 
 clear_at_queue () {

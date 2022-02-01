@@ -26,16 +26,12 @@ for s in $(get_user_sessions "$user"); do
     session_found=yes
     case "$s" in
         lxqt-session)
-            if [ -z "$(screenlockers)" ]; then
-                "${log[@]}" "Trying to lock the screen..." >&2
-                if ! run_as_user "$user" \
-                         lxqt-leave --lockscreen; then
-                    "${log[@]}" "...FAILED." >&2
-                else
-                    "${log[@]}" "...done." >&2
-                fi
+            "${log[@]}" "Trying to lock the screen..." >&2
+            if ! run_as_user "$user" \
+                     lxqt-leave --lockscreen; then
+                "${log[@]}" "...FAILED." >&2
             else
-                "${log[@]}" "Screen locker is already running." >&2
+                "${log[@]}" "...done." >&2
             fi
             ;;
         *)
@@ -52,8 +48,5 @@ lock_dir /opt/minecraft-launcher
 lock_dir /opt/multimc
 lock_flatpak_graphics io.mrarm.mcpelauncher
 
-kill_flatpak_user_app "$user" 'com.discordapp.Discord'
-
-clear_relock_queue
-
+"${log[@]}" "(Note: Discord app was not killed.)" >&2
 "${log[@]}" "(Note: Minecraft apps, if any, were not killed.)" >&2
