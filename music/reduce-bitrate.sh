@@ -71,7 +71,7 @@ while [ "$#" -gt 0 ]; do
 	    echo "Absolute path '$arg' will be ignored!" >&2 ;;
 	*/../*|*/..|../*)
 	    echo "Path with parent references '$arg' will be ignored!" >&2 ;;
-	*.[mM][pP]3|*.[mM]4[aA]|*.[aA][aA][cC])
+	*.[mM][pP]3|*.[mM]4[aA]|*.[aA][aA][cC]|*.[fF][lL][aA][cC])
 	    if [ -d "$arg" ]; then
 		echo ": $arg [skipped: strange directory]" >&2
 	    elif [ "$mode" = video ]; then
@@ -83,6 +83,8 @@ while [ "$#" -gt 0 ]; do
 		new_file="${arg##*/}"
 		new_file="${new_file%.[mM][pP]3}"
 		new_file="${new_file%.[mM]4[aA]}"
+		new_file="${new_file%.[aA][aA][cC]}"
+		new_file="${new_file%.[fF][lL][aA][cC]}"
 		new_file="$new_file$audio_ext"
 		if [ ! -d "$out_dir/$new_dir" ]; then
 		    $run mkdir_p "$out_dir" "$new_dir"
@@ -152,7 +154,8 @@ while [ "$#" -gt 0 ]; do
 		case "$mode" in
 		    audio)  files="-name *.[mM][pP]3"
 			    files="$files -o -name *.[mM]4[aA]"
-			    files="$files -o -name *.[aA][aA][cC]" ;;
+			    files="$files -o -name *.[aA][aA][cC]"
+			    files="$files -o -name *.[fF][lL][aA][cC]" ;;
 		    video)  files="-name *.[mM][pP]4"
 			    files="$files -o -name *.[mM][oO][vV]" ;;
 		esac
