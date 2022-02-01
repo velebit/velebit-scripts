@@ -33,6 +33,13 @@ def parse_args():
     group.add_argument(
         '--no-remove', dest='remove_old', action='store_false', default=True,
         help="Don't remove everything in old destination directory.")
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument(
+        '--skip-missing', dest='skip_missing', action='store_true',
+        default=None, help="Skip any missing files in the processing list.")
+    group.add_argument(
+        '--no-skip-missing', dest='skip_missing', action='store_false',
+        default=None, help="Fail immediately on any missing files.  [Default.]")
     settings = parser.parse_args()
     if settings.wipe_id3 is None:
         settings.wipe_id3 = settings.adjust_gain
@@ -144,7 +151,13 @@ def main():
             (inf, outf) = line.split('=')
         except ValueError as ve:
             raise ValueError("bad input format in '{line}': {ve}")
-        queue_file(inf, outf, settings)
+        try:
+            queue_file(inf, outf, settings)
+        except FileNotFoundError as fnfe:
+            if settings.skip_missing:
+                print_stderr(f"File not found, ignored: {outf}")
+            else:
+                raise
     process_queue()
 
 if __name__ == "__main__":

@@ -61,4 +61,4 @@ for prefix in "${prefixes[@]}"; do
         | ./globally-uniq.pl --sfdd \
         | inspect PM."$prefix"
 done \
-    | ./process-files.py
+    | ./process-files.py --skip-missing

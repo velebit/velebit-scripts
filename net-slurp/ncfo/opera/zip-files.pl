@@ -30,6 +30,11 @@ sub links_in ( $ ) {
   grep -l "$dir/$_", dir_entries $dir;
 }
 
+sub files_in ( $ ) {
+  my ($dir) = @_;
+  grep -f "$dir/$_", dir_entries $dir;
+}
+
 sub concat ( @ );
 sub concat ( @ ) {
   @_ or return '';
@@ -60,6 +65,7 @@ for my $link (links_in '.') {
 my (@working_dirs, @changing_dirs);
 
 for my $subdir ('../pretty', '../people') {
+  my @files_in_subdir = files_in $subdir;
   for my $src (sort { $a cmp $b } subdirs_in $subdir) {
     my $dst = unidecode $src;
     if ($subdir =~ /people/) {
@@ -70,6 +76,15 @@ for my $subdir ('../pretty', '../people') {
     }
     symlink "$subdir/$src", $dst or die "symlink($subdir/$src, $dst): $!";
     push @working_dirs, $dst;
+
+    #my @m3u = grep /\Q$src\E\.m3u$/, @files_in_subdir;
+    #@m3u > 1 and die "Multiple matching playlists: @m3u";
+    #symlink "$subdir/$_", "$dst.m3u"
+    #  or die "symlink($subdir/$_, $dst.m3u): $!" for @m3u;
+    #my @wpl = grep /\Q$src\E\.wpl$/, @files_in_subdir;
+    #@wpl > 1 and die "Multiple matching playlists: @wpl";
+    #symlink "$subdir/$_", "$dst.wpl"
+    #  or die "symlink($subdir/$_, $dst.wpl): $!" for @wpl;
   }
 }
 
@@ -102,6 +117,9 @@ if (@changing_dirs) {
   my @out_dirs = ('../out/', '../out/OLD/');
   my $suffix = unused_suffix \@out_dirs, \@working_dirs, '_' . $date, '.zip';
 
+  # Alternative: use the latest file modtime, via something like
+  # ls --time-style '+%Y-%m-%d' -ogNtr $DIR | tail -1 | awk '{print $4}'
+
   for my $dir (@changing_dirs) {
     my $zip = '../out/' . $dir . '_' . $date . $suffix . '.zip';
     -e $zip and die "$zip: file already exists!\n";
@@ -120,7 +138,8 @@ if (@changing_dirs) {
       rename $old_zip, $dest or warn "rename($old_zip, $dest): $!, continuing";
     }
 
-    system 'zip', '-qr', $zip, $dir
-      and die "zip -qr '$zip' '$dir': failed $?";
+    my @playlists; #XXX
+    system 'zip', '-qr', $zip, $dir, @playlists
+      and die "zip -qr '$zip' $dir @playlists: failed $?";
   }
 }
