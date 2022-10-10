@@ -4,6 +4,17 @@
 run=()
 log=(echo)
 
+no_unlock_days=( )
+
+# colors
+good () { echo -e '\e[34m'; }
+warn () { echo -e '\e[33m'; }
+bad ()  { echo -e '\e[31m'; }
+end ()  { echo -e '\e[0m'; }
+
+is_done() { echo "$(good)done$(end)"; }
+failed()  { echo "$(bad)FAILED$(end)"; }
+
 lst2comma () {
     echo "$*" | sed -e 's/^  *//;s/  *$//;s/  */,/g'
 }
@@ -113,10 +124,10 @@ lock_account () {
     fi
     "${log[@]}" "Locking ${name}'s account..." >&2
     if ! "${run[@]}" usermod -L -e 1 "$who"; then
-        "${log[@]}" "...FAILED, exiting." >&2
+        "${log[@]}" "...$(failed), exiting." >&2
         exit 2
     fi
-    "${log[@]}" "...done." >&2
+    "${log[@]}" "...$(is_done)." >&2
 }
 
 unlock_account () {
@@ -128,10 +139,10 @@ unlock_account () {
     fi
     "${log[@]}" "Unlocking ${name}'s account..." >&2
     if ! "${run[@]}" usermod -U -e '' "$who"; then
-        "${log[@]}" "...FAILED, exiting." >&2
+        "${log[@]}" "...$(failed), exiting." >&2
         exit 2
     fi
-    "${log[@]}" "...done." >&2
+    "${log[@]}" "...$(is_done)." >&2
 }
 
 set_perms_oct () {
@@ -146,10 +157,10 @@ set_perms_oct () {
         *)
             "${log[@]}" "Setting ${path} permissions to $perms_name..." >&2
             if ! "${run[@]}" chmod "$perms_oct" "$path"; then
-                "${log[@]}" "...FAILED, exiting." >&2
+                "${log[@]}" "...$(failed), exiting." >&2
                 exit 3
             fi
-            "${log[@]}" "...done." >&2
+            "${log[@]}" "...$(is_done)." >&2
             ;;
     esac
 }
@@ -187,10 +198,10 @@ lock_flatpak_graphics () {
                                  --nosocket=wayland \
                                  --nosocket=fallback-x11 \
                                  "$app"; then
-                "${log[@]}" "...FAILED, exiting." >&2
+                "${log[@]}" "...$(failed), exiting." >&2
                 exit 4
             fi
-            "${log[@]}" "...done." >&2
+            "${log[@]}" "...$(is_done)." >&2
             ;;
     esac
 }
@@ -204,10 +215,10 @@ unlock_flatpak () {
             if ! "${run[@]}" flatpak override \
                                  --reset \
                                  "$app"; then
-                "${log[@]}" "...FAILED, exiting." >&2
+                "${log[@]}" "...$(failed), exiting." >&2
                 exit 4
             fi
-            "${log[@]}" "...done." >&2
+            "${log[@]}" "...$(is_done)." >&2
             ;;
     esac
 }
@@ -225,9 +236,9 @@ kill_flatpak_user_app () {
     if is_flatpak_user_app_running "$user" "$app"; then
         "${log[@]}" "Killing $(user2name "$user")'s $app app..." >&2
         if ! run_as_user "$user" flatpak kill "$app"; then
-            "${log[@]}" "...FAILED." >&2
+            "${log[@]}" "...$(failed)." >&2
         else
-            "${log[@]}" "...done." >&2
+            "${log[@]}" "...$(is_done)." >&2
         fi
     else
         "${log[@]}" "$(user2name "$user") does not seem to be running $app." >&2

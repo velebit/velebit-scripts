@@ -1,11 +1,11 @@
 #!/bin/bash
 
+source "$(dirname "$(realpath "$0")")"/ll-functions.bash
+
 case "$1" in
     --child)    shift ;;
     *)          exec sudo "$0" --child "$@" ; exit 1 ;;
 esac
-
-source "$(dirname "$(realpath "$0")")"/ll-functions.bash
 
 user=luka
 
@@ -27,9 +27,9 @@ done
 #            "${log[@]}" "Trying to suspend..." >&2
 #            if ! run_as_user "$user" \
 #                     lxqt-leave --suspend; then
-#                "${log[@]}" "...FAILED." >&2
+#                "${log[@]}" "...$(failed)." >&2
 #            else
-#                "${log[@]}" "...done." >&2
+#                "${log[@]}" "...$(is_done)." >&2
 #            fi
 #            ;;
 #        *)

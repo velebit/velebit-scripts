@@ -1,11 +1,11 @@
 #!/bin/bash
 
+source "$(dirname "$(realpath "$0")")"/ll-functions.bash
+
 case "$1" in
     --child)    shift ;;
     *)          exec sudo "$0" --child "$@" ; exit 1 ;;
 esac
-
-source "$(dirname "$(realpath "$0")")"/ll-functions.bash
 
 user=luka
 

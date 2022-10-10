@@ -1,11 +1,11 @@
 #!/bin/bash
 
+source "$(dirname "$(realpath "$0")")"/ll-functions.bash
+
 case "$1" in
     --child)    shift ;;
     *)          exec sudo "$0" --child "$@" ; exit 1 ;;
 esac
-
-source "$(dirname "$(realpath "$0")")"/ll-functions.bash
 
 user=luka
 
@@ -20,6 +20,8 @@ done
 
 lock_account "$user"
 
+down_down_down=
+
 # lock the session
 session_found=
 for s in $(get_user_sessions "$user"); do
@@ -28,13 +30,26 @@ for s in $(get_user_sessions "$user"); do
         lxqt-session)
 #            if [ -z "$(screenlockers)" ]; then
                 "${log[@]}" "Trying to lock the screen..." >&2
+                lock_log="/tmp/lock_log.$$"
                 if ! run_as_user "$user" \
-                         xscreensaver-command -lock; then
-#                         lxqt-leave --lockscreen; then
-                    "${log[@]}" "...FAILED." >&2
+                         xscreensaver-command -lock > "$lock_log" 2>&1; then
+#                         lxqt-leave --lockscreen > "$lock_log" 2>&1; then
+                    sed -e 's/^/  /' "$lock_log"
+                    case "$(cat "$lock_log")" in
+                        *": already locked"*)
+                            "${log[@]}" "...$(warn)was already locked$(end)." \
+                                        >&2
+                            ;;
+                        *)
+                            "${log[@]}" "...$(failed), will try rebooting!." \
+                                        >&2
+                            down_down_down=yes
+                            ;;
+                    esac
                 else
-                    "${log[@]}" "...done." >&2
+                    "${log[@]}" "...$(is_done)." >&2
                 fi
+                rm -f "$lock_log"
 #            else
 #                "${log[@]}" "Screen locker is already running." >&2
 #            fi
@@ -45,7 +60,7 @@ for s in $(get_user_sessions "$user"); do
     esac
 done
 if [ -z "$session_found" ]; then
-    "${log[@]}" "$(user2name "$user") does not seem to be logged in." >&2
+    "${log[@]}" "$(warn)$(user2name "$user") does not seem to be logged in.$(end)" >&2
 fi
 
 # lock binaries for ALL users
@@ -60,3 +75,12 @@ kill_flatpak_user_app "$user" 'com.discordapp.Discord'
 clear_relock_queue
 
 "${log[@]}" "(Note: Minecraft apps, if any, were not killed.)" >&2
+
+if [ -n "$down_down_down" ]; then
+    "${log[@]}" "Starting shutdown in 30s..." >&2
+    if ! shutdown -h 'now + 30 seconds'; then
+        "${log[@]}" "...$(failed) to schedule a shutdown!" >&2
+    else
+        "${log[@]}" "...$(is_done)." >&2
+    fi
+fi
