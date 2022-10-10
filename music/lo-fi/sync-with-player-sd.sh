@@ -3,37 +3,11 @@
 cd "`dirname "$0"`" || exit 1
 if [ ! -e "`basename "$0"`" ]; then exit 1; fi
 
-DEST="/media/bert/CLIP JAM/Music"
+DEST="/media/bert/PLAYER_SD/Music"
 if [ ! -d "$DEST" ]; then exit 2; fi
 
 include=(
-    "./Bob Dylan"
-    "./Boiled in Lead"
-    "./Chorallaries of M.I.T_"
-    "./Cry Cry Cry"
-    "./Dar Williams"
-    "./David Haines"
-    "./Depeche Mode"
-    "./Emperor Norton's Stationary Marching Band"
-    "./Fleetwood Mac"
-    "./Genesis"
-    "./kids"
-    "./Kraftwerk"
-    "./Kris Delmhorst"
-    "./Leonard Cohen"
-    "./musical"
-    "./NCFO practice"
-    "./NCFO Science Festival Chorus"
-    "./North Cambridge Family Opera"
-    "./Rockapella"
-    "./Various Artists/The Hamilton Mixtape"
-    "./Kristen Anderson-Lopez, Robert Lopez & Christophe Beck"
-    "./Lin-Manuel Miranda, Opetaia Foaʻi & Mark Mancina"
-    "./The Pine Hill Project"
-    "./Richard Shindell"
-    "./summer camp practice"
-    "./Simon & Garfunkel"
-    "./projects"
+    "./Lofi Girl"
 )
 
 ignore=(

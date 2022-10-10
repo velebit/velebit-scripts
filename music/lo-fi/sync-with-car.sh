@@ -12,6 +12,7 @@ include=(
 )
 
 ignore=(
+    "./Lofi Girl"
 )
 
 exclude_patterns=( '*.sh' '*~' )
@@ -69,7 +70,6 @@ remove_matching () {
             fi
         done
 }
-
 
 #remove_unlisted "${include[@]}" "${ignore[@]}"
 #remove_matching "${exclude_patterns[@]}"
