@@ -42,6 +42,8 @@ Data ordering options:
   --output-by-line      (-ol)  Do --sort-by-line and repeat single-line links.
 Output options (extra fields printed before URI, separated by tabs):
   --show-heading         (-h)  Show text of <h#> or <title> tag before table.
+  --show-heading1       (-h1)  Show text of <h1> tag before table.
+  --show-heading2       (-h2)  Show text of <h2> tag before table.
   --show-bold-or-heading
                         (-hb)  Show text of <strong>, <h#> or <title> tag
                                before the table, with some heuristic filtering.
@@ -88,6 +90,8 @@ EndOfMessage
 
 
 use constant PRE_TABLE_HEADING => 'pre_table_heading';
+use constant PRE_TABLE_HEADING1 => 'pre_table_heading1';
+use constant PRE_TABLE_HEADING2 => 'pre_table_heading2';
 use constant PRE_TABLE_STRONG_OR_HEADING => 'pre_table_str_head';
 use constant ROW_NUMBER => 'row';
 use constant COLUMN_NUMBER => 'column';
@@ -164,6 +168,10 @@ GetOptions('verbose|v+' => \$VERBOSITY,
            sub { $REORDER_BY_LINE = $REPEAT_SINGLE_LINE = $_[1] },
            'show-heading|h!' =>
            sub { add_rm_field PRE_TABLE_HEADING, $_[1] },
+           'show-heading1|h1!' =>
+           sub { add_rm_field PRE_TABLE_HEADING1, $_[1] },
+           'show-heading2|h2!' =>
+           sub { add_rm_field PRE_TABLE_HEADING2, $_[1] },
            'show-bold-or-heading|hb!' =>
            sub { add_rm_field PRE_TABLE_STRONG_OR_HEADING, $_[1] },
            'show-row-number|nr' =>
@@ -233,6 +241,7 @@ sub get_text ( @ ) {
 # NB: this implementation matches plinks/e-c-l (or did at one point).
 sub get_divergent_lineage ( $$ ) {
   my ($from, $to) = @_;
+  croak if !defined $from or !defined $to;
   my @fparents = ($from, $from->lineage);
   my @tparents = ($to, $to->lineage);
   pop(@fparents), pop(@tparents)
@@ -420,6 +429,18 @@ sub get_markup_headings ( $ ) {
   my ($node) = @_;
   return unless $node;
   $node->look_down(_tag => qr/^(?:title|h\d)$/);
+}
+
+# build_get_level_headings('hN') returns a sub ref that extracts hN headings
+# NB: this implementation matches plinks (or did at one point).
+sub build_get_level_headings ( $ ) {
+  my ($tag) = @_;
+  $tag =~ /^h\d$/ or die "Unexpected heading tag '$tag'";
+  sub {
+    my ($node) = @_;
+    return unless $node;
+    $node->look_down(_tag => qr/^(?:$tag)$/);
+  };
 }
 
 # NB: this implementation matches plinks (or did at one point).
@@ -682,6 +703,19 @@ if (has_field PRE_TABLE_HEADING) {
   print STDERR "done.\n" if $VERBOSITY;
 }
 
+for my $h ([PRE_TABLE_HEADING1, 'h1'], [PRE_TABLE_HEADING2, 'h2']) {
+  my ($field, $tag) = @$h;
+  if (has_field $field) {
+    printf STDERR "    %-67s ", "Extracting $tag headings..." if $VERBOSITY;
+    clear_headings_cache;
+    my $get_headings = build_get_level_headings $tag;
+    $_->{$field} =
+      find_heading_text($_->{table}{tag}, $get_headings)
+      for @links;
+    print STDERR "done.\n" if $VERBOSITY;
+  }
+}
+
 if (has_field PRE_TABLE_STRONG_OR_HEADING) {
   printf STDERR "    %-67s ", "Extracting heading/strongs..." if $VERBOSITY;
   clear_headings_cache;
@@ -810,6 +844,12 @@ if (has_field TEXT) {
   printf STDERR "    %-67s ", "Extracting tag text..." if $VERBOSITY;
   $_->{+TEXT} = get_text($_->{tag}) for @links;
   print STDERR "done.\n" if $VERBOSITY;
+}
+
+# Fix up undefined CELL_LINE_NUMBERs
+if (has_field CELL_LINE_NUMBER) {
+  exists $_->{+CELL_LINE_NUMBER} and !defined $_->{+CELL_LINE_NUMBER}
+    and $_->{+CELL_LINE_NUMBER} = '' for @links;
 }
 
 if ($BASE_URI) {

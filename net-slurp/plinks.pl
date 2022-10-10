@@ -32,6 +32,8 @@ Data selection options:
   --merge-links         (-ml)  Treat adjacent links to same URI as one link.
 Output options (extra fields printed before URI, separated by tabs):
   --show-heading         (-h)  Show text of preceding <h#> or <title> tag.
+  --show-heading1       (-h1)  Show text of preceding <h1> tag.
+  --show-heading2       (-h2)  Show text of preceding <h2> tag.
   --show-bold-or-heading
                         (-hb)  Show text of preceding <strong>, <h#> or
                                <title> tag, with some heuristic filtering.
@@ -55,6 +57,8 @@ EndOfMessage
 
 
 use constant HEADING => 'heading';
+use constant HEADING1 => 'heading1';
+use constant HEADING2 => 'heading2';
 use constant STRONG_OR_HEADING => 'str_head';
 use constant PARENT1_TEXT => 'parent1_text';
 use constant PRECEDING_LESS_INDENTED_TEXT => 'preceding_less_indented_text';
@@ -123,6 +127,10 @@ GetOptions('verbose|v+' => \$VERBOSITY,
            'merge-links|ml!' => \$MERGE_LINKS,
            'show-heading|h!' =>
            sub { add_rm_field HEADING, $_[1] },
+           'show-heading1|h1!' =>
+           sub { add_rm_field HEADING1, $_[1] },
+           'show-heading2|h2!' =>
+           sub { add_rm_field HEADING2, $_[1] },
            'show-bold-or-heading|hb!' =>
            sub { add_rm_field STRONG_OR_HEADING, $_[1] },
            'show-parent-text|pt!' =>
@@ -448,6 +456,18 @@ sub get_markup_headings ( $ ) {
   $node->look_down(_tag => qr/^(?:title|h\d)$/);
 }
 
+# build_get_level_headings('hN') returns a sub ref that extracts hN headings
+# NB: this implementation matches print-table-links (or did at one point).
+sub build_get_level_headings ( $ ) {
+  my ($tag) = @_;
+  $tag =~ /^h\d$/ or die "Unexpected heading tag '$tag'";
+  sub {
+    my ($node) = @_;
+    return unless $node;
+    $node->look_down(_tag => qr/^(?:$tag)$/);
+  };
+}
+
 # NB: this implementation matches print-table-links (or did at one point).
 sub is_valid_display_heading ( $ ) {
   my ($node) = @_;
@@ -566,6 +586,17 @@ if (has_field HEADING) {
   my $get_headings = \&get_markup_headings;
   $_->{+HEADING} = find_heading_text($_->{tag}, $get_headings) for @links;
   print STDERR "done.\n" if $VERBOSITY;
+}
+
+for my $h ([HEADING1, 'h1'], [HEADING2, 'h2']) {
+  my ($field, $tag) = @$h;
+  if (has_field $field) {
+    printf STDERR "    %-67s ", "Extracting $tag headings..." if $VERBOSITY;
+    clear_headings_cache;
+    my $get_headings = build_get_level_headings $tag;
+    $_->{$field} = find_heading_text($_->{tag}, $get_headings) for @links;
+    print STDERR "done.\n" if $VERBOSITY;
+  }
 }
 
 if (has_field STRONG_OR_HEADING) {
