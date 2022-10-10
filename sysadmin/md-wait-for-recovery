@@ -1,0 +1,16 @@
+#!/bin/bash
+
+# wait for recovery to complete (successfully or not) for all arrays
+while true; do
+    status="$(awk 'BEGIN{dev="???"};/^[^ 	]/{dev="???"};/^md/{dev=$1};/recovery =/{print dev ":" $0}' /proc/mdstat)"
+    echo ""
+    date
+    echo "$status"
+    
+    case "$status" in
+	"")
+	    break
+	    ;;
+    esac
+    sleep 300
+done
