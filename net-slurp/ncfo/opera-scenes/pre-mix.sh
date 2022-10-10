@@ -6,12 +6,19 @@ html_dir=html
                     --demo "$html_dir/${chorus_uri##*/}.html" \
                     --orch "$html_dir/${chorus_uri##*/}.html"
 
+sources=( tmplists/bith.mp3.tmplist )
 for type in so cc est; do
-    for source in tmplists/"$type"-chorus-?.mp3.tmplist; do
+    sources+=( tmplists/"$type"-chorus-?.mp3.tmplist )
+done
+for source in "${sources[@]}"; do
         #echo "S> '$source'" >&2
         sed -e 's/.*	out_file://;s/^[A-Za-z]* [SATB] //;s,/,_,g' \
+            -e 's/^\(SO\|CC\|Est\|SH\) //' \
             -e 's/^\(w \)\?\(Chorus\) \(Soprano\|Alto\|Tenor\|Bass\) //' \
             -e 's/,\? \(Stormtr\?oopers\?\|Aliens\) \(Soprano\|Alto\|Tenor\|Bass\).*//' \
+            -e 's/,\? \(Soprano\|Alto\|Tenor\|Bass\)//' \
+            -e 's/,\? \(Soprano\|Alto\|Tenor\|Bass\)//' \
+            -e 's/\(Bith\) \([1-9]\)/\1/' \
             -e 's/, [1-9][0-9]*-[1-9][0-9]*,.*//' \
             -e 's/,\? \(High\|Low\) \(split\).*//' \
             "$source" \
@@ -20,13 +27,12 @@ for type in so cc est; do
                   #echo "T> '$track'" >&2
                   #pattern=$(echo "$track" \
                   #              | sed -e 's/ \(bars \)/.* \1/I' )
-                  pattern="/[A-Za-z]* [SATB] .*$track"
+                  pattern="/[A-Za-z]* \([SATB] \)\?.*$track"
                   #echo "P> '$pattern'" >&2
                   ./urllist2process.pl "$source" \
                       | grep -i "$pattern" \
                       | sed -e 's@=.*/@=mix-sources/'"$track"'/@'
               done
-    done
 done \
     | ./process-files.py
 

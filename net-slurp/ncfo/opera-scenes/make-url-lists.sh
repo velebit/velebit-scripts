@@ -226,7 +226,8 @@ process_table_section_columns () {
         -e '/^'"$bold_or_heading"'/I!d' \
         -e 's,^[^	]*	,,' \
         -e '/^'"$column"'	/!d' `# select columns to extract` \
-        -e 's,^\(3	\)\([^	]*	\),\1pan \2w ,' \
+        -e 's,^\(3	[^	]*	\)\([^	]*	\),\1pan \2w ,' \
+| tee /tmp/XYZZY."$column"."$heading1"."$bold_or_heading"."$part" | sed \
         -e 's/^[^	]*	//' \
         -e '/^'"$line"'	/!d' `# select columns to extract` \
         -e 's/^[^	]*	//' \
@@ -309,7 +310,8 @@ extract_table_demo () {
         | process_table_section_columns \
               "$heading1" "$bold_or_heading" "$part" \
               '1' '0\?' "$files_prefix" "$files_suffix" \
-        | sed -e 's!:[^,/][^,]*, *!:!; s!,[^,]*$! (Demo)!' `# hack file names` \
+        | sed -e 's!:[^,/][^,]*, *!:'"$files_prefix"'!; s!,[^,]*$! (Demo)!' \
+              `# hack file names` \
               > "$DIR"/"$file".mp3.tmplist
 }
 
@@ -377,6 +379,10 @@ if [ -n "$INDEX_CHORUS" ]; then
     extract_table_satb_sections "$(tlist "$INDEX_CHORUS")" \
                                 'The Coronation of Esther' 'Chorus' '' \
                                 'est-chorus-' '' 'Est ' ''
+
+    extract_table_satb_sections "$(tlist "$INDEX_CHORUS")" \
+                                'Springtime for Haman' 'Chorus' '' \
+                                'sh-chorus-' '' 'SH ' ''
 fi
 
 if [ -n "$INDEX_DEMO" ]; then
@@ -389,14 +395,23 @@ if [ -n "$INDEX_DEMO" ]; then
     extract_flat_section_links "$(plist "$INDEX_DEMO")" \
                                'The Coronation of Esther' 'DEMOS' \
                                'Demo' 'demo-est' 'Est ' ''
+    extract_flat_section_links "$(plist "$INDEX_DEMO")" \
+                               'Springtime for Haman' 'DEMOS' \
+                               'Demo' 'demo-sh' 'SH ' ''
 fi
 if [ -n "$INDEX_ORCH" ]; then
     extract_flat_section_links "$(plist "$INDEX_ORCH")" \
                                'Space Opera' 'DEMOS' \
                                'Orchestra' 'orchestra-so' 'SO ' ''
     extract_flat_section_links "$(plist "$INDEX_ORCH")" \
+                               'Cutlass Crew' 'DEMOS' \
+                               'Accompaniment' 'orchestra-cc' 'Est ' ''
+    extract_flat_section_links "$(plist "$INDEX_ORCH")" \
                                'The Coronation of Esther' 'DEMOS' \
                                'Orchestra' 'orchestra-est' 'Est ' ''
+    extract_flat_section_links "$(plist "$INDEX_ORCH")" \
+                               'Springtime for Haman' 'DEMOS' \
+                               'Orchestra' 'orchestra-sh' 'SH ' ''
 fi
 
 #if [ -n "$do_generate_all_voices" -a -n "$INDEX_CHORUS" ]; then
@@ -435,7 +450,15 @@ if [ -n "$INDEX_CHORUS" ]; then
     true > Katarina.mp3.urllist
     cat "$DIR"/bith.mp3.tmplist \
         | sed \
-            -e '/Bith 2/Id' \
+            -e '/Bith 1/I!d' \
+        >> Katarina.mp3.urllist
+    cat "$DIR"/bith.mp3.tmplist \
+        | sed \
+            -e '/Bith 1/Id' \
+        >> Katarina.mp3.urllist
+    cat "$DIR"/so-chorus-a.mp3.tmplist \
+        | sed \
+            -e '/Jabba/I!d' \
         >> Katarina.mp3.urllist
     cat "$DIR"/lady-mary.mp3.tmplist \
         >> Katarina.mp3.urllist
@@ -449,7 +472,15 @@ if [ -n "$INDEX_CHORUS" ]; then
     true > Luka.mp3.urllist
     cat "$DIR"/bith.mp3.tmplist \
         | sed \
-            -e '/Bith 2/Id' \
+            -e '/Bith 2/I!d' \
+        >> Luka.mp3.urllist
+    cat "$DIR"/bith.mp3.tmplist \
+        | sed \
+            -e '/Bith 1/I!d' \
+        >> Luka.mp3.urllist
+    cat "$DIR"/so-chorus-a.mp3.tmplist \
+        | sed \
+            -e '/Jabba/I!d' \
         >> Luka.mp3.urllist
     cat "$DIR"/henk-schenk-denk.mp3.tmplist \
         >> Luka.mp3.urllist
@@ -457,29 +488,75 @@ if [ -n "$INDEX_CHORUS" ]; then
         >> Luka.mp3.urllist
 fi
 
-### Abbe (Alto, Chamberlain, Reveler, Vader's Orders ST)
+### Abbe (Alto, Chamberlain, Reveler 1, Vader's Orders ST)
 # MP3s
 if [ -n "$INDEX_CHORUS" ]; then
     true > Abbe.mp3.urllist
     cat "$DIR"/so-chorus-a.mp3.tmplist \
+        | sed \
+            -e 's/both include/includes/' \
+            -e '/ panned right/{;s/ panned right//;s/SO A/SO A pan/;}' \
+        >> Abbe.mp3.urllist
+    cat "$DIR"/reveler-1.mp3.tmplist \
+        | sed \
+            -e '/1583/!d;/reprise/Id' \
         >> Abbe.mp3.urllist
     cat "$DIR"/cc-chorus-a.mp3.tmplist \
         | sed \
-            -e '/revelers/I!d' \
+            -e '/revelers/I!d;/1583/{;/reprise/Id;}' \
+        >> Abbe.mp3.urllist
+    cat "$DIR"/reveler-1.mp3.tmplist \
+        | sed \
+            -e '/1583/!d;/reprise/I!d' \
+        >> Abbe.mp3.urllist
+    cat "$DIR"/cc-chorus-a.mp3.tmplist \
+        | sed \
+            -e '/revelers/I!d;/1583/!d;/reprise/I!d' \
         >> Abbe.mp3.urllist
     cat "$DIR"/est-chorus-a.mp3.tmplist \
         >> Abbe.mp3.urllist
 fi
 
-### bert (Bass, Reveler, Vader's Orders ST)
+### bert (Bass, Reveler 2+4, Vader's Orders ST)
 # MP3s
 if [ -n "$INDEX_CHORUS" ]; then
     true > bert.mp3.urllist
     cat "$DIR"/so-chorus-b.mp3.tmplist \
+        | sed \
+            -e 's/both include/includes/' \
+            -e '/ panned right/{;s/ panned right//;s/SO B/SO B pan/;}' \
+        >> bert.mp3.urllist
+    cat "$DIR"/reveler-2.mp3.tmplist \
+        | sed \
+            -e '/1583/!d;/reprise/Id' \
         >> bert.mp3.urllist
     cat "$DIR"/cc-chorus-b.mp3.tmplist \
         | sed \
-            -e '/revelers/I!d' \
+            -e '/revelers/I!d;/1583/!d;/reprise/Id;/141-158/d' \
+        >> bert.mp3.urllist
+    cat "$DIR"/reveler-4.mp3.tmplist \
+        | sed \
+            -e '/1583/!d;/reprise/Id' \
+        >> bert.mp3.urllist
+    cat "$DIR"/cc-chorus-b.mp3.tmplist \
+        | sed \
+            -e '/revelers/I!d;/1583/!d;/reprise/Id;/141-158/!d' \
+        >> bert.mp3.urllist
+    cat "$DIR"/cc-chorus-b.mp3.tmplist \
+        | sed \
+            -e '/revelers/I!d;/1583/d' \
+        >> bert.mp3.urllist
+    cat "$DIR"/reveler-2.mp3.tmplist \
+        | sed \
+            -e '/1583/!d;/reprise/I!d' \
+        >> bert.mp3.urllist
+    cat "$DIR"/cc-chorus-b.mp3.tmplist \
+        | sed \
+            -e '/revelers/I!d;/1583/!d;/reprise/I!d' \
+        >> bert.mp3.urllist
+    cat "$DIR"/reveler-4.mp3.tmplist \
+        | sed \
+            -e '/1583/!d;/reprise/I!d' \
         >> bert.mp3.urllist
     cat "$DIR"/est-chorus-b.mp3.tmplist \
         >> bert.mp3.urllist
@@ -612,7 +689,7 @@ fi
 ### demo MP3s
 if [ -n "$do_generate_demo" ]; then
     echo "... demo" >&2
-    for i in so cc est; do cat tmplists/demo-"$i".mp3.tmplist; done \
+    for i in so cc est sh; do cat tmplists/demo-"$i".mp3.tmplist; done \
         > demo.mp3.urllist
     if [ ! -s demo.mp3.urllist ]; then rm -f demo.mp3.urllist; fi
 fi
@@ -620,7 +697,7 @@ fi
 ### orchestra-only MP3s
 if [ -n "$do_generate_orchestra" -a -e tmplists/orchestra.mp3.tmplist ]; then
     echo "... orchestra" >&2
-    for i in so cc est; do cat tmplists/orchestra-"$i".mp3.tmplist; done \
+    for i in so cc est sh; do cat tmplists/orchestra-"$i".mp3.tmplist; done \
         > orchestra.mp3.urllist
 fi
 #if [ -n "$do_generate_scenes" -a -e tmplists/scenes.mp3.tmplist ]; then
