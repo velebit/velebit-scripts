@@ -86,17 +86,17 @@ get_account_locked_status () {
         "$who"\ L\ *) echo -n "1" ;;
         "$who"\ P\ *) echo -n "0" ;;
         "$who"\ NP\ *)
-            echo "Warning: $who has no password" >&2
+            echo "$(warn)Warning: $who has no password$(end)" >&2
             echo -n "np" ;;
         *)
-            echo "Warning: can't understand 'passwd -S' for $who" >&2
+            echo "$(warn)Warning: can't understand 'passwd -S' for $who$(end)" >&2
             echo -n "x" ;;
     esac
     case "$(chage -l "$who" | sed -e '/Account expires/!d')" in
         *:*never*)          echo -n " 0" ;;
         *:*"Jan 02, 1970"*) echo -n " 1" ;;
         *)
-            echo "Warning: can't understand 'chage -l' for $who" >&2
+            echo "$(warn)Warning: can't understand 'chage -l' for $who$(end)" >&2
             echo -n " x" ;;
     esac
 }
@@ -119,7 +119,7 @@ lock_account () {
     local who="$1"; shift
     local name="$(user2name "$who")"
     if is_account_locked "$who"; then
-        "${log[@]}" "${name}'s account was already locked." >&2
+        "${log[@]}" "${name}'s account $(good)was already locked$(end)." >&2
         return 0
     fi
     "${log[@]}" "Locking ${name}'s account..." >&2
@@ -134,7 +134,7 @@ unlock_account () {
     local who="$1"; shift
     local name="$(user2name "$who")"
     if is_account_unlocked "$who"; then
-        "${log[@]}" "${name}'s account was already unlocked." >&2
+        "${log[@]}" "${name}'s account $(good)was already unlocked$(end)." >&2
         return 0
     fi
     "${log[@]}" "Unlocking ${name}'s account..." >&2
@@ -153,7 +153,7 @@ set_perms_oct () {
         "")
             "${log[@]}" "${path} not found, skipped." >&2 ;;
         "$perms_oct")
-            "${log[@]}" "${path} was already $perms_name." >&2 ;;
+            "${log[@]}" "${path} $(good)was already $perms_name$(end)." >&2 ;;
         *)
             "${log[@]}" "Setting ${path} permissions to $perms_name..." >&2
             if ! "${run[@]}" chmod "$perms_oct" "$path"; then
@@ -190,7 +190,7 @@ lock_flatpak_graphics () {
     local app="$1"; shift
     case "`flatpak override --show "$app" | grep '^sockets='`" in
         *"!x11;"*"!wayland;"*"!fallback-x11;"*)
-            "${log[@]}" "Graphics access for ${app} was already locked." >&2 ;;
+            "${log[@]}" "Graphics access for ${app} $(good)was already locked$(end)." >&2 ;;
         *)
             "${log[@]}" "Locking graphics access for ${app}..." >&2
             if ! "${run[@]}" flatpak override \
@@ -209,7 +209,7 @@ unlock_flatpak () {
     local app="$1"; shift
     case "`flatpak override --show "$app"`" in
         "")
-            "${log[@]}" "${app} was already unlocked." >&2 ;;
+            "${log[@]}" "${app} $(good)was already unlocked$(end)." >&2 ;;
         *)
             "${log[@]}" "Resetting permissions for ${app}..." >&2
             if ! "${run[@]}" flatpak override \
@@ -247,11 +247,32 @@ kill_flatpak_user_app () {
 
 notify () {
     local user="$1"; shift
-    local message="$1"; shift
-    local summary="Time warning"
-    local icon="alarm"
-    run_as_user "$user" notify-send -c im \
-                -t 0 -i alarm "$summary" "$message"
+    local summary="$1"; shift
+    local body="$1"; shift
+    local icon="${1:-user-available}"; shift
+    local app_name="$1"; shift
+
+    # Notable icons:
+    # system-lock-screen, system-shutdown, user-available (talk bubble?),
+    # appointment-soon, appointment-missed, dialog-information,
+    # dialog-warning, dialog-error
+    # See also:
+    # https://specifications.freedesktop.org/icon-naming-spec/icon-naming-spec-latest.html
+
+    local cmd_line=( notify-send )
+    cmd_line+=( -t 0 )
+    if [ -n "$app_name" ]; then
+        cmd_line+=( -a "$app_name" )
+    fi
+    cmd_line+=( -i "$icon" )
+    if [ -z "$summary" ]; then
+        cmd_line+=( "$body" )  # even if empty value
+    elif [ -z "$body" ]; then
+        cmd_line+=( "$summary" )
+    else
+        cmd_line+=( "$summary" "$body" )
+    fi
+    run_as_user "$user" "${cmd_line[@]}"
 }
 
 clear_at_queue () {
@@ -261,13 +282,17 @@ clear_at_queue () {
         "${run[@]}" atrm "${jobs[@]}"
     fi
 }
-schedule_script () {
+schedule_commands () {
     local queue="$1"; shift
     local timespec="$1"; shift
+    local i
+    for i in "$@"; do echo "$i"; done \
+        | "${run[@]}" at -M -q "$queue" "$timespec"
+}
+script_command () {
     local script="$1"; shift
     local user="$1"; shift
-    echo "\"$(dirname "$(realpath "$0")")/$script\" -u \"$user\"" \
-        | "${run[@]}" at -q "$queue" -M "$timespec"
+    echo "\"$(dirname "$(realpath "$0")")/$script\" -u \"$user\""
 }
 
 AT_QUEUE_RELOCK=c
@@ -276,21 +301,52 @@ DEFAULT_BEDTIME='19:30'
 clear_relock_queue () {
     clear_at_queue "$AT_QUEUE_RELOCK"
 }
-lock_at_bedtime_only () {
-    local user="$1"; shift
-    clear_relock_queue
-    schedule_script "$AT_QUEUE_RELOCK" "$DEFAULT_BEDTIME" 'luka-lock' "$user"
-}
-lock_mc_only_again_at () {
+schedule_lock () {
     local user="$1"; shift
     local timespec="$1"; shift
-    clear_relock_queue
-    schedule_script "$AT_QUEUE_RELOCK" "$timespec" 'luka-unlock' "$user"
-    schedule_script "$AT_QUEUE_RELOCK" "$DEFAULT_BEDTIME" 'luka-lock' "$user"
+
+    local pretty
+    local timestamp="$(date --date="$timespec" '+%s')"
+    if [ -z "$timestamp" ]; then
+        echo "$(bad)Error: Could not parse '$timespec' as a time!$(end)" >&2
+        return 1
+    fi
+    local dist="$(("$timestamp" - "$(date '+%s')"))"
+    if [[ "$dist" -ge -43200 ]] && [[ "$dist" -le -21600 ]] && \
+           [[ "$(date --date="@$timestamp" '+%H')" -lt 12 ]]; then
+        pretty="$(date --date="@$timestamp" '+%Y-%m-%d %H:%M:%S')"
+        echo "$(bad)Error: $pretty is in the past, did you forget 'pm'?" >&2
+        return 2
+    elif [[ "$dist" -le 0 ]]; then
+        pretty="$(date --date="@$timestamp" '+%Y-%m-%d %H:%M:%S')"
+        echo "Error: $pretty is in the past!" >&2
+        return 2
+    fi
+
+    clear_relock_queue \
+        || return 3
+    if [[ "$dist" -gt 300 ]]; then
+        local pre_timestamp="$(($timestamp-300))"
+        schedule_commands \
+            "$AT_QUEUE_RELOCK" \
+            "$(date --date="@$pre_timestamp" '+%H:%M %Y-%m-%d')" \
+            "$(script_command 'luka-message' "$user") --icon=lock 'Lock warning' 'SQ will lock in 5 minutes'" \
+            "for i in 4 3 2; do" \
+            "  sleep 60" \
+            "  $(script_command 'luka-message' "$user") --icon=clock 'Lock warning' \"SQ will lock in \$i minutes\"" \
+            "done" \
+            "sleep 60" \
+            "$(script_command 'luka-message' "$user") --icon=clock 'Lock warning' 'SQ will lock in 1 minute'" \
+            || return 4
+    fi
+    schedule_commands \
+        "$AT_QUEUE_RELOCK" \
+        "$(date --date="@$timestamp" '+%H:%M %Y-%m-%d')" \
+        "$(script_command 'luka-lock' "$user")" \
+        || return 5
+    return 0
 }
-lock_all_again_at () {
+schedule_lock_at_bedtime () {
     local user="$1"; shift
-    local timespec="$1"; shift
-    clear_relock_queue
-    schedule_script "$AT_QUEUE_RELOCK" "$timespec" 'luka-lock' "$user"
+    schedule_lock "$user" "$DEFAULT_BEDTIME"
 }

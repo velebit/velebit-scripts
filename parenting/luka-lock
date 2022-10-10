@@ -14,7 +14,8 @@ while [ "$#" -gt 0 ]; do
         -n)     run=(echo '>'); shift ;;
         -q)     log=(true); shift ;;
         -u)     user="$2"; shift; shift ;;
-        *)      echo "Unknown argument '$1'" >&2; exit 1 ;;
+        -*)     echo "Unknown flag '$1'!" >&2; exit 1 ;;
+        *)      echo "Unknown argument '$1'!" >&2; exit 1 ;;
     esac
 done
 
@@ -51,11 +52,11 @@ for s in $(get_user_sessions "$user"); do
                 fi
                 rm -f "$lock_log"
 #            else
-#                "${log[@]}" "Screen locker is already running." >&2
+#                "${log[@]}" "Screen locker $(good)is already running$(end)." >&2
 #            fi
             ;;
         *)
-            "${log[@]}" "Unknown session '$s', locking skipped." >&2
+            "${log[@]}" "$(warn)Unknown session '$s', locking skipped.$(end)" >&2
             ;;
     esac
 done
@@ -69,12 +70,16 @@ lock_executable_file /usr/bin/minecraft-launcher
 lock_executable_file /bin/minecraft-launcher
 lock_dir /opt/multimc
 lock_flatpak_graphics io.mrarm.mcpelauncher
+lock_flatpak_graphics com.valvesoftware.Steam
+lock_flatpak_graphics com.discordapp.Discord
 
-kill_flatpak_user_app "$user" 'com.discordapp.Discord'
+kill_flatpak_user_app "$user" io.mrarm.mcpelauncher
+kill_flatpak_user_app "$user" com.valvesoftware.Steam
+kill_flatpak_user_app "$user" com.discordapp.Discord
 
 clear_relock_queue
 
-"${log[@]}" "(Note: Minecraft apps, if any, were not killed.)" >&2
+"${log[@]}" "(Note: Minecraft and other apps, if any, were not killed.)" >&2
 
 if [ -n "$down_down_down" ]; then
     "${log[@]}" "Starting shutdown in 30s..." >&2

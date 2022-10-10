@@ -15,15 +15,8 @@ while [ "$#" -gt 0 ]; do
         -q)     log=(true); shift ;;
         -u)     user="$2"; shift; shift ;;
         -*)     echo "Unknown flag '$1'!" >&2; exit 1 ;;
-        *)      break ;;
+        *)      echo "Unknown argument '$1'!" >&2; exit 1 ;;
     esac
 done
-if [ "$#" -ne 1 ]; then
-    echo "Error: Expected 1 argument (time), got $#" >&2; exit 1
-fi
 
-in="$1"
-
-"${log[@]}" "Trying to schedule locking at $in" >&2
-
-schedule_lock "$user" "$in"
+run_as_user "$user" bash

@@ -5,8 +5,8 @@ source "$(dirname "$(realpath "$0")")"/ll-functions.bash
 today="$(date +%Y-%m-%d)"
 case " ${no_unlock_days[*]} " in
     *" $today "*)
-	echo "Today is not a screen day." >&2
-	exit 33 ;;
+        echo "Today is not a screen day." >&2
+        exit 33 ;;
 esac
 
 case "$1" in
@@ -20,8 +20,9 @@ while [ "$#" -gt 0 ]; do
     case "$1" in
         -n)     run=(echo '>'); shift ;;
         -q)     log=(true); shift ;;
-	-u)     user="$2"; shift; shift ;;
-        *)      echo "Unknown argument '$1'" >&2; exit 1 ;;
+        -u)     user="$2"; shift; shift ;;
+        -*)     echo "Unknown flag '$1'!" >&2; exit 1 ;;
+        *)      echo "Unknown argument '$1'!" >&2; exit 1 ;;
     esac
 done
 
@@ -33,9 +34,15 @@ lock_executable_file /usr/bin/minecraft-launcher
 lock_executable_file /bin/minecraft-launcher
 lock_dir /opt/multimc
 lock_flatpak_graphics io.mrarm.mcpelauncher
+lock_flatpak_graphics com.valvesoftware.Steam
+lock_flatpak_graphics com.discordapp.Discord
 
-lock_at_bedtime_only "$user"
+kill_flatpak_user_app "$user" io.mrarm.mcpelauncher
+kill_flatpak_user_app "$user" com.valvesoftware.Steam
+kill_flatpak_user_app "$user" com.discordapp.Discord
+
+schedule_lock_at_bedtime "$user"
 
 "${log[@]}" "(Note: timed unlocking is still not implemented.)" >&2
-"${log[@]}" "(Note: Minecraft apps are LOCKED.)" >&2
-"${log[@]}" "(Note: Minecraft apps, if any, were not killed.)" >&2
+"${log[@]}" "(Note: Minecraft and other apps are LOCKED.)" >&2
+"${log[@]}" "(Note: Minecraft and other apps, if any, were not killed.)" >&2

@@ -5,8 +5,8 @@ source "$(dirname "$(realpath "$0")")"/ll-functions.bash
 today="$(date +%Y-%m-%d)"
 case " ${no_unlock_days[*]} " in
     *" $today "*)
-	echo "Today is not a screen day." >&2
-	exit 33 ;;
+        echo "Today is not a screen day." >&2
+        exit 33 ;;
 esac
 
 case "$1" in
@@ -20,8 +20,9 @@ while [ "$#" -gt 0 ]; do
     case "$1" in
         -n)     run=(echo '>'); shift ;;
         -q)     log=(true); shift ;;
-	-u)     user="$2"; shift; shift ;;
-        *)      echo "Unknown argument '$1'" >&2; exit 1 ;;
+        -u)     user="$2"; shift; shift ;;
+        -*)     echo "Unknown flag '$1'!" >&2; exit 1 ;;
+        *)      echo "Unknown argument '$1'!" >&2; exit 1 ;;
     esac
 done
 
@@ -33,7 +34,9 @@ unlock_executable_file /usr/bin/minecraft-launcher
 unlock_executable_file /bin/minecraft-launcher
 unlock_dir /opt/multimc
 unlock_flatpak io.mrarm.mcpelauncher
+unlock_flatpak com.valvesoftware.Steam
+unlock_flatpak com.discordapp.Discord
 
-lock_at_bedtime_only "$user"
+schedule_lock_at_bedtime "$user"
 
 "${log[@]}" "(Note: timed unlocking is still not implemented.)" >&2
