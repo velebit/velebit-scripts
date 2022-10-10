@@ -80,13 +80,16 @@ add_if "$is_primary_os"     squashfs-tools
 add_if always               perl perl-doc
 add_if always               python3 ipython3 python3-pip
 add_if "!$is_headless"      python3-tk
+add_if "!$is_headless"      python3-numpy python3-scipy python3-matplotlib
+add_if "!$is_headless"      python3-sympy
+#add_if "!$is_headless"      python3-imageio python3-eyed3
 add_if "!$is_headless"      graphviz
 add_if always               iputils-ping traceroute
 add_if always               telnet ncat
 add_if always               wget curl
 add_if always               tcpdump dhcpdump tshark nmap
 add_if "!$is_headless"      wireshark
-add_if always               lsof iotop
+add_if always               lsof iotop time
 add_if always               bsdextrautils
 add_if "!$is_headless"      task-desktop
 add_if "$is_remote"         task-ssh-server

@@ -4,6 +4,12 @@ py_install='pip3 install --disable-pip-version-check -U'
 
 packages=()
 
+#packages+=( \
+#    pip \
+#)
+packages+=( \
+    black mypy
+)
 packages+=( \
     scipy numpy matplotlib \
     sympy \
@@ -30,6 +36,19 @@ packages+=( \
 )
 packages+=( \
     rgain \
+)
+packages+=( \
+    pyluach \
+    `# hebcal` \
+    python-dateutil convertdate \
+)
+packages+=( \
+    ics
+)
+packages+=( \
+    pybotics \
+    pytransform3d \
+    roboticstoolbox-python \
 )
 
 $py_install "${packages[@]}"

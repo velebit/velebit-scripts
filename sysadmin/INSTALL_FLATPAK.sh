@@ -82,7 +82,12 @@ add_if "$is_media"          io.github.jliljebl.Flowblade
 
 #### 3D modeling
 add_if "$is_media"          org.blender.Blender
+add_if "$is_media"          net.meshlab.MeshLab
+add_if "$is_media"          io.github.f3d_app.f3d
 add_if "$is_media"          org.openscad.OpenSCAD
+add_if "$is_media"          com.ultimaker.cura
+add_if "$is_media"          com.flashforge.FlashPrint
+add_if "$is_media"          com.prusa3d.PrusaSlicer
 
 #### comms
 add_if "!$is_headless"      com.discordapp.Discord
