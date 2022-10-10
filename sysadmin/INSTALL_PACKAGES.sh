@@ -134,6 +134,11 @@ add_if "$drv_nvidia_opti+$drv_nvidia"   bumblebee-nvidia primus
 add_if "$drv_nvidia_opti+!$drv_nvidia"  bumblebee primus
 add_if "$drv_nvidia_opti+$is_multiuser" mate-optimus
 
+add_if "$drv_bluetooth"     bluetooth
+add_if "$drv_bluetooth"     blueman
+#add_if "$drv_bluetooth"                 pavucontrol
+#add_if "$drv_bluetooth+$is_multiuser"   pavucontrol-qt
+
 # nvidia-detect <-- TEMPORARY
 # xfce4-mixer
 # no need for crypt disk setup at boot (cryptsetup, cryptsetup-initramfs)
