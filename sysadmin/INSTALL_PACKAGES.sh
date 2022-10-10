@@ -181,6 +181,7 @@ add_if always               whois bind9-dnsutils
 add_if "!$is_vm"            atomicparsley libmp3-tag-perl
 add_if "!$is_headless"      audacity
 add_if "!$is_headless"      musescore
+add_if "!$is_vm"            vorbis-tools ogmtools
 add_if "!$is_vm"            jhead libimage-exiftool-perl exiv2
 add_if "!$is_headless"      paprefs
 add_if "!$is_vm"            sox libsox-fmt-all
@@ -229,6 +230,7 @@ add_if "!$is_headless"      xournal
 
 ### other document tools
 add_if "$is_bert_desktop"   pandoc
+add_if "$is_primary_os"     librecad
 
 #### 32-bit compat (for e.g. Brother binaries)
 #if is_selected "$is_server"; then
