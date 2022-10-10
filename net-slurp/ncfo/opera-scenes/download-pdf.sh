@@ -6,7 +6,7 @@ type=pdf
 file_dir="$pdf_dir"
 log=download-"$type".log
 
-all_uris=("$pdf_uri")
+all_uris=("$pdf_uri" "$video_uri")
 
 for file in "${all_uris[@]##*/}"; do
     if [ -f "$html_dir/$file.html" ]; then
@@ -33,7 +33,8 @@ for file in "${all_uris[@]##*/}"; do
     rm -f "$html_dir/$file.html"; mv "$html_dir/$file" "$html_dir/$file.html"
 done
 
-./make-url-lists.sh --pdf "$html_dir/${pdf_uri##*/}.html"
+./make-url-lists.sh --pdf "$html_dir/${pdf_uri##*/}.html" \
+                    --video "$html_dir/${video_uri##*/}.html"
 sed -e 's/	.*//' *."$type".urllist | sort | uniq \
     | sed -e '/\.[Pp][Dd][Ff]$/!d' \
     > "$type"-master.urllist

@@ -718,3 +718,14 @@ if [ -n "$INDEX_PDF" ]; then
                -e 's/^[^	]*	//' \
                -e 's/^[^	]*	//' > score.pdf.urllist
 fi
+
+### blocking PDFs
+
+if [ -n "$INDEX_VIDEO" ]; then
+    echo "... blocking" >&2
+
+    ./plinks.pl --base "$base_uri" "$INDEX_VIDEO" \
+        | sed  -e '/\.pdf$/I!d' \
+               -e 's/^[^	]*	//' \
+               -e 's/^[^	]*	//' > blocking.pdf.urllist
+fi
