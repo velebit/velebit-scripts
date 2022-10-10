@@ -39,16 +39,17 @@ audio_rate=96k
 video_rate=96k
 audio_ext=.mp3
 video_ext=.mp4
-xargs_parallel=
+xargs_parallel=()
 child_flags=
 update_all=
 update_older=
+find_args=()
 
 while [ "$#" -gt 0 ]; do
     arg="$1"; shift
     case "$arg" in
-	-P)  xargs_parallel="-P $1 -l3"; shift ;;
-	-P*) xargs_parallel="-P `echo "$arg" | sed -e 's/^..//'` -l3" ;;
+	-P)  xargs_parallel=( -P "$1" -l3 ); shift ;;
+	-P*) xargs_parallel=( -P "`echo "$arg" | sed -e 's/^..//'`" -l3 ) ;;
 	-r)  audio_rate="$1"; shift;
              child_flags="$child_flags -r '$audio_rate'" ;;
 	-r*) audio_rate="`echo "$arg" | sed -e 's/^..//'`";
@@ -66,6 +67,7 @@ while [ "$#" -gt 0 ]; do
 	--video)  mode=video; child_flags="$child_flags --video" ;;
 	-f|--force) update_all=yes; child_flags="$child_flags $arg" ;;
 	-o|--older) update_older=yes; child_flags="$child_flags $arg" ;;
+	--follow) find_args+=( -L ) ;;
 	-*)  echo "Unknown flag '$arg'!" >&2; exit 1 ;;
 	/*|[a-zA-Z]:[\\/]*)
 	    echo "Absolute path '$arg' will be ignored!" >&2 ;;
@@ -159,8 +161,8 @@ while [ "$#" -gt 0 ]; do
 		    video)  files="-name *.[mM][pP]4"
 			    files="$files -o -name *.[mM][oO][vV]" ;;
 		esac
-		find "$arg" \( $files \) -type f -print0 \
-		    | xargs --no-run-if-empty -0 $xargs_parallel \
+		find "${find_args[@]}" "$arg" \( $files \) -type f -print0 \
+		    | xargs --no-run-if-empty -0 "${xargs_parallel[@]}" \
 		        "$0" $child_flags
 	    else
 		echo ". $arg [skipped: unknown file type]" >&2
