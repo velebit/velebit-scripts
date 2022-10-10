@@ -22,6 +22,8 @@ unlock_account "$user"
 
 # lock binaries for ALL users
 lock_dir /opt/minecraft-launcher
+lock_executable_file /usr/bin/minecraft-launcher
+lock_executable_file /bin/minecraft-launcher
 lock_dir /opt/multimc
 lock_flatpak_graphics io.mrarm.mcpelauncher
 

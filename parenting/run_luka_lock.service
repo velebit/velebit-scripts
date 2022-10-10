@@ -1,0 +1,13 @@
+# Place in /etc/systemd/system, then enable the service by running:
+# sudo systemctl enable run_luka_lock
+
+[Unit]
+Description=Run luka-lock
+After=multi-user.target suspend.target hibernate.target hybrid-sleep.target suspend-then-hibernate.target
+
+[Service]
+ExecStart=/usr/local/bin/run-luka-lock
+User=root
+
+[Install]
+WantedBy=multi-user.target suspend.target hibernate.target hybrid-sleep.target suspend-then-hibernate.target

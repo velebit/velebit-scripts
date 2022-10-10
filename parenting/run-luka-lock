@@ -1,0 +1,8 @@
+#!/bin/bash
+# Wrapper for running luka-lock as a service
+
+log=/tmp/run-luka-lock.log
+touch "$log"
+chmod go-w "$log"
+echo "*** [$(date)]" >> "$log"
+/usr/local/bin/luka-lock >> "$log" 2>&1

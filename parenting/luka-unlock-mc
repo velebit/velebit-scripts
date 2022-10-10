@@ -22,6 +22,8 @@ unlock_account "$user"
 
 # unlock binaries for ALL users
 unlock_dir /opt/minecraft-launcher
+unlock_executable_file /usr/bin/minecraft-launcher
+unlock_executable_file /bin/minecraft-launcher
 unlock_dir /opt/multimc
 unlock_flatpak io.mrarm.mcpelauncher
 

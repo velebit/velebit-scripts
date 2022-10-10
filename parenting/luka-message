@@ -1,0 +1,20 @@
+#!/bin/bash
+
+case "$1" in
+    --child)    shift ;;
+    *)          exec sudo "$0" --child "$@" ; exit 1 ;;
+esac
+
+source "$(dirname "$(realpath "$0")")"/ll-functions.bash
+
+user=luka
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        -n)     run=(echo '>'); shift ;;
+        -q)     log=(true); shift ;;
+	-u)     user="$2"; shift; shift ;;
+    esac
+done
+
+notify "$user" "${1:-It's time to stop!}"

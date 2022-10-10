@@ -138,7 +138,9 @@ set_perms_oct () {
     local path="$1"; shift
     local perms_oct="$1"; shift
     local perms_name="$1"; shift
-    case "$(stat -c '%a' "$path")" in
+    case "$(stat -c '%a' "$path" 2>/dev/null)" in
+        "")
+            "${log[@]}" "${path} not found, skipped." >&2 ;;
         "$perms_oct")
             "${log[@]}" "${path} was already $perms_name." >&2 ;;
         *)
@@ -163,6 +165,14 @@ unlock_dir () {
 fully_unlock_dir () {
     local path="$1"; shift
     set_perms_oct "$path" 755 "fully unlocked"
+}
+lock_executable_file () {
+    local path="$1"; shift
+    set_perms_oct "$path" 700 "locked"
+}
+unlock_executable_file () {
+    local path="$1"; shift
+    set_perms_oct "$path" 755 "unlocked"
 }
 
 lock_flatpak_graphics () {

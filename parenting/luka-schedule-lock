@@ -1,0 +1,26 @@
+#!/bin/bash
+
+case "$1" in
+    --child)    shift ;;
+    *)          exec sudo "$0" --child "$@" ; exit 1 ;;
+esac
+
+source "$(dirname "$(realpath "$0")")"/ll-functions.bash
+
+user=luka
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        -n)     run=(echo '>'); shift ;;
+        -q)     log=(true); shift ;;
+	-u)     user="$2"; shift; shift ;;
+	*)      break ;;
+    esac
+done
+if [ "$#" -ne 1 ]; then
+    echo "Expected 1 argument (time), got $#" >&2; exit 1
+fi
+
+"${log[@]}" "Trying to schedule locking at $1" >&2
+
+lock_all_again_at "$user" "$1"
