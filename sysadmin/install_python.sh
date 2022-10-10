@@ -11,6 +11,7 @@ packages+=( \
 packages+=( \
     imageio imageio-ffmpeg \
     eyed3 \
+    grako `# dependency for eyeD3\'s "display" plugin` \
 )
 packages+=( \
     regex \
