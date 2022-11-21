@@ -275,6 +275,36 @@ notify () {
     run_as_user "$user" "${cmd_line[@]}"
 }
 
+pulseaudio_set_mute_state_all () {
+    local user="$1"; shift
+    local muted="$1"; shift
+    local s
+    local num=0
+    for s in $(run_as_user "$user" pactl list short sinks \
+		   | awk '{print $1}'); do
+	if run_as_user "$user" pactl set-sink-mute "$s" "$muted"; then
+	    num="$((num+1))"
+	fi
+    done
+    if [ "$num" -gt 0 ]; then
+	"${log[@]}" "Set ${user}'s audio muting to $(good)$muted$(end)" \
+		    "for $(good)$num sinks$(end)." >&2
+    else
+	"${log[@]}" "Set ${user}'s audio muting to $(warn)$muted$(end)" \
+		    "for $(warn)$num sinks$(end)." >&2
+    fi
+}
+
+mute_all () {
+    local user="$1"; shift
+    pulseaudio_set_mute_state_all "$user" true
+}
+
+unmute_all () {
+    local user="$1"; shift
+    pulseaudio_set_mute_state_all "$user" false
+}
+
 clear_at_queue () {
     local queue="$1"; shift
     local jobs=( $(atq -q "$queue" | awk '{print $1}') )

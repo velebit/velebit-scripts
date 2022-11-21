@@ -1,0 +1,22 @@
+#!/bin/bash
+
+source "$(dirname "$(realpath "$0")")"/ll-functions.bash
+
+case "$1" in
+    --child)    shift ;;
+    *)          exec sudo "$0" --child "$@" ; exit 1 ;;
+esac
+
+user=luka
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        -n)     run=(echo '>'); shift ;;
+        -q)     log=(true); shift ;;
+        -u)     user="$2"; shift; shift ;;
+        -*)     echo "Unknown flag '$1'!" >&2; exit 1 ;;
+        *)      echo "Unknown argument '$1'!" >&2; exit 1 ;;
+    esac
+done
+
+unmute_all "$user"
