@@ -15,6 +15,20 @@ end ()  { echo -e '\e[0m'; }
 is_done() { echo "$(good)done$(end)"; }
 failed()  { echo "$(bad)FAILED$(end)"; }
 
+combine_tokens () {
+    local a="$1"; shift
+    local b="$1"; shift
+    if [ -z "$a" ]; then
+        echo "$b"  # even if b is empty
+    elif [ -z "$b" ]; then
+        echo "$a"
+    elif [ "x$a" = "x$b" ]; then
+        echo "$a"
+    else
+        echo "mixed"
+    fi
+}
+
 lst2comma () {
     # either separate args, whitespace-delimited, or both
     echo "$*" | sed -e 's/^  *//;s/  *$//;s/  */,/g'
@@ -92,7 +106,7 @@ get_user_process_pids () {
     for p in "${pids[@]}"; do
         case "$(users_cmds "$p")" in
             "$user":*) echo "$p" ;;
-	esac
+        esac
     done
 }
 
@@ -101,11 +115,11 @@ get_user_minecraft_pids () {
     local java_pids=( $(get_user_process_pids "$user" java) )
     for p in "${java_pids[@]}"; do
         case "$(cmd_line_long "$p")" in
-	    # Native Minecraft runs from net.minecraft.client.main.Main
-	    *\ net.minecraft.client.*)  echo "$p" ;;
-	    # MultiMC runs from org.multimc.EntryPoint
-	    *\ org.multimc.*)  echo "$p" ;;
-	esac
+            # Native Minecraft runs from net.minecraft.client.main.Main
+            *\ net.minecraft.client.*)  echo "$p" ;;
+            # MultiMC runs from org.multimc.EntryPoint
+            *\ org.multimc.*)  echo "$p" ;;
+        esac
     done
 }
 
@@ -203,7 +217,7 @@ lock_screen () {
                         *)
                             "${log[@]}" "...$(failed), will try rebooting!." \
                                         >&2
-			    retval=1
+                            retval=1
                             ;;
                     esac
                 else
@@ -383,34 +397,69 @@ notify () {
     run_as_user "$user" "${cmd_line[@]}"
 }
 
+pulseaudio_get_mute_state_all () {
+    local user="$1"; shift
+    local line common_state mute_state
+    while IFS='' read -r line; do
+        line="${line//[ 	]/ }"
+        line="${line//  / }"; line="${line//  / }"; line="${line//  / }"
+        case "$line" in
+            Sink\ *)  # new sink
+                common_state="$(combine_tokens "$common_state" "$mute_state")"
+                # If a Mute: line is not seen, that probably means not
+                # muted, but assuming we need to update is conservative
+                mute_state=unknown
+                ;;
+            \ Mute:\ yes*)  mute_state=true ;;
+            \ Mute:\ no*)   mute_state=false ;;
+        esac
+    done < <(run_as_user "$user" pactl list sinks)
+    # the last sink isn't followed by a Sink line, so process it here
+    common_state="$(combine_tokens "$common_state" "$mute_state")"
+    if [ -z "$common_state" ]; then common_state=undefined; fi
+    echo "$common_state"
+}
+
 pulseaudio_set_mute_state_all () {
     local user="$1"; shift
     local muted="$1"; shift
     local s
     local num=0
     for s in $(run_as_user "$user" pactl list short sinks \
-		   | awk '{print $1}'); do
-	if run_as_user "$user" pactl set-sink-mute "$s" "$muted"; then
-	    num="$((num+1))"
-	fi
+                   | awk '{print $1}'); do
+        if run_as_user "$user" pactl set-sink-mute "$s" "$muted"; then
+            num="$((num+1))"
+        fi
     done
     if [ "$num" -gt 0 ]; then
-	"${log[@]}" "Set ${user}'s audio muting to $(good)$muted$(end)" \
-		    "for $(good)$num sinks$(end)." >&2
+        "${log[@]}" "Set $(user2name "$user")'s audio muting to" \
+            "$(good)$muted$(end) for $(good)$num sink(s)$(end)." >&2
     else
-	"${log[@]}" "Set ${user}'s audio muting to $(warn)$muted$(end)" \
-		    "for $(warn)$num sinks$(end)." >&2
+        "${log[@]}" "Set $(user2name "$user")'s audio muting to" \
+            "$(warn)$muted$(end) for $(warn)$num sink(s)$(end)." >&2
     fi
 }
 
 mute_all () {
     local user="$1"; shift
-    pulseaudio_set_mute_state_all "$user" true
+    if [ "$(pulseaudio_get_mute_state_all "$user")" = true ]; then
+        "${log[@]}" "$(user2name "$user")'s audio is already" \
+            "$(good)muted$(end)." >&2
+    else
+        # includes unknown and mixed states
+        pulseaudio_set_mute_state_all "$user" true
+    fi
 }
 
 unmute_all () {
     local user="$1"; shift
-    pulseaudio_set_mute_state_all "$user" false
+    if [ "$(pulseaudio_get_mute_state_all "$user")" = false ]; then
+        "${log[@]}" "$(user2name "$user")'s audio is already" \
+            "$(good)unmuted$(end)." >&2
+    else
+        # includes unknown and mixed states
+        pulseaudio_set_mute_state_all "$user" false
+    fi
 }
 
 clear_at_queue () {
