@@ -16,25 +16,37 @@ is_done() { echo "$(good)done$(end)"; }
 failed()  { echo "$(bad)FAILED$(end)"; }
 
 lst2comma () {
+    # either separate args, whitespace-delimited, or both
     echo "$*" | sed -e 's/^  *//;s/  *$//;s/  */,/g'
 }
 
+pidlist () {
+    # arguments are a list of command names
+    ps -C "$(lst2comma "$@")" -o pid=
+}
 dms () {
-    ps -C sddm,lightdm -o pid=
+    pidlist sddm lightdm
 }
 screenlockers () {
-    ps -C xscreensaver,xflock4 -o pid=
+    pidlist xscreensaver xflock4
 }
 children () {
+    # arguments are a list of PIDs
     ps --ppid "$(lst2comma "$@")" -o pid=
 }
 users_cmds () {
+    # arguments are a list of PIDs
     ps --pid "$(lst2comma "$@")" -o user=,comm= | sed -e 's/  */:/g' \
         | sort | uniq
+}
+cmd_line_long () {
+    # arguments are a list of PIDs
+    ps --pid "$(lst2comma "$@")" --cols 65536 -o args=
 }
 
 as_user () {
     local user="$1"; shift
+    # remaining arguments are a command line
     local uid="$(id -u "$user")"
     sudo -u "$user" \
         env DISPLAY=:0 XAUTHORITY=/home/"$user"/.Xauthority \
@@ -43,6 +55,7 @@ as_user () {
 }
 run_as_user () {
     local user="$1"; shift
+    # remaining arguments are a command line
     local uid="$(id -u "$user")"
     "${run[@]}" \
         sudo -u "$user" \
@@ -70,6 +83,30 @@ get_user_sessions () {
         pids=( $(children "${pids[@]}") )
     done
     return 1   # false
+}
+
+get_user_process_pids () {
+    local user="$1"; shift
+    # remaining arguments are command names
+    local pids=( $(pidlist "$@") )
+    for p in "${pids[@]}"; do
+        case "$(users_cmds "$p")" in
+            "$user":*) echo "$p" ;;
+	esac
+    done
+}
+
+get_user_minecraft_pids () {
+    local user="$1"; shift
+    local java_pids=( $(get_user_process_pids "$user" java) )
+    for p in "${java_pids[@]}"; do
+        case "$(cmd_line_long "$p")" in
+	    # Native Minecraft runs from net.minecraft.client.main.Main
+	    *\ net.minecraft.client.*)  echo "$p" ;;
+	    # MultiMC runs from org.multimc.EntryPoint
+	    *\ org.multimc.*)  echo "$p" ;;
+	esac
+    done
 }
 
 user2name () {
@@ -145,6 +182,46 @@ unlock_account () {
     "${log[@]}" "...$(is_done)." >&2
 }
 
+lock_screen () {
+    local retval=0
+    local session_found lock_log
+    for s in $(get_user_sessions "$user"); do
+        session_found=yes
+        case "$s" in
+            lxqt-session)
+                "${log[@]}" "Trying to lock the screen..." >&2
+                lock_log="/tmp/lock_log.$$"
+                if ! run_as_user "$user" \
+                     xscreensaver-command -lock > "$lock_log" 2>&1; then
+#                     lxqt-leave --lockscreen > "$lock_log" 2>&1; then
+                    sed -e 's/^/  /' "$lock_log"
+                    case "$(cat "$lock_log")" in
+                        *": already locked"*)
+                            "${log[@]}" "...$(warn)was already locked$(end)." \
+                                        >&2
+                            ;;
+                        *)
+                            "${log[@]}" "...$(failed), will try rebooting!." \
+                                        >&2
+			    retval=1
+                            ;;
+                    esac
+                else
+                    "${log[@]}" "...$(is_done)." >&2
+                fi
+                rm -f "$lock_log"
+                ;;
+            *)
+                "${log[@]}" "$(warn)Unknown session '$s', locking skipped.$(end)" >&2
+                ;;
+        esac
+    done
+    if [ -z "$session_found" ]; then
+        "${log[@]}" "$(warn)$(user2name "$user") does not seem to be logged in.$(end)" >&2
+    fi
+    return "$retval"
+}
+
 set_perms_oct () {
     local path="$1"; shift
     local perms_oct="$1"; shift
@@ -184,6 +261,37 @@ lock_executable_file () {
 unlock_executable_file () {
     local path="$1"; shift
     set_perms_oct "$path" 755 "unlocked"
+}
+
+kill_user_minecraft () {
+    local user="$1"; shift
+    local pids=( $(get_user_minecraft_pids "$user") )
+    if [ "${#pids[@]}" -gt 0 ]; then
+        "${log[@]}" "Killing $(user2name "$user")'s Minecraft processes..." >&2
+        if ! "${run[@]}" kill -HUP "${pids[@]}"; then
+            "${log[@]}" "...$(failed)." >&2
+        else
+            "${log[@]}" "...$(is_done)." >&2
+        fi
+    else
+        "${log[@]}" "$(user2name "$user") does not seem to be running $name." >&2
+    fi
+}
+
+kill_user_process () {
+    local user="$1"; shift
+    local name="$1"; shift
+    local pids=( $(get_user_process_pids "$user" "$name") )
+    if [ "${#pids[@]}" -gt 0 ]; then
+        "${log[@]}" "Killing $(user2name "$user")'s $name processes..." >&2
+        if ! "${run[@]}" kill -HUP "${pids[@]}"; then
+            "${log[@]}" "...$(failed)." >&2
+        else
+            "${log[@]}" "...$(is_done)." >&2
+        fi
+    else
+        "${log[@]}" "$(user2name "$user") does not seem to be running $name." >&2
+    fi
 }
 
 lock_flatpak_graphics () {

@@ -33,6 +33,8 @@ unlock_dir /opt/minecraft-launcher
 unlock_executable_file /usr/bin/minecraft-launcher
 unlock_executable_file /bin/minecraft-launcher
 unlock_dir /opt/multimc
+unlock_dir /home/luka/.minecraft
+unlock_dir /home/luka/.local/share/multimc
 unlock_flatpak io.mrarm.mcpelauncher
 unlock_flatpak com.valvesoftware.Steam
 unlock_flatpak com.discordapp.Discord

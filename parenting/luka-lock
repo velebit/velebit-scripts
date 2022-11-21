@@ -8,12 +8,16 @@ case "$1" in
 esac
 
 user=luka
+kill=yes
+unlock_discord=
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
         -n)     run=(echo '>'); shift ;;
         -q)     log=(true); shift ;;
         -u)     user="$2"; shift; shift ;;
+        -o)     kill=; shift ;;
+        -D)     unlock_discord=yes; shift ;;
         -*)     echo "Unknown flag '$1'!" >&2; exit 1 ;;
         *)      echo "Unknown argument '$1'!" >&2; exit 1 ;;
     esac
@@ -22,46 +26,8 @@ done
 lock_account "$user"
 
 down_down_down=
-
-# lock the session
-session_found=
-for s in $(get_user_sessions "$user"); do
-    session_found=yes
-    case "$s" in
-        lxqt-session)
-#            if [ -z "$(screenlockers)" ]; then
-                "${log[@]}" "Trying to lock the screen..." >&2
-                lock_log="/tmp/lock_log.$$"
-                if ! run_as_user "$user" \
-                         xscreensaver-command -lock > "$lock_log" 2>&1; then
-#                         lxqt-leave --lockscreen > "$lock_log" 2>&1; then
-                    sed -e 's/^/  /' "$lock_log"
-                    case "$(cat "$lock_log")" in
-                        *": already locked"*)
-                            "${log[@]}" "...$(warn)was already locked$(end)." \
-                                        >&2
-                            ;;
-                        *)
-                            "${log[@]}" "...$(failed), will try rebooting!." \
-                                        >&2
-                            down_down_down=yes
-                            ;;
-                    esac
-                else
-                    "${log[@]}" "...$(is_done)." >&2
-                fi
-                rm -f "$lock_log"
-#            else
-#                "${log[@]}" "Screen locker $(good)is already running$(end)." >&2
-#            fi
-            ;;
-        *)
-            "${log[@]}" "$(warn)Unknown session '$s', locking skipped.$(end)" >&2
-            ;;
-    esac
-done
-if [ -z "$session_found" ]; then
-    "${log[@]}" "$(warn)$(user2name "$user") does not seem to be logged in.$(end)" >&2
+if ! lock_screen; then
+    down_down_down=yes
 fi
 
 # lock binaries for ALL users
@@ -69,23 +35,38 @@ lock_dir /opt/minecraft-launcher
 lock_executable_file /usr/bin/minecraft-launcher
 lock_executable_file /bin/minecraft-launcher
 lock_dir /opt/multimc
+lock_dir /home/luka/.minecraft
+lock_dir /home/luka/.local/share/multimc
 lock_flatpak_graphics io.mrarm.mcpelauncher
 lock_flatpak_graphics com.valvesoftware.Steam
-lock_flatpak_graphics com.discordapp.Discord
+if [ -z "$unlock_discord" ]; then
+    lock_flatpak_graphics com.discordapp.Discord
+else
+    unlock_flatpak com.discordapp.Discord
+fi
 
-kill_flatpak_user_app "$user" io.mrarm.mcpelauncher
-kill_flatpak_user_app "$user" com.valvesoftware.Steam
-kill_flatpak_user_app "$user" com.discordapp.Discord
+
+if [ -n "$kill" ]; then
+    kill_user_minecraft "$user"
+    kill_user_process "$user" minecraft-launcher
+    kill_user_process "$user" MultiMC
+    kill_flatpak_user_app "$user" io.mrarm.mcpelauncher
+    kill_flatpak_user_app "$user" com.valvesoftware.Steam
+    if [ -z "$unlock_discord" ]; then
+        kill_flatpak_user_app "$user" com.discordapp.Discord
+    fi
+fi
 
 clear_relock_queue
 
-"${log[@]}" "(Note: Minecraft and other apps, if any, were not killed.)" >&2
-
 if [ -n "$down_down_down" ]; then
     "${log[@]}" "Starting shutdown in 30s..." >&2
-    if ! shutdown -h 'now + 30 seconds'; then
+    if ! "${run[@]}" shutdown -h 'now + 30 seconds'; then
         "${log[@]}" "...$(failed) to schedule a shutdown!" >&2
     else
         "${log[@]}" "...$(is_done)." >&2
     fi
+fi
+if [ -n "$unlock_discord" ]; then
+    "${log[@]}" "(Note: Discord is unlocked!)" >&2
 fi
