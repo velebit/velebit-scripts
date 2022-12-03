@@ -433,10 +433,10 @@ pulseaudio_set_mute_state_all () {
     done
     if [ "$num" -gt 0 ]; then
         "${log[@]}" "Set $(user2name "$user")'s audio muting to" \
-            "$(good)$muted$(end) for $(good)$num sink(s)$(end)." >&2
+            "$(good)$muted$(end) for $(good)$num audio output(s)$(end)." >&2
     else
         "${log[@]}" "Set $(user2name "$user")'s audio muting to" \
-            "$(warn)$muted$(end) for $(warn)$num sink(s)$(end)." >&2
+            "$(warn)$muted$(end) for $(warn)$num audio output(s)$(end)." >&2
     fi
 }
 
@@ -462,6 +462,30 @@ unmute_all () {
     fi
 }
 
+get_timestamp () {
+    local timespec="$1"; shift
+
+    local timestamp="$(date --date="$timespec" '+%s' 2>/dev/null)"
+    if [ -z "$timestamp" ]; then
+        echo "$(bad)Error: Could not parse '$timespec' as a time!$(end)" >&2
+        return 1
+    fi
+    echo "$timestamp"
+    return 0
+}
+# this should produce a timestamp that is readable by `at' (and by humans)
+timespec_for_at () {
+    local timestamp="$1"; shift
+
+    local timespec="$(date --date="@$timestamp" '+%H:%M %Y-%m-%d')"
+    if [ -z "$timespec" ]; then
+        echo "$(bad)Error: Invalid timestamp '$timestamp'!$(end)" >&2
+        return 1
+    fi
+    echo "$timespec"
+    return 0
+}
+
 clear_at_queue () {
     local queue="$1"; shift
     local jobs=( $(atq -q "$queue" | awk '{print $1}') )
@@ -471,10 +495,16 @@ clear_at_queue () {
 }
 schedule_commands () {
     local queue="$1"; shift
-    local timespec="$1"; shift
+    local timestamp="$1"; shift
+
+    local timespec="$(timespec_for_at "$timestamp")"
+    if [ -z "$timespec" ]; then
+        echo "$(bad)Error: Invalid timestamp '$timestamp'!$(end)" >&2
+        return 1
+    fi
     local i
-    for i in "$@"; do echo "$i"; done \
-        | "${run[@]}" at -M -q "$queue" "$timespec"
+    "${run[@]}" at -M -q "$queue" "$timespec" \
+                < <(for i in "$@"; do echo "$i"; done)
 }
 script_command () {
     local script="$1"; shift
@@ -484,29 +514,60 @@ script_command () {
 
 AT_QUEUE_RELOCK=c
 DEFAULT_BEDTIME='19:30'
+DEFAULT_SLOT_INTERVAL='91 minutes'
+
+parse_schedule_time () {
+    local timespec="$1"; shift
+    case "$timespec" in
+        [0-9]|[0-9][0-9]|[0-9][0-9][0-9])
+            echo "Interpreting '$timespec' as" \
+                 "$(warn)number of minutes" \
+                 "in the future.$(end)" >&2
+            get_timestamp "now + $timespec minutes"
+            ;;
+        "")
+            echo "Interpreting '$timespec' as" \
+                 "$(warn)the default ($DEFAULT_SLOT_INTERVAL)" \
+                 "in the future.$(end)" >&2
+            get_timestamp "now + $DEFAULT_SLOT_INTERVAL"
+            ;;
+        [0-9]:[0-9][0-9]|[0-9][0-9]:[0-9][0-9])
+	    # no warning in this case
+            get_timestamp "$timespec"
+            ;;
+        [0-9]:[0-9][0-9][ap]m|[0-9][0-9]:[0-9][0-9][ap]m)
+	    # no warning in this case
+            get_timestamp "$timespec"
+            ;;
+        *)
+            echo "Interpreting '$timespec' as" \
+                 "$(warn)a specific time.$(end)" >&2
+            get_timestamp "$timespec"
+            ;;
+    esac
+}
 
 clear_relock_queue () {
     clear_at_queue "$AT_QUEUE_RELOCK"
 }
 schedule_lock () {
     local user="$1"; shift
-    local timespec="$1"; shift
+    local timestamp="$1"; shift
 
     local pretty
-    local timestamp="$(date --date="$timespec" '+%s')"
     if [ -z "$timestamp" ]; then
-        echo "$(bad)Error: Could not parse '$timespec' as a time!$(end)" >&2
+        echo "$(bad)Error: Invalid timestamp '$timestamp'!$(end)" >&2
         return 1
     fi
     local dist="$(("$timestamp" - "$(date '+%s')"))"
     if [[ "$dist" -ge -43200 ]] && [[ "$dist" -le -21600 ]] && \
            [[ "$(date --date="@$timestamp" '+%H')" -lt 12 ]]; then
         pretty="$(date --date="@$timestamp" '+%Y-%m-%d %H:%M:%S')"
-        echo "$(bad)Error: $pretty is in the past, did you forget 'pm'?" >&2
+        echo "$(bad)Error: $pretty is in the past, did you forget 'pm'?$(end)" >&2
         return 2
     elif [[ "$dist" -le 0 ]]; then
         pretty="$(date --date="@$timestamp" '+%Y-%m-%d %H:%M:%S')"
-        echo "Error: $pretty is in the past!" >&2
+        echo "$(bad)Error: $pretty is in the past!$(end)" >&2
         return 2
     fi
 
@@ -515,8 +576,7 @@ schedule_lock () {
     if [[ "$dist" -gt 300 ]]; then
         local pre_timestamp="$(($timestamp-300))"
         schedule_commands \
-            "$AT_QUEUE_RELOCK" \
-            "$(date --date="@$pre_timestamp" '+%H:%M %Y-%m-%d')" \
+            "$AT_QUEUE_RELOCK" "$pre_timestamp" \
             "$(script_command 'luka-message' "$user") --icon=lock 'Lock warning' 'SQ will lock in 5 minutes'" \
             "for i in 4 3 2; do" \
             "  sleep 60" \
@@ -527,13 +587,8 @@ schedule_lock () {
             || return 4
     fi
     schedule_commands \
-        "$AT_QUEUE_RELOCK" \
-        "$(date --date="@$timestamp" '+%H:%M %Y-%m-%d')" \
+        "$AT_QUEUE_RELOCK" "$timestamp" \
         "$(script_command 'luka-lock' "$user")" \
         || return 5
     return 0
-}
-schedule_lock_at_bedtime () {
-    local user="$1"; shift
-    schedule_lock "$user" "$DEFAULT_BEDTIME"
 }

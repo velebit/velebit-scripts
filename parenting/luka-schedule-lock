@@ -14,16 +14,21 @@ while [ "$#" -gt 0 ]; do
         -n)     run=(echo '>'); shift ;;
         -q)     log=(true); shift ;;
         -u)     user="$2"; shift; shift ;;
-        -*)     echo "Unknown flag '$1'!" >&2; exit 1 ;;
+        -*)     echo "$(bad)Unknown flag '$1'!$(end)" >&2; exit 1 ;;
         *)      break ;;
     esac
 done
-if [ "$#" -ne 1 ]; then
-    echo "Error: Expected 1 argument (time), got $#" >&2; exit 1
+
+timespec="$1"; shift  # note: okay if missing
+if [ "$#" -gt 0 ]; then
+    echo "$(bad)Unexpected argument '$1'!$(end)" >&2; exit 1
 fi
 
-in="$1"
+timestamp="$(parse_schedule_time "$timespec")"
+if [ -z "$timestamp" ]; then
+    exit 2
+fi
 
-"${log[@]}" "Trying to schedule locking at $in" >&2
+"${log[@]}" "Trying to schedule locking at $(timespec_for_at "$timestamp")" >&2
 
-schedule_lock "$user" "$in"
+schedule_lock "$user" "$timestamp"

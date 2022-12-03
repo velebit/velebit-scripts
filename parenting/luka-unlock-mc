@@ -23,10 +23,20 @@ while [ "$#" -gt 0 ]; do
         -q)     log=(true); shift ;;
         -u)     user="$2"; shift; shift ;;
         -a)     unmute=; shift ;;
-        -*)     echo "Unknown flag '$1'!" >&2; exit 1 ;;
-        *)      echo "Unknown argument '$1'!" >&2; exit 1 ;;
+        -*)     echo "$(bad)Unknown flag '$1'!$(end)" >&2; exit 1 ;;
+        *)      break ;;
     esac
 done
+
+lock_timespec="$1"; shift  # note: okay if missing
+if [ "$#" -gt 0 ]; then
+    echo "$(bad)Unexpected argument '$1'!$(end)" >&2; exit 1
+fi
+
+lock_timestamp="$(parse_schedule_time "$lock_timespec")"
+if [ -z "$lock_timestamp" ]; then
+    exit 2
+fi
 
 unlock_account "$user"
 
@@ -45,6 +55,4 @@ if [ -n "$unmute" ]; then
     unmute_all "$user"
 fi
 
-schedule_lock_at_bedtime "$user"
-
-"${log[@]}" "(Note: timed unlocking is still not implemented.)" >&2
+schedule_lock "$user" "$lock_timestamp"
