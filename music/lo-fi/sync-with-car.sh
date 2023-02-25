@@ -12,7 +12,11 @@ include=(
 )
 
 ignore=(
-    "./Lofi Girl"
+    # Not sure why absolute paths don't get things ignored:
+#    "./Lofi Girl"
+#    "./projects"
+    "Lofi Girl"
+    "projects"
 )
 
 exclude_patterns=( '*.sh' '*~' )
@@ -73,7 +77,6 @@ remove_matching () {
 
 #remove_unlisted "${include[@]}" "${ignore[@]}"
 #remove_matching "${exclude_patterns[@]}"
-
 
 rsync --info=progress2,flist2,stats2,skip,symsafe --human-readable \
     "${ignore[@]/#/--exclude=}" \
