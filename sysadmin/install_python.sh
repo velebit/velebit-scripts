@@ -8,7 +8,7 @@ packages=()
 #    pip \
 #)
 packages+=( \
-    black mypy
+    black mypy \
 )
 packages+=( \
     scipy numpy matplotlib \
@@ -24,6 +24,7 @@ packages+=( \
 )
 packages+=( \
     unidecode \
+    pdf2txt \
 )
 packages+=( \
     speedtest-cli \
@@ -49,6 +50,9 @@ packages+=( \
     pybotics \
     pytransform3d \
     roboticstoolbox-python \
+)
+packages+=( \
+    py-trello \
 )
 
 $py_install "${packages[@]}"

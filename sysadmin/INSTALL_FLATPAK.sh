@@ -66,6 +66,8 @@ add_if always               com.github.tchx84.Flatseal
 
 ### medical imaging tools
 add_if "$is_server"         br.gov.cti.invesalius
+#add_if "$is_server"         io.github.nroduit.Weasis
+#add_if "$is_server"         com.github.AlizaMedicalImaging.AlizaMS
 
 ### media tools
 add_if "!$is_headless"      org.musicbrainz.Picard
@@ -74,8 +76,10 @@ add_if "!$is_headless"      org.inkscape.Inkscape
 add_if "!$is_headless"      org.kde.digikam
 add_if "$is_media"          io.github.Soundux
 
-### PDF tools
+### PDF tools (and related)
 add_if "!$is_headless"      net.scribus.Scribus
+add_if "$is_bert_desktop"   xyz.rescribe.rescribe
+add_if "$is_bert_desktop"   org.gnome.OCRFeeder
 
 #### video editing
 add_if "$is_media"          io.github.jliljebl.Flowblade
@@ -101,7 +105,7 @@ add_if "$is_multiuser"      com.slack.Slack
 add_if "$is_multiuser"      io.mrarm.mcpelauncher
 add_if "$is_multiuser"      edu.mit.Scratch
 add_if "$is_multiuser"      org.scummvm.ScummVM
-add_if "$is_multiuser"      com.valvesoftware.Steam
+add_if "$is_multiuser,$is_bert_desktop" com.valvesoftware.Steam
 add_if "$is_multiuser"      org.flightgear.FlightGear
 add_if "$is_multiuser"      com.endlessnetwork.passage
 

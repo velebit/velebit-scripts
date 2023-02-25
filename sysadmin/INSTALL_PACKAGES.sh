@@ -80,9 +80,9 @@ add_if "$is_primary_os"     squashfs-tools
 add_if always               perl perl-doc
 add_if always               python3 ipython3 python3-pip
 add_if "!$is_headless"      python3-tk
-add_if "!$is_headless"      python3-numpy python3-scipy python3-matplotlib
-add_if "!$is_headless"      python3-sympy
-#add_if "!$is_headless"      python3-imageio python3-eyed3
+#add_if "!$is_headless"      python3-numpy python3-scipy python3-matplotlib
+#add_if "!$is_headless"      python3-sympy
+##add_if "!$is_headless"      python3-imageio python3-eyed3
 add_if "!$is_headless"      graphviz
 add_if always               iputils-ping traceroute
 add_if always               telnet ncat
@@ -98,6 +98,7 @@ add_if "$is_server"         cups cups-client cups-bsd
 add_if "$is_server"         foomatic-db-engine
 add_if "$is_server"         printer-driver-all openprinting-ppds
 add_if "$is_primary_os"     cups printer-driver-cups-pdf
+add_if "$is_primary_os"     sane sane-utils xsane
 add_if "!$is_headless"      task-cinnamon-desktop
 add_if "$is_bert_desktop"   task-xfce-desktop
 add_if "$is_multiuser"      task-mate-desktop
