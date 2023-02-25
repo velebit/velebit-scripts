@@ -7,9 +7,9 @@ log=(echo)
 no_unlock_days=( )
 
 # colors
-good () { echo -e '\e[34m'; }
-warn () { echo -e '\e[33m'; }
-bad ()  { echo -e '\e[31m'; }
+good () { echo -e '\e[34;1m'; }
+warn () { echo -e '\e[33;1m'; }
+bad ()  { echo -e '\e[31;1m'; }
 end ()  { echo -e '\e[0m'; }
 
 is_done() { echo "$(good)done$(end)"; }
@@ -423,43 +423,46 @@ pulseaudio_get_mute_state_all () {
 pulseaudio_set_mute_state_all () {
     local user="$1"; shift
     local muted="$1"; shift
-    local s
-    local num=0
-    for s in $(run_as_user "$user" pactl list short sinks \
-                   | awk '{print $1}'); do
-        if run_as_user "$user" pactl set-sink-mute "$s" "$muted"; then
-            num="$((num+1))"
-        fi
-    done
-    if [ "$num" -gt 0 ]; then
-        "${log[@]}" "Set $(user2name "$user")'s audio muting to" \
-            "$(good)$muted$(end) for $(good)$num audio output(s)$(end)." >&2
+    local state_description="$1"; shift
+    if [ "$(pulseaudio_get_mute_state_all "$user")" = "$muted" ]; then
+        "${log[@]}" "$(user2name "$user")'s audio $(good)was already" \
+                    "$state_description$(end)." >&2
     else
-        "${log[@]}" "Set $(user2name "$user")'s audio muting to" \
-            "$(warn)$muted$(end) for $(warn)$num audio output(s)$(end)." >&2
+        # includes unknown and mixed states
+        local num_all=0
+        local num_set=0
+        for s in $(run_as_user "$user" pactl list short sinks \
+                       | awk '{print $1}'); do
+            num_all="$((num_all+1))"
+            if run_as_user "$user" pactl set-sink-mute "$s" "$muted"; then
+                num_set="$((num_set+1))"
+            fi
+        done
+        if [ "$num_set" -ne "$num_all" ]; then
+            "${log[@]}" "Set $(user2name "$user")'s audio to" \
+                        "$(warn)$state_description$(end) for" \
+                        "$(warn)$num_set of $num_all" \
+                        "audio output(s)$(end)." >&2
+        elif [ "$num_set" -eq 0 ]; then
+            "${log[@]}" "Set $(user2name "$user")'s audio to" \
+                        "$(warn)$state_description$(end) for" \
+                        "$(warn)$num_set audio output(s)$(end)." >&2
+        else
+            "${log[@]}" "Set $(user2name "$user")'s audio to" \
+                        "$(good)$state_description$(end) for" \
+                        "$(good)$num_set audio output(s)$(end)." >&2
+        fi
     fi
 }
 
 mute_all () {
     local user="$1"; shift
-    if [ "$(pulseaudio_get_mute_state_all "$user")" = true ]; then
-        "${log[@]}" "$(user2name "$user")'s audio is already" \
-            "$(good)muted$(end)." >&2
-    else
-        # includes unknown and mixed states
-        pulseaudio_set_mute_state_all "$user" true
-    fi
+    pulseaudio_set_mute_state_all "$user" true muted
 }
 
 unmute_all () {
     local user="$1"; shift
-    if [ "$(pulseaudio_get_mute_state_all "$user")" = false ]; then
-        "${log[@]}" "$(user2name "$user")'s audio is already" \
-            "$(good)unmuted$(end)." >&2
-    else
-        # includes unknown and mixed states
-        pulseaudio_set_mute_state_all "$user" false
-    fi
+    pulseaudio_set_mute_state_all "$user" false unmuted
 }
 
 get_timestamp () {
@@ -532,11 +535,11 @@ parse_schedule_time () {
             get_timestamp "now + $DEFAULT_SLOT_INTERVAL"
             ;;
         [0-9]:[0-9][0-9]|[0-9][0-9]:[0-9][0-9])
-	    # no warning in this case
+            # no warning in this case
             get_timestamp "$timespec"
             ;;
         [0-9]:[0-9][0-9][ap]m|[0-9][0-9]:[0-9][0-9][ap]m)
-	    # no warning in this case
+            # no warning in this case
             get_timestamp "$timespec"
             ;;
         *)
