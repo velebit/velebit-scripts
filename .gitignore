@@ -1,5 +1,28 @@
 *~
 
-# temporary Python files
+# /net-slurp/election/
+/net-slurp/election/http%3A%2F%2F*
+/net-slurp/election/CBS.*
+/net-slurp/election/BOS.*
+
+# /net-slurp/games/
+/net-slurp/games/STEAM_BY_METASCORE@*.html
+/net-slurp/games/steam-metascore-*.png
+/net-slurp/games/CACHE.*
+
+# /net-slurp/kol/booze/
+/net-slurp/kol/booze/Pages
+/net-slurp/kol/booze/Booze.html
+/net-slurp/kol/booze/Booze_drunkenness.html
+/net-slurp/kol/booze/Booze_level.html
+/net-slurp/kol/booze/Booze.table
+/net-slurp/kol/booze/Booze_drunkenness.table
+/net-slurp/kol/booze/Booze_level.table
+/net-slurp/kol/booze/Booze.links
+/net-slurp/kol/booze/Booze_drunkenness.links
+/net-slurp/kol/booze/Booze_level.links
+
+# /puzzle/year-arithmetic-trY/
+/puzzle/year-arithmetic-trY/op-trees.*.stored
+
 __pycache__
-.mypy_cache
