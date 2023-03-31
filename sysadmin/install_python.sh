@@ -63,5 +63,10 @@ packages+=( \
     feedparser \
     feedgen \
 )
+packages+=( \
+    markdown \
+    cactus mkdocs pelican 'pelican[markdown]' 'Nikola[extras]' \
+    `# hyde <= 0.8.x imposes dependency on very old markdown` \
+)
 
 $py_install "${packages[@]}"

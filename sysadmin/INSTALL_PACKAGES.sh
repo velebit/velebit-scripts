@@ -83,6 +83,7 @@ add_if "!$is_headless"      python3-tk
 #add_if "!$is_headless"      python3-numpy python3-scipy python3-matplotlib
 #add_if "!$is_headless"      python3-sympy
 ##add_if "!$is_headless"      python3-imageio python3-eyed3
+add_if always               ruby-dev
 add_if "!$is_headless"      graphviz
 add_if always               iputils-ping traceroute
 add_if always               telnet ncat
