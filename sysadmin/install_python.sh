@@ -4,11 +4,13 @@ py_install='pip3 install --disable-pip-version-check -U'
 
 packages=()
 
+# future me, you should do this only sometimes:
 #packages+=( \
-#    pip \
+#    pip setuptools wheel \
 #)
 packages+=( \
     black mypy \
+    flake8 \
 )
 packages+=( \
     scipy numpy matplotlib \
@@ -17,7 +19,7 @@ packages+=( \
 packages+=( \
     imageio imageio-ffmpeg \
     eyed3 music_tag \
-    grako `# dependency for eyeD3\'s "display" plugin` \
+    grako `# <= dependency for eyeD3\'s "display" plugin` \
 )
 packages+=( \
     regex \
@@ -35,6 +37,9 @@ packages+=( \
 packages+=( \
     youtube-dl yt-dlp \
 )
+#packages+=( \
+#    flexget \
+#)
 packages+=( \
     rgain \
 )
@@ -53,6 +58,10 @@ packages+=( \
 )
 packages+=( \
     py-trello \
+)
+packages+=( \
+    feedparser \
+    feedgen \
 )
 
 $py_install "${packages[@]}"
