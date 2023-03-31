@@ -253,22 +253,34 @@ def move_cards_to_list(cards, dst_list, *, verbosity=0, dry_run=False):
                       .format(name=c.name, src=prev_list.name,
                               dst=dst_list.name),
                       file=sys.stderr)
-            else:
-                c.change_list(dst_list.id)
-                if verbosity >= 0:
-                    print("(T) Moved card '{name}' from '{src}' to '{dst}'."
-                          .format(name=c.name, src=prev_list.name,
-                                  dst=dst_list.name),
-                          file=sys.stderr)
+        else:
+            c.change_list(dst_list.id)
+            if verbosity >= 0:
+                print("(T) Moved card '{name}' from '{src}' to '{dst}'."
+                      .format(name=c.name, src=prev_list.name,
+                              dst=dst_list.name),
+                      file=sys.stderr)
 
 def move_cards_from_lists_to_list(cards, src_lists, dst_list,
                                   *, verbosity=0, dry_run=False):
-    move_cards_to_list((c for c in cards if c.get_list() in src_lists),
+    moving = [(c, (c.get_list() in src_lists)) for c in cards]
+    if verbosity >= 3:
+        for card in (m[0] for m in moving if not m[1]):
+            print("(T) Card '{name}' is in list {lst}, not in filter lists"
+                  .format(name=card.name, lst=card.get_list().name),
+                  file=sys.stderr)
+    move_cards_to_list((m[0] for m in moving if m[1]),
                        dst_list, verbosity=verbosity, dry_run=dry_run)
 
 def move_cards_not_in_lists_to_list(cards, excl_lists, dst_list,
                                     *, verbosity=0, dry_run=False):
-    move_cards_to_list((c for c in cards if c.get_list() not in excl_lists),
+    moving = [(c, (c.get_list() not in excl_lists)) for c in cards]
+    if verbosity >= 3:
+        for card in (m[0] for m in moving if not m[1]):
+            print("(T) Card '{name}' is in list {lst}, in exclude lists"
+                  .format(name=card.name, lst=card.get_list().name),
+                  file=sys.stderr)
+    move_cards_to_list((m[0] for m in moving if m[1]),
                        dst_list, verbosity=verbosity, dry_run=dry_run)
 
 ## directly managing labels on a card

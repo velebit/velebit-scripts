@@ -4,11 +4,8 @@
 import argparse
 import codecs
 import csv
-import os.path
 import regex
-import subprocess
-import sys
-
+import trello.exceptions
 import bert_miro as bm
 import bert_trello as bt
 
