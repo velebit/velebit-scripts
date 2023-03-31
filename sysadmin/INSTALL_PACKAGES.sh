@@ -156,6 +156,8 @@ add_if always               libhtml-element-extended-perl \
 add_if always               libtext-unidecode-perl libtext-unaccent-perl
 add_if "$is_primary_os"     sonic-pi
 add_if "$is_primary_os"     sloccount
+# These may be useful for bootstraping node.js / typescript development:
+#add_if "$is_bert_desktop"   nodejs npm ts-node
 
 ### OpenWRT ImageBuilder dependencies
 #add_if "$is_server"         libncurses5-dev libncursesw5-dev  # <- transitional
@@ -170,6 +172,8 @@ add_if "$is_server"         gettext
 ### file versioning, comparison and whatnot
 add_if always               git git-svn subversion
 add_if "!$is_headless"      meld
+add_if "!$is_headless"      diffuse
+add_if "!$is_headless"      ripgrep
 
 ### local network and maintenance tools
 add_if always               sshfs
