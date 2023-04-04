@@ -4,11 +4,13 @@ import datetime as dt
 import json
 import os
 import re
-import sys
 import requests
+import sys
+import time
+from typing import Dict, List, Optional
+
 
 # ===== HTTP request error classes =====
-
 
 class UnexpectedHTTPResponseError(requests.exceptions.HTTPError):
     """The HTTP response code which was received was unexpected."""
@@ -28,7 +30,6 @@ class MissingAuthorizationError(StateError):
 
 # ===== Toggl Track client authentication data =====
 
-
 class Auth(object):
 
     def __init__(self, *, email=None, password=None, api_token=None):
@@ -44,6 +45,45 @@ class Auth(object):
 
     def clone(self):
         return self.__class__(**self.__dict__)
+
+
+# ===== Common caching code =====
+
+class ObjectCache(object):
+    """A common class for caching objects by ID."""
+
+    def __init__(self):
+        self.__all = None
+        self.__map = {}
+
+    def full_list(self):
+        assert self.has_full_list()
+        return self.__all
+
+    def has_full_list(self):
+        return self.__all is not None
+
+    def record_full_list(self):
+        self.__all = tuple(self.__map.values())
+
+    def has_id(self, id):
+        return id in self.__map
+
+    def get_id(self, id):
+        return self.__map[id]
+
+    def add_id(self, id, value):
+        self.__map[id] = value
+
+    def populate(self, items, *, create, get_id=None, **kwargs):
+        if get_id is None:
+            def get_id(data):
+                return int(data['id'])
+        for data in items:
+            id = get_id(data)
+            if not self.has_id(id):
+                self.add_id(id, create(data, **kwargs))
+        self.record_full_list()
 
 
 # ===== Toggl Track client =====
@@ -71,18 +111,18 @@ class TogglTrack(object):
         if api_token is not None:
             self.__auth.api_token = api_token
         self.__session = requests.Session()
-        self.__workspace_id = None
         self.__default_workspace_id = None
+        self.__workspaces = ObjectCache()
 
     def __del__(self):
         # This generates noise from the `copy` module at Python shutdown:
         # self.deauthenticate()
         pass
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"{type(self).__name__}(...)"
 
-    def __eq__(self, other):
+    def __eq__(self, other) -> bool:
         return (isinstance(self, TogglTrack) and isinstance(other, TogglTrack)
                 and self.__auth == other.__auth)
 
@@ -90,13 +130,19 @@ class TogglTrack(object):
 
     def _make_basic_request(self, *, method=Method.GET, url,
                             accept_codes={requests.codes.ok},
-                            extra_headers={}, **kwargs):
+                            extra_headers={}, **kwargs) \
+            -> requests.models.Response:
         headers = {
             "accept": "application/json",
             **extra_headers
         }
-        response = self.__session.request(method=method, url=url,
-                                          headers=headers, **kwargs)
+        response, delay = None, 0.25
+        while response is None:
+            response = self.__session.request(method=method, url=url,
+                                              headers=headers, **kwargs)
+            if response.status_code == requests.codes.TOO_MANY_REQUESTS:
+                time.sleep(delay)
+                response, delay = None, 2*delay
         if response.status_code not in accept_codes:
             # try normal response error mechanism...
             response.raise_for_status()
@@ -109,13 +155,15 @@ class TogglTrack(object):
         return response
 
     def _make_auth_request(self, *, username, password,
-                           extra_headers={}, **kwargs):
+                           extra_headers={}, **kwargs) \
+            -> requests.models.Response:
         response = self._make_basic_request(
             auth=requests.auth.HTTPBasicAuth(username, password),
             extra_headers=extra_headers, **kwargs)
         return response
 
-    def _make_cookie_request(self, **kwargs):
+    def _make_cookie_request(self, **kwargs) \
+            -> requests.models.Response:
         if not self.has_cookie():
             raise MissingAuthorizationError("Cookie is not present.")
         return self._make_basic_request(**kwargs)
@@ -123,13 +171,13 @@ class TogglTrack(object):
     # authentication-related functionality
 
     @property
-    def auth(self):
+    def auth(self) -> Auth:
         return self.__auth.clone()
 
-    def has_cookie(self):
+    def has_cookie(self) -> bool:
         return self.AUTH_COOKIE_NAME in self.__session.cookies
 
-    def is_cookie_valid(self):
+    def is_cookie_valid(self) -> bool:
         if not self.has_cookie():
             return False
         url = "https://api.track.toggl.com/api/v9/me/logged"
@@ -140,7 +188,7 @@ class TogglTrack(object):
                           requests.codes.forbidden})
         return response.status_code == requests.codes.ok
 
-    def _create_cookie(self):
+    def _create_cookie(self) -> Optional[Auth]:
         url = "https://api.track.toggl.com/api/v9/me/sessions"
         if self.__auth.api_token is not None:
             try:
@@ -160,7 +208,7 @@ class TogglTrack(object):
             return self.__auth
         return None
 
-    def authenticate(self, *, allow_user_input=True):
+    def authenticate(self, *, allow_user_input=True) -> Optional[Auth]:
         if self.is_cookie_valid():
             return None
         auth = self._create_cookie()
@@ -185,51 +233,62 @@ class TogglTrack(object):
         json = response.json()
         self.__default_workspace_id = json['default_workspace_id']
 
-    def organizations(self):
+    def organizations(self) -> "List[Organization]":
         url = "https://api.track.toggl.com/api/v9/me/organizations"
         response = self._make_cookie_request(method=Method.GET, url=url)
         json = response.json()
         return [Organization._from_json(org_data, toggl_track=self)
                 for org_data in json]
 
-    def workspaces(self):
-        url = "https://api.track.toggl.com/api/v9/me/workspaces"
-        response = self._make_cookie_request(method=Method.GET, url=url)
-        json = response.json()
-        return [Workspace._from_json(wsp_data, toggl_track=self)
-                for wsp_data in json]
+    def workspaces(self) -> "List[Workspace]":
+        if not self.__workspaces.has_full_list():
+            url = "https://api.track.toggl.com/api/v9/me/workspaces"
+            response = self._make_cookie_request(method=Method.GET, url=url)
+            json = response.json()
+            # create new objects for any data not already cached
+            self.__workspaces.populate(
+                json, create=Workspace._from_json, toggl_track=self)
+        return self.__workspaces.full_list()
 
-    def workspace(self, *, workspace_id=None):
+    def workspace(self, *, workspace_id=None) -> "Optional[Workspace]":
         if workspace_id is None:
             workspace_id = self.workspace_id
         assert type(workspace_id) == int
+        if self.__workspaces.has_id(workspace_id):
+            return self.__workspaces.get_id(workspace_id)
         url = f"https://api.track.toggl.com/api/v9/workspaces/{workspace_id}"
         try:
             response = self._make_cookie_request(method=Method.GET, url=url)
-            return Workspace._from_json(response.json(), toggl_track=self)
+            ws = Workspace._from_json(response.json(), toggl_track=self)
+            self.__workspaces.add_id(workspace_id, ws)
+            return ws
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == requests.codes.FORBIDDEN:
                 return None  # assume we just can't (even)
             raise
 
     @property
-    def workspace_id(self):
-        if self.__workspace_id is not None:
-            return self.__workspace_id
+    def workspace_id(self) -> str:
         if self.__default_workspace_id is not None:
             return self.__default_workspace_id
         self._cache_me()
+        assert self.__default_workspace_id is not None
         return self.__default_workspace_id
 
-    def time_entries(self):
+    def time_entries(self, *, start, end) -> "List[TimeEntry]":
         url = "https://api.track.toggl.com/api/v9/me/time_entries"
-        tomorrow = dt.date.today() + dt.timedelta(days=+1)
         response = self._make_cookie_request(
             method=Method.GET, url=url,
-            params={'before': tomorrow.strftime("%Y-%m-%d")})
+            params={'start_date': start.isoformat(),
+                    'end_date': end.isoformat()})
         json = response.json()
-        return [TimeEntry._from_json(entry_data, toggl_track=self)
-                for entry_data in json]
+        return [
+            TimeEntry._from_json(
+                entry_data, toggl_track=self,
+                workspace=self.workspace(
+                    workspace_id=entry_data['workspace_id']))
+            for entry_data in json
+        ]
 
 
 # ===== Base class for all Toggl Track objects =====
@@ -238,15 +297,18 @@ class TogglTrack(object):
 class TtObject(object):
     """Any object in Toggl Track."""
 
-    def __init__(self, *, json, toggl_track=None):
+    def __init__(self, *, json, toggl_track: Optional[TogglTrack] = None):
         self.__json = json
         self.__tt = toggl_track
         self.__id = self.__json['id']
 
-    def __repr__(self):
+    def __str__(self) -> str:
         return f"{type(self).__name__}(id={self.id!r})"
 
-    def __eq__(self, other):
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}(json={self.__json!r})"
+
+    def __eq__(self, other) -> bool:
         return (isinstance(self, TtObject) and
                 isinstance(other, TtObject) and
                 type(self) == type(other) and
@@ -254,8 +316,8 @@ class TtObject(object):
                 self.__id == other.__id)
 
     @classmethod
-    def _from_json(cls, json, toggl_track=None):
-        return cls(json=json, toggl_track=toggl_track)
+    def _from_json(cls, json: str, **kwargs):
+        return cls(json=json, **kwargs)
 
     @property
     def _json(self):
@@ -275,18 +337,18 @@ class TtObject(object):
         return self.__id
 
     @property
-    def toggl_track(self):
+    def toggl_track(self) -> Optional[TogglTrack]:
         return self.__tt
 
 
 class TtNamedObject(TtObject):
     """Any named object in Toggl Track."""
 
-    def __repr__(self):
+    def __str__(self) -> str:
         return f"{type(self).__name__}(id={self.id!r}, name={self.name!r})"
 
     @property
-    def name(self):
+    def name(self) -> str:
         return self._get_property('name')
 
 
@@ -300,43 +362,68 @@ class Organization(TtNamedObject):
 class Workspace(TtNamedObject):
     """A workspace in Toggl Track."""
 
-    def projects(self):
-        url = (f"https://api.track.toggl.com/api/v9/workspaces/{self.id}"
-               f"/projects")
-        response = self.toggl_track._make_cookie_request(
-            method=Method.GET, url=url)
-        json = response.json()
-        return [Project._from_json(prj_data, toggl_track=self)
-                for prj_data in json]
+    def __init__(self, *, json, toggl_track=None):
+        super().__init__(json=json, toggl_track=toggl_track)
+        self.__projects = ObjectCache()
+        self.__clients = ObjectCache()
+        self.__tags = ObjectCache()
 
-    def project(self, *, project_id):
+    def projects(self) -> "List[Project]":
+        if not self.__projects.has_full_list():
+            url = (f"https://api.track.toggl.com/api/v9/workspaces/{self.id}"
+                   f"/projects")
+            assert self.toggl_track is not None
+            response = self.toggl_track._make_cookie_request(
+                method=Method.GET, url=url)
+            json = response.json()
+            # create new objects for any data not already cached
+            self.__projects.populate(
+                json, create=Project._from_json, toggl_track=self)
+        return self.__projects.full_list()
+
+    def project(self, *, project_id) -> "Optional[Project]":
+        assert type(project_id) == int
+        if self.__projects.has_id(project_id):
+            return self.__projects.get_id(project_id)
         url = (f"https://api.track.toggl.com/api/v9/workspaces/{self.id}"
                f"/projects/{project_id}")
         try:
+            assert self.toggl_track is not None
             response = self.toggl_track._make_cookie_request(
                 method=Method.GET, url=url)
-            return Project._from_json(response.json(), toggl_track=self)
+            pr = Project._from_json(response.json(), toggl_track=self)
+            self.__projects.add_id(project_id, pr)
+            return pr
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == requests.codes.NOT_FOUND:
                 return None
             raise
 
-    def clients(self):
-        url = (f"https://api.track.toggl.com/api/v9/workspaces/{self.id}"
-               f"/clients")
-        response = self.toggl_track._make_cookie_request(
-            method=Method.GET, url=url)
-        json = response.json()
-        return [Client._from_json(cl_data, toggl_track=self)
-                for cl_data in json]
+    def clients(self) -> "List[Client]":
+        if not self.__clients.has_full_list():
+            url = (f"https://api.track.toggl.com/api/v9/workspaces/{self.id}"
+                   f"/clients")
+            assert self.toggl_track is not None
+            response = self.toggl_track._make_cookie_request(
+                method=Method.GET, url=url)
+            json = response.json()
+            # create new objects for any data not already cached
+            self.__clients.populate(
+                json, create=Client._from_json, toggl_track=self)
+        return self.__clients.full_list()
 
-    def client(self, *, client_id):
+    def client(self, *, client_id) -> "Optional[Client]":
+        if self.__clients.has_id(client_id):
+            return self.__clients.get_id(client_id)
         url = (f"https://api.track.toggl.com/api/v9/workspaces/{self.id}"
                f"/clients/{client_id}")
         try:
+            assert self.toggl_track is not None
             response = self.toggl_track._make_cookie_request(
                 method=Method.GET, url=url)
-            return Client._from_json(response.json(), toggl_track=self)
+            cl = Client._from_json(response.json(), toggl_track=self)
+            self.__clients.add_id(client_id, cl)
+            return cl
         except requests.exceptions.HTTPError as e:
             # 500 Internal Server Error is what's actually returned
             if (e.response.status_code == requests.codes.INTERNAL_SERVER_ERROR
@@ -344,45 +431,50 @@ class Workspace(TtNamedObject):
                 return None
             raise
 
-    def tags(self):
-        url = (f"https://api.track.toggl.com/api/v9/workspaces/{self.id}"
-               f"/tags")
-        response = self.toggl_track._make_cookie_request(
-            method=Method.GET, url=url)
-        json = response.json()
-        return [Tag._from_json(tag_data, toggl_track=self)
-                for tag_data in json]
+    def tags(self) -> "List[Tag]":
+        if not self.__tags.has_full_list():
+            url = (f"https://api.track.toggl.com/api/v9/workspaces/{self.id}"
+                   f"/tags")
+            assert self.toggl_track is not None
+            response = self.toggl_track._make_cookie_request(
+                method=Method.GET, url=url)
+            json = response.json()
+            # create new objects for any data not already cached
+            self.__tags.populate(
+                json, create=Tag._from_json, toggl_track=self)
+        return self.__tags.full_list()
 
-    def tag(self, *, tag_id):
+    def tag(self, *, tag_id) -> "Optional[Tag]":
+        if self.__tags.has_id(tag_id):
+            return self.__tags.get_id(tag_id)
         # There is no documented v9 API for looking up a tag by ID.
-        # But we can just search through the list of all tags...
-        for t in self.tags():
-            if t.id == tag_id:
-                return t
+        self.tags()  # call for its side effects
+        if self.__tags.has_id(tag_id):
+            return self.__tags.get_id(tag_id)
         return None
 
 
 class Project(TtNamedObject):
     """A project in Toggl Track."""
 
-    def __repr__(self):
+    def __str__(self) -> str:
         return (f"{type(self).__name__}(id={self.id!r}, name={self.name!r},"
                 f"  active={self.active!r})")
 
     @property
-    def active(self):
+    def active(self) -> bool:
         return self._get_property('active')
 
 
 class Client(TtNamedObject):
     """A client in Toggl Track."""
 
-    def __repr__(self):
+    def __str__(self) -> str:
         return (f"{type(self).__name__}(id={self.id!r}, name={self.name!r},"
                 f" archived={self.archived!r})")
 
     @property
-    def archived(self):
+    def archived(self) -> bool:
         return self._get_property('archived')
 
 
@@ -393,32 +485,76 @@ class Tag(TtNamedObject):
 class TimeEntry(TtObject):
     """A time entry in Toggl Track."""
 
-    def __repr__(self):
+    def __init__(self, *, json, toggl_track=None, workspace=None):
+        super().__init__(json=json, toggl_track=toggl_track)
+        if workspace is not None:
+            self.__ws = workspace
+        elif toggl_track is not None:
+            self.__ws = toggl_track.workspace(workspace_id=self.workspace_id)
+
+    def __str__(self) -> str:
         return (f"{type(self).__name__}(id={self.id!r},"
                 f" description={self.description!r})")
 
     @property
-    def description(self):
+    def description(self) -> str:
         return self._get_property('description')
+
+    @property
+    def start(self) -> dt.datetime:
+        return dt.datetime.fromisoformat(
+            re.sub(r'Z$', '+00:00', self._get_property('start')))
+
+    @property
+    def end(self) -> Optional[dt.datetime]:
+        end = self._get_property('stop')
+        if end is None:
+            return None
+        return dt.datetime.fromisoformat(
+            re.sub(r'Z$', '+00:00', end))
+
+    @property
+    def duration(self) -> dt.timedelta:
+        return dt.timedelta(seconds=self._get_property('duration'))
+
+    @property
+    def workspace_id(self) -> str:
+        return self._get_property('workspace_id')
+
+    @property
+    def project_id(self) -> Optional[str]:
+        return self._get_property('project_id')
+
+    @property
+    def workspace(self) -> Workspace:
+        return self.__ws
+
+    @property
+    def project(self) -> Optional[Project]:
+        pr_id = self.project_id
+        if pr_id is None:
+            return None
+        return self.workspace.project(project_id=pr_id)
 
 
 # ===== managing saved authentication and the client object =====
 
 
-def get_auth_file_name():
+def get_auth_file_name() -> str:
     home_dir = os.getenv("HOME")
     assert home_dir is not None, "HOME needs to be set"
     return home_dir + "/.toggl_track_auth.json"
 
 
-def read_auth_data():
+def read_auth_data() -> Dict[str, str]:
     with open(get_auth_file_name(), "r", encoding="utf-8") as f:
         auth = json.load(f)
     assert (('email' in auth and 'password' in auth) or 'api_token' in auth)
     return auth
 
 
-def _update_auth(old_auth, client_auth, save=True):
+def _update_auth(old_auth: Dict[str, str], client_auth: Auth, save=True) \
+        -> Dict[str, str]:
     new_auth = dict(old_auth)
     if client_auth.email is not None or 'email' not in new_auth:
         new_auth['email'] = client_auth.email
@@ -449,7 +585,7 @@ def create_client(auth=None, allow_user_input=True, reauth_and_save=True):
 # ===== helpers for getting objects by ID or name =====
 
 
-def get_workspace(key, tt=None, verbosity=0):
+def get_workspace(key, tt=None, verbosity=0) -> Workspace:
     if tt is None:
         tt = create_client()
     ws, verbosity_threshold, extra_msg = None, 2, ''
@@ -495,4 +631,4 @@ def get_workspace(key, tt=None, verbosity=0):
 # tags = ws.tags()
 # print(tags)
 # print(ws.tag(tag_id=tags[0].id))
-# print(tt.time_entries())
+# print(tt.time_entries(...tbd...))
