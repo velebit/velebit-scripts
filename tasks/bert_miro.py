@@ -1,6 +1,5 @@
 #!/not-executable/python3
 import bs4
-import collections
 import json
 import os
 import requests
