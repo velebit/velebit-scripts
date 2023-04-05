@@ -356,7 +356,9 @@ def fetch_timesheet_data(workspace_key: str,
         start = entry.start
         end = entry.end
         if end is None:
-            continue  # TODO: we currently skip any running time entries
+            # If the task is running, use the current time as the end time
+            # (ignore any time sync difference between Toggl and this computer)
+            end = dt.datetime.now(tz=start.tzinfo)
         end -= one_sec
         while start.weekday() != end.weekday():
             assert start < end
