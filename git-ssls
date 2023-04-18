@@ -2,32 +2,32 @@
 use warnings;
 use strict;
 
-{
-  package WorkingDirectory;
-  use Carp;
-  use Cwd ();
-
-  sub new ( $$ ) {
-    my ($class, $new_dir) = @_;
-    $class = ref $class if ref $class;
-    return bless {}, $class if ! defined $new_dir;
-
-    my $old_dir = Cwd::getcwd
-      or croak "Could not determine old working directory";
-    chdir $new_dir
-      or croak "chdir($new_dir): $!";
-
-    return bless { old => $old_dir, new => $new_dir }, $class;
-  }
-
-  sub DESTROY ( $ ) {
-    my ($obj) = @_;
-    !exists $obj->{old}
-      or chdir $obj->{old}
-      or croak "chdir($obj->old): $!";
-  }
-  1;
-}
+#{
+#  package WorkingDirectory;
+#  use Carp;
+#  use Cwd ();
+#
+#  sub new ( $$ ) {
+#    my ($class, $new_dir) = @_;
+#    $class = ref $class if ref $class;
+#    return bless {}, $class if ! defined $new_dir;
+#
+#    my $old_dir = Cwd::getcwd
+#      or croak "Could not determine old working directory";
+#    chdir $new_dir
+#      or croak "chdir($new_dir): $!";
+#
+#    return bless { old => $old_dir, new => $new_dir }, $class;
+#  }
+#
+#  sub DESTROY ( $ ) {
+#    my ($obj) = @_;
+#    !exists $obj->{old}
+#      or chdir $obj->{old}
+#      or croak "chdir($obj->old): $!";
+#  }
+#  1;
+#}
 
 sub remove_ansi ( $ ) {
   local ($_) = @_;
@@ -36,37 +36,62 @@ sub remove_ansi ( $ ) {
   $_;
 }
 
-use constant EXPAND_SUBMODULES => 1;
+sub colorize_status ( $ ) {
+  my ($status) = @_;
+  # note: this uses yellow for ??, git status -s uses red
+  $status eq '?? ' and return "\e[33m??\e[0m ";
+  # order matters:
+  $status =~ s/^(.)([^ ])/$1\e[31m$2\e[0m/;
+  $status =~ s/^([^ ])/\e[32m$1\e[0m/;
+  return $status;
+}
+
+#use constant EXPAND_SUBMODULES => 1;
 
 my %status;
 
-sub process_status ( ;$ );
-sub process_status ( ;$ ) {
-  my ($dir) = @_;
+sub process_status ( ;$$ );
+sub process_status ( ;$$ ) {
+  my ($top, $dir) = @_;
 
-  my $prefix = (defined $dir ? "$dir/" : '');
-  $prefix =~ s,//+$,/,;
-  my $temp_wd = WorkingDirectory->new($dir) if defined $dir;
+  if (!defined $top) {
+    open(my $TOP, '-|', qw( git rev-parse --show-toplevel ))
+      or die "open(git rev-parse --show-toplevel|): $!";
+    defined($top = <$TOP>)
+      or die "read(git rev-parse --show-toplevel|): $!";
+    $top =~ s/\r?\n$//;
+  }
 
-  open(my $STATUS, '-|', qw( git -c color.status=always status -sb ))
+  if (!defined $dir) {
+    open(my $DIR, '-|', qw( git rev-parse --show-prefix ))
+      or die "open(git rev-parse --show-prefix|): $!";
+    defined($dir = <$DIR>)
+      or die "read(git rev-parse --show-prefix|): $!";
+    $dir =~ s/\r?\n$//; $dir =~ s,/$,,;
+  }
+
+  open(my $STATUS, '-|', qw( git status --porcelain=v1 -z . ))
     or die "open(git status|): $!";
-
+  local ($/) = "\0";
   while (<$STATUS>) {
-    my ($stat, $path) = /(^.{10,18}? )([^\e]*)\r?\n/
-      or ($prefix or print), next;
-    # if working in a prefix subdirectory, ignore paths back out of that subdir
-    $prefix and $path =~ m,^\.\./, and next;
+    $_ =~ s/\0$//;
+    my ($stat, $path, $old_path, $cstat);
+    ($stat, $path) = /(^.{2} )(.*)$/
+      or print "$_\n", next;
+    my $is_rename_or_copy = ($stat =~ /^(?:[RC].|.[RC]) $/);
+    if ($is_rename_or_copy) {
+      defined($old_path = <$STATUS>) or last;
+      $old_path =~ s/\0$//;
+    }
 
-    # normalize path
-    $path =~ s,.* -> ,,;
-    $path = $prefix . $path;
-    $path =~ s,/+\.(/*)$,$1, if $prefix;
+    # strip subdirectory path
+    length $dir and not $path =~ s,^\Q$dir\E(?:$|/),, and die "$path";
+    $path = '.' if !length $path;
 
-    if (! -d $path or ! EXPAND_SUBMODULES or $path eq $prefix) {
-      $status{$path} = $stat;
+    if (defined $old_path) {
+      $status{$path} = [colorize_status($stat), " <- $old_path"];
     } else {
-      # a subdirectory may or may not be a submodule, but this works for both
-      process_status $path;
+      $status{$path} = [colorize_status($stat), ""];
     }
   }
 }
@@ -96,7 +121,8 @@ if (keys %status) {
   while (<$LS>) {
     my $name = get_filename $_;
     warn "No status for '@{[join '', map sprintf('[%02x]', ord $_), split //, $name]}'" unless exists $status{$name};
-    s/^/$status{$name}/, delete $status{$name} if exists $status{$name};
+    s/^/$status{$name}[0]/, s/$/$status{$name}[1]/, delete $status{$name}
+      if exists $status{$name};
     print;
   }
 }
