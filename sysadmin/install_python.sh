@@ -46,7 +46,7 @@ packages+=( \
 packages+=( \
     pyluach \
     `# hebcal` \
-    python-dateutil convertdate \
+    python-dateutil convertdate dateparser \
 )
 packages+=( \
     ics
