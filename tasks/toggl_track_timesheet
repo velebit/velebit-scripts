@@ -17,7 +17,7 @@ import bert_toggl_track as trk
 CACHE_FILE = 'timesheet_data.pkl'
 
 DAILY_SOFT_CAP = dt.timedelta(hours=8)
-QUANTUM = dt.timedelta(minutes=30)
+QUANTUM = dt.timedelta(minutes=60)
 ENTRY_THRESHOLD = QUANTUM / 2
 
 
