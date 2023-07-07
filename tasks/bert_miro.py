@@ -117,12 +117,60 @@ class Client(object):
                           requests.codes.unauthorized})
         return response.status_code == requests.codes.ok
 
+    def create_access_token_via_settings(self):
+        while self.__auth.client_id is None:
+            print("Enter your app's Client ID.\n"
+                  "  You can find this in the App Credentials section of the\n"
+                  "  app's page, accessible from your Dev Team > Profile\n"
+                  "  settings > Your apps > Created apps > (select the app).")
+            value = input("> ").strip()
+            if value != "":
+                self.__auth.client_id = value
+        while self.__auth.client_secret is None:
+            print("Enter your app's Client secret.\n"
+                  "  You can find this in the App Credentials section of the\n"
+                  "  app's page, accessible from your Dev Team > Profile\n"
+                  "  settings > Your apps > Created apps > (select the app).")
+            value = input("> ").strip()
+            if value != "":
+                self.__auth.client_secret = value
+        self.__auth.access_token = None
+        self.__auth.refresh_token = None
+        while self.__auth.access_token is None and \
+              self.__auth.refresh_token is None:
+            print("Enter your app's Access token.\n"
+                  "  You can generate this from the app's page, accessible\n"
+                  "  from your Dev Team > Profile settings > Your apps >\n"
+                  "  Created apps > (select the app). On the app's page,\n"
+                  "  scroll down to find the 'Install app and get OAuth\n"
+                  "  token' button, click it, and install the app to the\n"
+                  "  desired workspace. This will show you the tokens.\n"
+                  "  You can leave this blank to use the refresh token to\n"
+                  "  immediately refresh.")
+            value = input("> ").strip()
+            if value != "":
+                self.__auth.access_token = value
+            print("Enter your app's Refresh token.\n"
+                  "  You can generate this from the app's page, accessible\n"
+                  "  from your Dev Team > Profile settings > Your apps >\n"
+                  "  Created apps > (select the app). On the app's page,\n"
+                  "  scroll down to find the 'Install app and get OAuth\n"
+                  "  token' button, click it, and install the app to the\n"
+                  "  desired workspace. This will show you the tokens.\n"
+                  "  You can leave this blank to disable refresh.")
+            value = input("> ").strip()
+            if value != "":
+                self.__auth.refresh_token = value
+        if self.__auth.access_token is None and \
+              self.__auth.refresh_token is not None:
+            return self.refresh_access_token()
+        return self.auth
+
     def create_access_token(self):
-        if self.__auth.client_id is None:
-            raise MissingAuthorizationError("Client ID not known.")
-        if self.__auth.client_secret is None:
-            raise MissingAuthorizationError("Client secret not known.")
-        raise NotImplementedError("create_access_token() not yet implemented.")
+        # TODO: Consider implementing creating the access token by using (and
+        # possibly intercepting) the redirect mechanism. But we don't have that
+        # yet.
+        return self.create_access_token_via_settings()
 
     def refresh_access_token(self):
         if self.__auth.client_id is None:
@@ -151,15 +199,16 @@ class Client(object):
             auth = self.refresh_access_token()
             if self.is_access_token_valid():  # is the check even needed?
                 return auth
-        except:
+        except MissingAuthorizationError:
             pass
-        if allow_user_input:
-            try:
-                auth = self.create_access_token()
-                if self.is_access_token_valid():  # is the check even needed?
-                    return auth
-            except:
-                pass
+        except requests.exceptions.HTTPError:
+            pass
+        if not allow_user_input:
+            raise RuntimeError("Could not refresh auth token, and could not"
+                               " get a new one without user input.")
+        auth = self.create_access_token()
+        if self.is_access_token_valid():  # is the check even needed?
+            return auth
         raise RuntimeError("Could not get or create valid auth data.")
 
     ## accessing objects
@@ -423,10 +472,8 @@ def read_auth_data():
 
 def _update_auth(old_auth, client_auth, save=True):
     new_auth = dict(old_auth)
-    if client_auth.access_token is not None or 'access_token' not in new_auth:
-        new_auth['access_token'] = client_auth.access_token
-    if client_auth.refresh_token is not None or 'refresh_token' not in new_auth:
-        new_auth['refresh_token'] = client_auth.refresh_token
+    new_auth['access_token'] = client_auth.access_token
+    new_auth['refresh_token'] = client_auth.refresh_token
     if save and new_auth != old_auth:
         with open(get_auth_file_name(), "w", encoding="utf-8") as f:
             json.dump(new_auth, f)
