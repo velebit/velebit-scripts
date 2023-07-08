@@ -6,19 +6,26 @@ import requests
 import sys
 import urllib.parse
 
-## general helpers
+
+# general helpers
+
 
 def html2text(html):
-    return bs4.BeautifulSoup(html, features="lxml").get_text("\n\n", strip=True)
+    return bs4.BeautifulSoup(html, features="lxml").get_text(
+        "\n\n", strip=True)
 
-## HTTP request error classes
+
+# HTTP request error classes
+
 
 class UnexpectedHTTPResponseError(requests.exceptions.HTTPError):
     """The HTTP response code which was received was unexpected."""
 
+
 class ClientStateError(requests.exceptions.RequestException):
     """Some error in the state management of the Client has occurred.
     Ideally the specific error will be represented as a derived class."""
+
 
 class MissingAuthorizationError(ClientStateError):
     """The authorization information needed to make a request was missing.
@@ -26,7 +33,9 @@ class MissingAuthorizationError(ClientStateError):
     so while some of the information may be specified, what we needed
     right now wasn't."""
 
-## Miro client authentication data
+
+# Miro client authentication data
+
 
 class Auth(object):
 
@@ -47,7 +56,9 @@ class Auth(object):
     def clone(self):
         return self.__class__(**self.__dict__)
 
-## Miro client
+
+# Miro client
+
 
 class Client(object):
     """Client for access to Miro."""
@@ -71,7 +82,7 @@ class Client(object):
         return (isinstance(self, Client) and isinstance(other, Client) and
                 self.__auth == other.__auth)
 
-    ## HTTP request helpers
+    # HTTP request helpers
 
     @classmethod
     def _make_basic_request(cls, *, request=requests.post, url,
@@ -88,7 +99,8 @@ class Client(object):
             # ...otherwise generate our own exception
             raise UnexpectedHTTPResponseError(
                 "Unexpected status: {code} {reason} for url: {url}".format(
-                    code=response.status_code, reason=response.reason, url=url),
+                    code=response.status_code, reason=response.reason,
+                    url=url),
                 response=response)
         return response
 
@@ -101,7 +113,7 @@ class Client(object):
         }
         return self._make_basic_request(extra_headers=headers, **kwargs)
 
-    ## authentication-related functionality
+    # authentication-related functionality
 
     @property
     def auth(self):
@@ -136,8 +148,8 @@ class Client(object):
                 self.__auth.client_secret = value
         self.__auth.access_token = None
         self.__auth.refresh_token = None
-        while self.__auth.access_token is None and \
-              self.__auth.refresh_token is None:
+        while (self.__auth.access_token is None
+                and self.__auth.refresh_token is None):
             print("Enter your app's Access token.\n"
                   "  You can generate this from the app's page, accessible\n"
                   "  from your Dev Team > Profile settings > Your apps >\n"
@@ -161,8 +173,8 @@ class Client(object):
             value = input("> ").strip()
             if value != "":
                 self.__auth.refresh_token = value
-        if self.__auth.access_token is None and \
-              self.__auth.refresh_token is not None:
+        if (self.__auth.access_token is None
+                and self.__auth.refresh_token is not None):
             return self.refresh_access_token()
         return self.auth
 
@@ -211,7 +223,7 @@ class Client(object):
             return auth
         raise RuntimeError("Could not get or create valid auth data.")
 
-    ## accessing objects
+    # accessing objects
 
     def boards(self):
         url = "https://api.miro.com/v2/boards"
@@ -249,7 +261,9 @@ class Client(object):
                 return b
         return None
 
-## Miro board
+
+# Miro board
+
 
 class Board(object):
     """A board in Miro."""
@@ -324,7 +338,9 @@ class Board(object):
                                                   url=url)
         return Item._from_json(response.json(), board=self)
 
-## Items on a Miro board
+
+# Items on a Miro board
+
 
 class Item(object):
     """An item from a Miro board."""
@@ -377,7 +393,11 @@ class Item(object):
             for key in keys:
                 node = node[key]
             return node
-        except:
+        except KeyError:
+            return None
+        except TypeError:
+            return None
+        except IndexError:
             return None
 
     @property
@@ -408,6 +428,7 @@ class Item(object):
     def fill_color(self):
         return self._get_property('style', 'fillColor')
 
+
 class Frame(Item):
     """A frame item from a Miro board."""
 
@@ -424,6 +445,7 @@ class Frame(Item):
 
 Frame._register_subclass('frame')
 
+
 class StickyNote(Item):
     """A sticky_note item from a Miro board."""
 
@@ -431,7 +453,9 @@ class StickyNote(Item):
     def text(self):
         return html2text(self._get_property('data', 'content'))
 
+
 StickyNote._register_subclass('sticky_note')
+
 
 class Shape(Item):
     """A shape item from a Miro board."""
@@ -444,7 +468,9 @@ class Shape(Item):
     def shape(self):
         return self._get_property('data', 'shape')
 
+
 Shape._register_subclass('shape')
+
 
 class Text(Item):
     """A text item from a Miro board."""
@@ -453,14 +479,18 @@ class Text(Item):
     def text(self):
         return html2text(self._get_property('data', 'content'))
 
+
 Text._register_subclass('text')
 
-## managing saved authentication and the client object
+
+# managing saved authentication and the client object
+
 
 def get_auth_file_name():
     home_dir = os.getenv("HOME")
     assert home_dir is not None, "HOME needs to be set"
     return home_dir + "/.miro_auth.json"
+
 
 def read_auth_data():
     with open(get_auth_file_name(), "r", encoding="utf-8") as f:
@@ -470,6 +500,7 @@ def read_auth_data():
     assert 'client_secret' in auth
     return auth
 
+
 def _update_auth(old_auth, client_auth, save=True):
     new_auth = dict(old_auth)
     new_auth['access_token'] = client_auth.access_token
@@ -478,6 +509,7 @@ def _update_auth(old_auth, client_auth, save=True):
         with open(get_auth_file_name(), "w", encoding="utf-8") as f:
             json.dump(new_auth, f)
     return new_auth
+
 
 def create_client(auth=None, allow_user_input=True, reauth_and_save=True):
     if auth is None:
@@ -492,7 +524,9 @@ def create_client(auth=None, allow_user_input=True, reauth_and_save=True):
             auth = _update_auth(auth, updated, save=True)
     return client
 
-## getting a board/frame handle, with authentication setup and logging
+
+# getting a board/frame handle, with authentication setup and logging
+
 
 def get_board(board_id, board_name, auth=None, verbosity=0):
     verbosity_threshold, extra_msg = 2, ''
@@ -515,12 +549,13 @@ def get_board(board_id, board_name, auth=None, verbosity=0):
               file=sys.stderr)
     return board
 
+
 def get_frame(board, frame_id, frame_name, verbosity=0):
     verbosity_threshold, extra_msg = 1, ''
     frame = board.item_by_id(frame_id)
     if frame is None:
         pass  # getting by name is unimplemented
-        #verbosity_threshold, extra_msg = 0, '*by name*, fix the ID!'
+        # ... verbosity_threshold, extra_msg = 0, '*by name*, fix the ID!'
     assert frame is not None, "No frame found"
     assert type(frame) == Frame, "Bad type for frame"
     if verbosity >= verbosity_threshold:
@@ -528,33 +563,34 @@ def get_frame(board, frame_id, frame_name, verbosity=0):
               file=sys.stderr)
     return frame
 
-## ad hoc tests
 
-#client = create_client()
-#print(client)
-#print(client.boards())
-#print(client.board_by_id("uXjVPdpN6Vw="))
-#print(client.board_by_id("ajshjaljs"))
-#print(client.board_by_name("Dvorniki tasks"))
-#print(client.board_by_name("ajshjaljs"))
-#board = client.board_by_id("uXjVPdpN6Vw=")
-#print(board.items())
-#print(board.frames())
-#print(board.sticky_notes()[0]._json)
-#print(board.items(item_type='shape')[0]._json)
-#print(board.items(item_type='text')[0]._json)
+# ad hoc tests
 
-#import regex
-#for s in board.sticky_notes():
-#    if s.parent_id is None:
-#        print("{0:20} {1}".format('', regex.sub(r'\s+', ' ', s.text)))
-#    else:
-#        print("{0:20} {1}".format(regex.sub(r'\s+', ' ', s.parent.text),
-#                                  regex.sub(r'\s+', ' ', s.text)))
+# client = create_client()
+# print(client)
+# print(client.boards())
+# print(client.board_by_id("uXjVPdpN6Vw="))
+# print(client.board_by_id("ajshjaljs"))
+# print(client.board_by_name("Dvorniki tasks"))
+# print(client.board_by_name("ajshjaljs"))
+# board = client.board_by_id("uXjVPdpN6Vw=")
+# print(board.items())
+# print(board.frames())
+# print(board.sticky_notes()[0]._json)
+# print(board.items(item_type='shape')[0]._json)
+# print(board.items(item_type='text')[0]._json)
 
-#import regex
-#for f in board.frames():
-#    frame_name = regex.sub(r'\s+', ' ', f.text)
-#    for s in f.sticky_notes():
-#        print("{0:20} {1}".format(frame_name,
-#                                  regex.sub(r'\s+', ' ', s.text)))
+# import regex
+# for s in board.sticky_notes():
+#     if s.parent_id is None:
+#         print("{0:20} {1}".format('', regex.sub(r'\s+', ' ', s.text)))
+#     else:
+#         print("{0:20} {1}".format(regex.sub(r'\s+', ' ', s.parent.text),
+#                                   regex.sub(r'\s+', ' ', s.text)))
+
+# import regex
+# for f in board.frames():
+#     frame_name = regex.sub(r'\s+', ' ', f.text)
+#     for s in f.sticky_notes():
+#         print("{0:20} {1}".format(frame_name,
+#                                   regex.sub(r'\s+', ' ', s.text)))

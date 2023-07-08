@@ -1,16 +1,14 @@
 #!/usr/bin/python3
 # List all frames (text label and ID) for the specified board.
 import argparse
-import os.path
-import regex
-import subprocess
-import sys
 from bert_miro import get_board
 
-def print_lists(board_key, verbosity=0):
+
+def print_frames(board_key, verbosity=0):
     board = get_board(board_key, board_key, verbosity=verbosity)
     for frame in board.frames():
         print("    {}, {}".format(repr(frame.id), repr(frame.text)))
+
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -19,9 +17,11 @@ def parse_args():
     settings = parser.parse_args()
     return settings
 
+
 def main():
     settings = parse_args()
-    print_lists(settings.board, verbosity=settings.verbose)
+    print_frames(settings.board, verbosity=settings.verbose)
+
 
 if __name__ == "__main__":
     main()
