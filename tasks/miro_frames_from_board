@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/home/bert/.py_venv/tasks_000/bin/python3
 # List all frames (text label and ID) for the specified board.
 import argparse
 from bert_miro import get_board

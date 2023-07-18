@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/home/bert/.py_venv/tasks_000/bin/python3
 # List all boards (name and ID) for the current user.
 import argparse
 import os.path

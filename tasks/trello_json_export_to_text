@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/home/bert/.py_venv/tasks_000/bin/python3
 import json
 
 with open("trello-hopper.json", "r", encoding="utf-8") as f:
