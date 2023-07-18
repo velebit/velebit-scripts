@@ -4,34 +4,41 @@ import os
 import sys
 import trello
 
-## constants
+
+# ===== constants =====
 
 # keys for label manipulation
 ADD_LABELS = 'add'
 REMOVE_LABELS = 'rm'
 RETIRE_LABELS = 'retire'
 
-## generic utility functions
+
+# ===== generic utility functions =====
 
 def flatten(collection_of_collections):
     return [element for collection in collection_of_collections
             for element in collection]
 
+
 def intersection(first, *rest):
     return frozenset(first).intersection(*(frozenset(s) for s in rest))
+
 
 def difference(first, *rest):
     return frozenset(first).difference(*(frozenset(s) for s in rest))
 
+
 def union(first, *rest):
     return frozenset(first).union(*(frozenset(s) for s in rest))
 
-## authentication and client object management
+
+# ===== authentication and client object management =====
 
 def get_auth_file_name():
     home_dir = os.getenv("HOME")
     assert home_dir is not None, "HOME needs to be set"
     return home_dir + "/.trello_auth.json"
+
 
 def read_auth_data():
     with open(get_auth_file_name(), "r", encoding="utf-8") as f:
@@ -39,6 +46,7 @@ def read_auth_data():
     assert 'api_key' in auth
     assert 'api_secret' in auth
     return auth
+
 
 def create_auth_token(auth, save_if_updated=True):
     token = trello.create_oauth_token(key=auth['api_key'],
@@ -52,6 +60,7 @@ def create_auth_token(auth, save_if_updated=True):
     assert 'oauth_token_secret' in auth
     return auth
 
+
 def get_full_auth_data(auth=None, allow_update=True, save_if_updated=True):
     if auth is None:
         auth = read_auth_data()
@@ -64,6 +73,7 @@ def get_full_auth_data(auth=None, allow_update=True, save_if_updated=True):
             # If assertion fails, other apps will create a token we can use!
     return auth
 
+
 def create_client(auth=None):
     if auth is None:
         auth = get_full_auth_data()
@@ -73,48 +83,65 @@ def create_client(auth=None):
                                  token_secret=auth['oauth_token_secret'])
     return client
 
-## creating and applying selector condition functions
+
+# ===== creating and applying selector condition functions =====
 
 def item_id_is(item_id):
     return lambda i: i.id == item_id
 
+
 def item_name_is(item_name):
     return lambda i: i.name == item_name
+
 
 def item_is_open():
     return lambda i: not i.closed
 
+
 def select_all(collection, *conditions):
     return [i for i in collection if all([c(i) for c in conditions])]
+
 
 def select_one(collection, *conditions):
     # return the first match or None
     return [*select_all(collection, *conditions), None][0]
 
-## accessing existing boards, labels and lists
+
+# ===== accessing existing boards, labels and lists =====
 
 def get_open_board_by_id(client, id):
     return select_one(client.list_boards(),
                       item_is_open(), item_id_is(id))
+
+
 def get_open_board_by_name(client, name):
     return select_one(client.list_boards(),
                       item_is_open(), item_name_is(name))
+
 
 def get_multiple_labels_by_name(board, names):
     all_labels = board.get_labels()
     return {n: select_one(all_labels, item_name_is(n)) for n in names}
 
+
 def get_any_list_by_id(board, id):
     return select_one(board.list_lists(), item_id_is(id))
+
+
 def get_any_list_by_name(board, name):
     return select_one(board.list_lists(), item_name_is(name))
 
+
 def get_open_list_by_id(board, id):
     return select_one(board.open_lists(), item_id_is(id))
+
+
 def get_open_list_by_name(board, name):
     return select_one(board.open_lists(), item_name_is(name))
 
-## getting a board handle, with authentication setup and logging
+
+# ===== getting a board handle, with authentication setup and logging =====
+
 
 def get_board(board_id, board_name, auth=None, verbosity=0):
     verbosity_threshold, extra_msg = 2, ''
@@ -129,7 +156,8 @@ def get_board(board_id, board_name, auth=None, verbosity=0):
               file=sys.stderr)
     return board
 
-## creating labels
+
+# ===== creating labels =====
 
 def get_or_create_labels(board, names, verbosity=0):
     label_map = get_multiple_labels_by_name(board, names)
@@ -150,7 +178,8 @@ def get_or_create_labels(board, names, verbosity=0):
                       file=sys.stderr)
     return label_map.values()
 
-## creating lists
+
+# ===== creating lists =====
 
 def get_list(board, list_id, list_name, verbosity=0):
     verbosity_threshold, extra_msg = 1, ''
@@ -164,6 +193,7 @@ def get_list(board, list_id, list_name, verbosity=0):
                   file=sys.stderr)
     return tlist
 
+
 def get_or_create_list(board, list_id, list_name, verbosity=0):
     tlist = get_list(board, list_id, list_name, verbosity)
     if tlist is None:
@@ -176,6 +206,7 @@ def get_or_create_list(board, list_id, list_name, verbosity=0):
                   file=sys.stderr)
     assert tlist is not None, "No list found or created"
     return tlist
+
 
 def reopen_list(tlist, *, verbosity=0, dry_run=False):
     if tlist.closed:
@@ -193,7 +224,8 @@ def reopen_list(tlist, *, verbosity=0, dry_run=False):
                               id=tlist.id),
                       file=sys.stderr)
 
-## creating cards
+
+# ===== creating cards =====
 
 def get_cards_with_info(board, cards, verbosity=0):
     existing = dict()
@@ -214,6 +246,7 @@ def get_cards_with_info(board, cards, verbosity=0):
                           file=sys.stderr)
     return cards
 
+
 def get_or_create_cards_with_info(tlist, cards, labels=None, verbosity=0):
     cards = get_cards_with_info(tlist.board, cards, verbosity=verbosity)
     for info in cards:
@@ -227,6 +260,7 @@ def get_or_create_cards_with_info(tlist, cards, labels=None, verbosity=0):
             info['cards'] = [card]
     return cards
 
+
 # backwards compatibility
 def maybe_create_card(tlist, name, description=None, labels=None, verbosity=0):
     cards = get_or_create_cards_with_info(
@@ -234,14 +268,17 @@ def maybe_create_card(tlist, name, description=None, labels=None, verbosity=0):
         labels=labels, verbosity=verbosity)
     return cards_from_info(cards)
 
+
 def cards_from_info(info):
     return flatten((c['cards'] for c in info))
+
 
 def get_or_create_cards(tlist, cards, labels=None, verbosity=0):
     return cards_from_info(
         get_or_create_cards_with_info(tlist, cards, labels, verbosity))
 
-## moving cards between lists
+
+# ===== moving cards between lists =====
 
 def move_cards_to_list(cards, dst_list, *, verbosity=0, dry_run=False):
     for c in cards:
@@ -261,6 +298,7 @@ def move_cards_to_list(cards, dst_list, *, verbosity=0, dry_run=False):
                               dst=dst_list.name),
                       file=sys.stderr)
 
+
 def move_cards_from_lists_to_list(cards, src_lists, dst_list,
                                   *, verbosity=0, dry_run=False):
     moving = [(c, (c.get_list() in src_lists)) for c in cards]
@@ -271,6 +309,7 @@ def move_cards_from_lists_to_list(cards, src_lists, dst_list,
                   file=sys.stderr)
     move_cards_to_list((m[0] for m in moving if m[1]),
                        dst_list, verbosity=verbosity, dry_run=dry_run)
+
 
 def move_cards_not_in_lists_to_list(cards, excl_lists, dst_list,
                                     *, verbosity=0, dry_run=False):
@@ -283,16 +322,17 @@ def move_cards_not_in_lists_to_list(cards, excl_lists, dst_list,
     move_cards_to_list((m[0] for m in moving if m[1]),
                        dst_list, verbosity=verbosity, dry_run=dry_run)
 
-## directly managing labels on a card
+
+# ===== directly managing labels on a card =====
 
 def add_labels_to_card(card, labels_to_add, verbosity=0):
     missing_labels = difference(labels_to_add, card.labels)
     if len(missing_labels) > 0:
-        for l in missing_labels:
-            card.add_label(l)
+        for ml in missing_labels:
+            card.add_label(ml)
         if verbosity >= 0:
-            label_info = ", ".join(["'" + l.name + "'"
-                                    for l in missing_labels])
+            label_info = ", ".join(["'" + ml.name + "'"
+                                    for ml in missing_labels])
             print("(T) Updated card '{name}': added label(s) {labels}."
                   .format(name=card.name, labels=label_info),
                   file=sys.stderr)
@@ -300,14 +340,15 @@ def add_labels_to_card(card, labels_to_add, verbosity=0):
     else:
         return False
 
+
 def remove_labels_from_card(card, labels_to_remove, verbosity=0):
     extra_labels = intersection(labels_to_remove, card.labels)
     if len(extra_labels) > 0:
-        for l in extra_labels:
-            card.remove_label(l)
+        for el in extra_labels:
+            card.remove_label(el)
         if verbosity >= 0:
-            label_info = ", ".join(["'" + l.name + "'"
-                                    for l in extra_labels])
+            label_info = ", ".join(["'" + el.name + "'"
+                                    for el in extra_labels])
             print("(T) Updated card '{name}': removed label(s) {labels}."
                   .format(name=card.name, labels=label_info),
                   file=sys.stderr)
@@ -315,16 +356,19 @@ def remove_labels_from_card(card, labels_to_remove, verbosity=0):
     else:
         return False
 
-## managing labels on cards according to rules
+
+# ===== managing labels on cards according to rules =====
 
 def look_up_label_objects_in_label_rules(board, label_str_rules, verbosity=0):
-    return [ {k: frozenset(get_or_create_labels(board, v, verbosity=verbosity))
-              for k, v in lsr.items()}
-            for lsr in label_str_rules ]
+    return [{k: frozenset(get_or_create_labels(board, v, verbosity=verbosity))
+             for k, v in lsr.items()}
+            for lsr in label_str_rules]
+
 
 def get_default_labels_from_rules(label_rules):
     return frozenset(flatten(
         (lr[ADD_LABELS] for lr in label_rules if ADD_LABELS in lr)))
+
 
 def update_card_labels(cards, label_rules, verbosity=0):
     for card in cards:
@@ -346,7 +390,8 @@ def update_card_labels(cards, label_rules, verbosity=0):
         remove_labels_from_card(card, difference(card.labels, want_labels),
                                 verbosity=verbosity)
         # The assertion is unreliable because the card.labels update is delayed
-        #assert frozenset(card.labels) == want_labels
+#        assert frozenset(card.labels) == want_labels
+
 
 def update_orphan_labeled_tasks(board, label_rules, tasks, verbosity=0):
     task_names = [t['name'] for t in tasks]
@@ -367,4 +412,4 @@ def update_orphan_labeled_tasks(board, label_rules, tasks, verbosity=0):
         remove_labels_from_card(card, difference(card.labels, want_labels),
                                 verbosity=verbosity)
         # The assertion is unreliable because the card.labels update is delayed
-        #assert frozenset(card.labels) == want_labels
+#        assert frozenset(card.labels) == want_labels

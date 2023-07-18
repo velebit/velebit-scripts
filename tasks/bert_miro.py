@@ -7,16 +7,14 @@ import sys
 import urllib.parse
 
 
-# general helpers
-
+# ===== general helpers =====
 
 def html2text(html):
     return bs4.BeautifulSoup(html, features="lxml").get_text(
         "\n\n", strip=True)
 
 
-# HTTP request error classes
-
+# ===== HTTP request error classes =====
 
 class UnexpectedHTTPResponseError(requests.exceptions.HTTPError):
     """The HTTP response code which was received was unexpected."""
@@ -34,8 +32,7 @@ class MissingAuthorizationError(ClientStateError):
     right now wasn't."""
 
 
-# Miro client authentication data
-
+# ===== Miro client authentication data =====
 
 class Auth(object):
 
@@ -57,8 +54,7 @@ class Auth(object):
         return self.__class__(**self.__dict__)
 
 
-# Miro client
-
+# ===== Miro client =====
 
 class Client(object):
     """Client for access to Miro."""
@@ -262,8 +258,7 @@ class Client(object):
         return None
 
 
-# Miro board
-
+# ===== Miro board =====
 
 class Board(object):
     """A board in Miro."""
@@ -339,8 +334,7 @@ class Board(object):
         return Item._from_json(response.json(), board=self)
 
 
-# Items on a Miro board
-
+# ===== Items on a Miro board =====
 
 class Item(object):
     """An item from a Miro board."""
@@ -483,8 +477,7 @@ class Text(Item):
 Text._register_subclass('text')
 
 
-# managing saved authentication and the client object
-
+# ===== managing saved authentication and the client object =====
 
 def get_auth_file_name():
     home_dir = os.getenv("HOME")
@@ -525,8 +518,7 @@ def create_client(auth=None, allow_user_input=True, reauth_and_save=True):
     return client
 
 
-# getting a board/frame handle, with authentication setup and logging
-
+# ===== getting a board/frame handle, with auth setup and logging =====
 
 def get_board(board_id, board_name, auth=None, verbosity=0):
     verbosity_threshold, extra_msg = 2, ''
@@ -564,7 +556,7 @@ def get_frame(board, frame_id, frame_name, verbosity=0):
     return frame
 
 
-# ad hoc tests
+# ... ad hoc tests ...
 
 # client = create_client()
 # print(client)

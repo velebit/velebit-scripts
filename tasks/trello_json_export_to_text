@@ -15,6 +15,7 @@ if False:
         import pprint
         pprint.pprint(j["cards"], indent=4, stream=f)
 
+
 def label_text(label_info):
     if "name" in label_info and len(label_info["name"]) > 0:
         return label_info["name"]
@@ -22,10 +23,12 @@ def label_text(label_info):
         return label_info["color"]
     return None
 
+
 def not_none(it):
     return [x for x in it if x is not None]
 
-cards_in_list = { x: [] for x in list_order }
+
+cards_in_list = {x: [] for x in list_order}
 for card_info in j["cards"]:
     if "closed" in card_info and card_info["closed"]:
         continue
