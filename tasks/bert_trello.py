@@ -229,9 +229,9 @@ def get_or_create_cards_with_info(tlist, cards, labels=None, verbosity=0):
 
 # backwards compatibility
 def maybe_create_card(tlist, name, description=None, labels=None, verbosity=0):
-    cards = get_or_create_cards_with_info(tlist,
-                                          {'name': name, 'desc': description},
-                                          labels=labels, verbosity=verbosity)
+    cards = get_or_create_cards_with_info(
+        tlist, [{'name': name, 'desc': description}],
+        labels=labels, verbosity=verbosity)
     return cards_from_info(cards)
 
 def cards_from_info(info):
