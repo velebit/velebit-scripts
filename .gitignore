@@ -1,0 +1,5 @@
+*~
+
+# temporary Python files
+__pycache__
+.mypy_cache
