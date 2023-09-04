@@ -1,0 +1,8 @@
+#!/bin/bash
+cd "$(dirname "$0")" || exit 1
+echo "Processing..." >&2
+./combine_cam_trust.py ../data-*/CamTrust-RelPlus-transactions-*.csv || exit 1
+./combine_venmo.py ../data-*/Venmo-transactions-*.csv || exit 1
+./combine_cap_one.py ../data-*/CapitalOne-transactions-*.csv || exit 1
+./combine_discover.py ../data-*/Discover-transactions-*.csv || exit 1
+echo "done!" >&2
