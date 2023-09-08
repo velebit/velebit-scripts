@@ -1,23 +1,26 @@
 #!/not executable but recognized as/python3
 import codecs
 import csv
+import enum
 
-# DESCRIPTION_KEY = ...
-# ADDITIONAL_INFO_KEY = ...
-# MINUS_KEY = ...
-# PLUS_KEY = ...
-# SUMMARY_KEY = ...
+
+class Column(enum.StrEnum):
+    DATE = enum.auto()
+    POSTED_DATE = enum.auto()
+    DEBIT = enum.auto()
+    CREDIT = enum.auto()
+    SOURCE = enum.auto()
+    CATEGORY = enum.auto()
+    DESCRIPTION = enum.auto()
 
 
 # XXX TODO
 # def add_source(data, source):
 #     return [{**row, SOURCE_KEY: source} for row in data]
 
-
 # XXX TODO
 # def get_summary(row):
 #     ...
-
 
 # XXX TODO
 # def add_summaries(data):
@@ -35,7 +38,9 @@ def read_csv_data(file, remove_until=None, normalize=(lambda ln: ln.rstrip()),
         lines = [normalize(ln) for ln in lines]
     if filter is not None:
         lines = [ln for ln in lines if filter(ln)]
-    return csv.DictReader(lines)
+    data = list(csv.DictReader(lines))
+    assert all((d.keys() == data[0].keys() for d in data))
+    return data
 
 
 def write_csv_data(data, file):
@@ -56,6 +61,7 @@ def combine_data(data0, data1):
     return [*data0, *data1]
 
 
+# XXX TODO
 # def write_collated(data, collation_key, file):
 #     cat_totals = {}
 #     for row in data:

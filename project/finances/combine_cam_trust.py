@@ -2,33 +2,15 @@
 import argparse
 import regex
 
-from budget_transactions import read_csv_data, combine_data, write_csv_data
+from budget_transactions import read_csv_data, combine_data, write_csv_data, \
+    Column
 
-DESCRIPTION_KEY = '<Description>'
-ADDITIONAL_INFO_KEY = '<Additional Info>'
-MINUS_KEY = '<Withdrawal Amount>'
-PLUS_KEY = '<Deposit Amount>'
-SUMMARY_KEY = 'Summary'
-
-
-def get_summary(row):
-    desc = row[DESCRIPTION_KEY]
-    cat = row[ADDITIONAL_INFO_KEY]
-    cat = regex.sub(r'^POS PURCHASE TERMINAL\s+\S+\s+(?:\d+\s+)?', '', cat)
-    cat = regex.sub(r'^SURCHARGE AMOUNT TERMINAL\s+\S+\s+(?:\d+\s+)?',
-                    'SURCHARGE ', cat)
-    cat = regex.sub(r'^CASH WITHDRAWAL TERMINAL\s+\S+\s+(?:\d+\s+)?', '', cat)
-    cat = regex.sub(r'^(CAPITAL ONE|COVIDIEN LP)\s.*', '\\1', cat)
-    cat = regex.sub(r'\s+\#?(?<!\d)(?<!MY)\d.*', '', cat)
-    cat = regex.sub(r'\s{2,}', ' ', cat)
-    if cat == '' or regex.match(r'^ATM ', desc):
-        return desc
-    else:
-        return desc + ": " + cat
-
-
-def add_summaries(data):
-    return [{**row, SUMMARY_KEY: get_summary(row)} for row in data]
+SRC_KEY_DATE = '<Date>'
+SRC_KEY_CHECK_NUM = '<CheckNum>'
+SRC_KEY_DESCRIPTION = '<Description>'
+SRC_KEY_DEBIT = '<Withdrawal Amount>'
+SRC_KEY_CREDIT = '<Deposit Amount>'
+SRC_KEY_ADDITIONAL_INFO = '<Additional Info>'
 
 
 def read_cam_trust_data(file):
@@ -36,6 +18,53 @@ def read_cam_trust_data(file):
     return list(reversed(data))
 
 
+def get_source(row):
+    if len(row[SRC_KEY_CHECK_NUM]) > 0:
+        return f"CamTr check {row[SRC_KEY_CHECK_NUM]}"
+    else:
+        return "CamTr"
+
+
+def get_description(row):
+    desc = row[SRC_KEY_DESCRIPTION]
+    info = row[SRC_KEY_ADDITIONAL_INFO]
+    info = regex.sub(r', Inc\.', '', info)
+    info = regex.sub(r'^POS PURCHASE TERMINAL\s+\S+\s+(?:\d+\s+)?', '', info)
+    info = regex.sub(r'^SURCHARGE AMOUNT TERMINAL\s+\S+\s+(?:\d+\s+)?',
+                     'Surcharge ', info)
+    info = regex.sub(r'^CASH WITHDRAWAL TERMINAL\s+\S+\s+(?:\d+\s+)?',
+                     '', info)
+    info = regex.sub(r'^(CAPITAL ONE|COVIDIEN LP)\s.*', '\\1', info)
+    info = regex.sub(r'\s+\#?(?<!\d)(?<!MY)\d.*', '', info)
+    info = regex.sub(r'\s{2,}', ' ', info)
+    if regex.match(r'^PREAUTHORIZED (WD|CREDIT)$', desc):
+        return info
+    elif regex.match(r'^ELECTRONIFIED CHECK$', desc):
+        return info
+    elif info == '' or regex.match(r'^ATM ', desc):
+        return desc
+    else:
+        return desc + ": " + info
+
+
+def make_uniform_row(row):
+    info = {
+        Column.DATE: row[SRC_KEY_DATE],
+        Column.POSTED_DATE: row[SRC_KEY_DATE],
+        Column.DEBIT: row[SRC_KEY_DEBIT],
+        Column.CREDIT: row[SRC_KEY_CREDIT],
+        Column.SOURCE: get_source(row),
+        Column.CATEGORY: '',
+        Column.DESCRIPTION: get_description(row),
+    }
+    return info
+
+
+def make_uniform(data):
+    return [make_uniform_row(row) for row in data]
+
+
+# XXX TODO
 def write_collated(data, collation_key, file):
     cat_totals = {}
     for row in data:
@@ -43,10 +72,10 @@ def write_collated(data, collation_key, file):
         if cat not in cat_totals:
             cat_totals[cat] = [0, 0, 0]
         cat_totals[cat][0] += 1
-        if row[MINUS_KEY] != '':
-            cat_totals[cat][1] += float(row[MINUS_KEY])
-        if row[PLUS_KEY] != '':
-            cat_totals[cat][2] += float(row[PLUS_KEY])
+        if row[Column.DEBIT] != '':
+            cat_totals[cat][1] += float(row[Column.DEBIT])
+        if row[Column.CREDIT] != '':
+            cat_totals[cat][2] += float(row[Column.CREDIT])
     cat_summary = []
     for k in sorted(cat_totals.keys(), key=lambda x: -sum(cat_totals[x][1:3])):
         instances = cat_totals[k][0]
@@ -56,7 +85,7 @@ def write_collated(data, collation_key, file):
                     else '')
         # print(f"{instances:2d} {k:50.50s} {val_minus:>10.10s}"
         #       f" {val_plus:>10.10s}")
-        cat_summary.append({'#': instances, SUMMARY_KEY: k,
+        cat_summary.append({'#': instances, Column.XXX: k,
                             'Withdrawals': val_minus, 'Deposits': val_plus})
     write_csv_data(cat_summary, file)
 
@@ -68,9 +97,13 @@ def main():
     data = None
     for f in opts.FILE:
         data = combine_data(data, read_cam_trust_data(f))
+    data = sorted(data, key=lambda d: d[SRC_KEY_DATE])
     write_csv_data(data, 'CamTrust-combined.csv')
-    data = add_summaries(data)
-    write_collated(data, SUMMARY_KEY, 'CamTrust-summary.csv')
+    data = make_uniform(data)
+    write_csv_data(data, 'CamTrust-uniform.csv')
+    # XXX TODO
+    # data = add_summaries(data)
+    # write_collated(data, SUMMARY_KEY, 'CamTrust-summary.csv')
 
 
 if __name__ == '__main__':

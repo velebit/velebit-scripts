@@ -15,7 +15,8 @@ SUMMARY_KEY = 'Summary'
 def read_venmo_data(file):
     reader = read_csv_data(file, remove_until=(lambda ln:
                                                regex.search(DATE_KEY, ln)))
-    return [row for row in reader if row[DATE_KEY] != '']
+    return [{k: v for k, v in row.items() if k != '' or v != ''}
+            for row in reader if row[DATE_KEY] != '']
 
 
 def write_collated(data, collation_keys, file):
@@ -60,7 +61,8 @@ def main():
     for f in opts.FILE:
         data = combine_data(data, read_venmo_data(f))
     write_csv_data(data, 'Venmo-combined.csv')
-    write_collated(data, (TO_KEY, FROM_KEY), 'Venmo-summary.csv')
+    # XXX TODO
+    # write_collated(data, (TO_KEY, FROM_KEY), 'Venmo-summary.csv')
 
 
 if __name__ == '__main__':

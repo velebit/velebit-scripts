@@ -65,9 +65,10 @@ def main():
     for f in opts.FILE:
         data = combine_data(data, read_discover_data(f))
     write_csv_data(data, 'Discover-combined.csv')
-    data = add_summaries(data)
-    write_collated(data, SUMMARY_KEY, 'Discover-summary.csv')
-    write_collated(data, CATEGORY_KEY, 'Discover-summary-cat.csv')
+    # XXX TODO
+    # data = add_summaries(data)
+    # write_collated(data, SUMMARY_KEY, 'Discover-summary.csv')
+    # write_collated(data, CATEGORY_KEY, 'Discover-summary-cat.csv')
 
 
 if __name__ == '__main__':
