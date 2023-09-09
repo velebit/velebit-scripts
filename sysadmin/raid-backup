@@ -352,13 +352,14 @@ generate_last_backup () {
     local backup_file="$1"
     local backup_end="`date +'%Y-%m-%d %H:%M:%S'`"
     echo "$backup_file" && \
-	echo "# Started: $backup_start" && \
-	echo "# Ended:   $backup_end" && \
-	true
+        echo "# Started: $backup_start" && \
+        echo "# Ended:   $backup_end" && \
+        true
 }
 
 mark_last_backup () {
-    backup_file="$1"
+    local backup_file="$1"
+    local last_backup_file
     set -- `cd "$backup"; echo DISK_*`
     if [ "$#" -ne 1 -o "$1" = "DISK_*" ]; then
         status "Could not determine disk ID, last not updated!"
@@ -370,7 +371,7 @@ mark_last_backup () {
             if [ ! -e "$last_backup" ]; then mkdir "$last_backup"; fi
             if generate_last_backup "$backup_file" > "$last_backup_file"; then
                 status "Updated $last_backup_file"
-	    else
+            else
                 status "Failed to update $last_backup_file"
             fi
         fi
@@ -515,6 +516,20 @@ dump_disk_setup () {
     done
 }
 
+write_disk_setup () {
+    local setup_file="$1"
+    if [ -n "$dryrun" ]; then
+        status "Would write setup to $setup_file"
+    else
+        if dump_disk_setup > "$setup_file" 2>&1; then
+            status "Wrote setup to $setup_file"
+        else
+            status "Failed while writing setup to $setup_file"
+        fi
+    fi
+}
+
+
 if [ -n "$partition_check" ]; then
     check_partition_coverage
     check_partition_list
@@ -546,14 +561,14 @@ if [ -t 1 ]; then
     if [ -z "$dryrun" ]; then
         status "Will write log to $backup/$log"
         run_all_backups 2>&1 | tee "$backup/$log"
-        dump_disk_setup > "$backup/$setup"
+        write_disk_setup "$backup/$setup" 2>&1 | tee -a "$backup/$log"
+        mark_last_backup "$backup/$log" 2>&1 | tee -a "$backup/$log"
     else
         status "Would write log to $backup/$log"
         run_all_backups
-        status "Would write log to $backup/$log"
-        status "Would write setup to $backup/$setup"
+        write_disk_setup "$backup/$setup"
+        mark_last_backup "$backup/$log"
     fi
-    mark_last_backup "$backup/$log"
 else
     no_colors
     run_all_backups
