@@ -1,0 +1,16 @@
+#!/usr/bin/perl
+use warnings;
+use strict;
+
+open my $QUERY, '-|', 'dpkg-query', '--status', @ARGV
+    or die "open(dpkg-query --status @ARGV |): $!";
+while (<$QUERY>) {
+    s/^Recommends:\s*// or next;
+    #s/^Suggests:\s*// or next;
+    s/\n$//;
+    for my $entry (split /,\s*/) {
+	my @choices = split /\s*\|\s*/, $entry;
+	s/\s*\([^()]+\)$// for @choices;
+	print "@choices\n";
+    }
+}

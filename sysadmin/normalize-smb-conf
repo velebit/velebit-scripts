@@ -1,0 +1,5 @@
+#!/bin/sh
+# Removes comments, sorts parameters in each section, makes leading
+# whitespace uniform. Does not sort sections.
+
+perl -0777 -pe 's/^\s*[#;].*$//mg;@p=split qr/(?=^\s*\[)/m, $_;for (@p){@l=grep length, split qr/\n/, $_;s/^\s*/   / for @l;$l[0]=~s/^\s*//;$_=join "\n", $l[0], sort(@l[1..$#l]), ""};$_=join "\n",grep /\S/, @p' "$@"

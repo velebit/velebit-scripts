@@ -1,0 +1,260 @@
+#!/bin/bash
+
+usage () {
+    echo "Usage: $(basename "$0" .sh) [FLAGS]" \
+	 "DISK_DEVICE [START_POS [END_POS]]" >& 2
+    cat <<'EOF' >& 2
+Flags and arguments:
+  --args              Only display the arguments to "mkpart {name} ext4 ...".
+  START_POS, END_POS  Specified as {num}s, {num} or {num}%
+EOF
+    exit 1
+}
+
+ARGS_ONLY=
+while [[ "$#" -gt 0 ]] && [[ "$1" == -* ]]; do
+    case "$1" in
+	--args|-args)
+	    ARGS_ONLY=yes; shift ;;
+	*)
+	    echo "Unknown flag '$1'" >&2; usage ;;
+    esac
+done
+
+if [ "$#" -lt 1 -o "$#" -gt 3 ]; then
+    usage
+fi
+
+dev="$1"; shift
+if [ ! -b "$dev" ]; then
+    if [ -b "/dev/$dev" ]; then dev="/dev/$dev"; fi
+    if [ ! -b "$dev" ]; then
+	echo "$dev: not a block device" >& 2
+	exit 1
+    fi
+fi
+if [ ! -e "/sys/block/`basename "$dev"`" ]; then
+    echo "$dev: block device not in /sys/block" >& 2
+    exit 1
+fi
+
+if [ "$#" -gt 0 ]; then
+    start="$1"; shift
+else
+    start=
+fi
+if [ "$#" -gt 0 ]; then
+    end="$1"; shift
+else
+    end=
+fi
+
+for pos in "$start" "$end"; do
+    pos_bad=
+    case "$pos" in
+	""|[0-9]*|-[0-9]*) ;;
+	*)  pos_bad=yes ;;
+    esac
+    case "$pos" in
+	""|*[0-9]|*[0-9][%s]) ;;
+	*)  pos_bad=yes ;;
+    esac
+    case "$pos" in
+	?*[^0-9]*?)  pos_bad=yes ;;
+    esac
+    if [ -n "$pos_bad" ]; then
+	echo "'$pos': Bad position specification." >& 2
+	exit 1
+    fi
+done
+
+dev_name="$(basename "$dev")"
+block_info="/sys/block/$dev_name"
+if [ ! -d "$block_info" ]; then
+    if [ ! -d "/sys/block" ]; then
+	echo "/sys/block does not exist!" >&2
+	exit 1
+    else
+	echo "/sys/block/$dev_name does not exist!" \
+	     " (Is $dev_name a partition?)" >&2
+	exit 1
+    fi
+fi
+
+read_num () {
+    local file default
+    if [ "$#" -gt 0 ]; then file="$1"; shift; fi
+    if [ "$#" -gt 0 ]; then default="$1"; shift; fi
+    if [ "$#" -gt 0 ]; then
+	echo "ERROR in read_num: $(( $# + 2 )) args" >&2; exit 1
+    fi
+    if [ -z "$file" -o ! -e "$file" ]; then
+	echo "ERROR in read_num: need a $file" >&2; exit 1
+    fi
+
+    num="$(cat "$file")"
+    if [ -z "$num" ]; then
+	echo "$file: no value found" >&2; exit 1
+    fi
+    if [ "($num)" != "($(( $num + 0 )))" ]; then
+	echo "$file: non-numeric value $num found" >&2; exit 1
+    fi
+       
+    if [ "$num" -eq 0 ]; then num="$default"; fi
+    echo "$num"
+}
+
+logical_block_size="$(read_num "$block_info/queue/logical_block_size")"
+if [ -z "$logical_block_size" ]; then exit 2; fi  # message was sent to stderr?
+physical_block_size="$(read_num "$block_info/queue/physical_block_size")"
+if [ -z "$physical_block_size" ]; then exit 2; fi  # message was sent to stderr?
+
+optimal_io_size="$(read_num "$block_info/queue/optimal_io_size" 1048576)"
+if [ -z "$optimal_io_size" ]; then exit 2; fi  # message was sent to stderr?
+if [ "$optimal_io_size" -eq 0 -o "($((${optimal_io_size}%65535)))" = "(0)" ]; then
+    echo "WARNING: Optimal I/O size for $dev is"\
+	 "$optimal_io_size = $(( ${optimal_io_size}/65535 )) * 65535." >& 2
+    echo "         Can this be correct?" >& 2
+fi
+
+minimum_io_size="$(read_num "$block_info/queue/minimum_io_size" \
+                            "$physical_block_size")"
+if [ -z "$minimum_io_size" ]; then exit 2; fi  # message was sent to stderr?
+if [ "$minimum_io_size" -eq 0 -o "($((${minimum_io_size}%65535)))" = "(0)" ]; then
+    echo "WARNING: Minimal I/O size for $dev is"\
+	 "$minimum_io_size = $(( ${minimum_io_size}/65535 )) * 65535." >& 2
+    echo "         Can this be correct?" >& 2
+fi
+
+alignment_offset="$(read_num "$block_info/alignment_offset" 0)"
+if [ -z "$alignment_offset" ]; then exit 2; fi  # message was sent to stderr?
+
+size="$(read_num "$block_info/size")"
+if [ -z "$size" ]; then exit 2; fi  # message was sent to stderr?
+
+greatest_common_divisor () {
+    if [ "$#" -ne "2" ]; then
+	echo "ERROR in greatest_common_divisor: $# args" >&2; exit 4
+    fi
+    local a="$(( $1 + 0 ))"
+    if [ "($a)" != "($1)" ]; then
+	echo "ERROR in greatest_common_divisor: argument '$1' non-numeric" >&2
+	exit 4
+    fi
+    local b="$(( $2 + 0 ))"
+    if [ "($b)" != "($2)" ]; then
+	echo "ERROR in greatest_common_divisor: argument '$2' non-numeric" >&2
+	exit 4
+    fi
+
+    if [ "$a" -eq 0 ]; then echo "$b"; exit 0; fi
+    if [ "$b" -eq 0 ]; then echo "$a"; exit 0; fi
+    while true; do
+	a="$(( $a % $b ))"
+	if [ "$a" -eq 0 ]; then echo "$b"; exit 0; fi
+	b="$(( $b % $a ))"
+	if [ "$b" -eq 0 ]; then echo "$a"; exit 0; fi
+    done
+}
+
+least_common_multiple () {
+    if [ "$#" -ne "2" ]; then
+	echo "ERROR in least_common_multiple: $# args" >&2; exit 4
+    fi
+    local gcd="$(greatest_common_divisor "$1" "$2")"
+    if [ -z "$gcd" ]; then
+	exit 4  # message was sent to stderr?
+    elif [ "$gcd" -eq 0 ]; then
+	echo "ERROR in least_common_multiple: gcd is $gcd" >&2; exit 4
+    fi
+    echo "$(( $1 * $2 / $gcd ))"
+}
+
+io_size_S="$(least_common_multiple "${optimal_io_size}" "${minimum_io_size}")"
+
+if [ -z "$io_size_S" ]; then
+    echo "Could not determine the I/O size for 1st partition of $dev."
+    exit 3
+fi
+if [ "($io_size_S)" != "($(( $io_size_S + 0 )))" ]; then
+    echo "Calculated I/O size is incorrect: $io_size_S"
+    exit 3
+fi
+if [ "$io_size_S" -eq 0 ]; then
+    echo "Calculated I/O size is zero."
+    exit 3
+fi
+if [ "$io_size_S" -ne "$optimal_io_size" ]; then
+    echo "WARNING: Optimal I/O size $optimal_io_size is not a multiple of" \
+	 "minimum I/O size $minimum_io_size;"
+    echo "         using GCD $io_size_S."
+fi
+
+if [ "$(($io_size_S % $logical_block_size))" -ne 0 ]; then
+    echo "ERROR: I/O size $io_size_S is not a multiple" \
+	 " of logical block size $logical_block_size." >&2
+    exit 1
+fi
+if [ "$(($alignment_offset % $logical_block_size))" -ne 0 ]; then
+    echo "WARNING: Alignment offset $alignment_offset is not a multiple" \
+	 " of logical block size $logical_block_size." >&2
+fi
+
+pos2bytes () {
+    local pos="$1"
+    pos_subtract=
+    case "$pos" in
+	*s)  pos="${pos%%s}" ;;
+    esac
+    case "$pos" in
+	-*)  pos="${pos##-}"; pos_subtract=yes ;;
+    esac
+    case "$pos" in
+	*%)  pos="$(($size * ${pos%%\%} / 100))" ;;
+    esac
+    if [ -n "$pos_subtract" ]; then pos="$(($size - $pos))" ; fi
+    echo "$(( $pos * $logical_block_size ))"
+}
+
+if [ -n "$start" ]; then
+    start_B="$(pos2bytes "$start")"
+else
+    start_B=1024  # traditional MBR and boot loader reserve 2 x 512 bytes
+fi
+aligned_start_I="$(( ($start_B + $io_size_S - 1) / $io_size_S ))"
+aligned_start_B="$(( $aligned_start_I * $io_size_S + $alignment_offset ))"
+aligned_start_L="$(( $aligned_start_B/$logical_block_size ))"
+if [ "$aligned_start_L" -le 0 ]; then
+    echo "WARNING: Partition starts before the beginning of the disk." >&2
+fi
+if [ "$aligned_start_L" -ge "$size"  ]; then
+    echo "WARNING: Partition starts after the end of the disk." >&2
+fi
+aligned_start_s="${aligned_start_L}s"
+
+if [ -n "$end" ]; then
+    aligned_end_I="$(( $(pos2bytes "$end") / $io_size_S ))"
+    aligned_end_B="$(( $aligned_end_I * $io_size_S ))"
+    if [ "$alignment_offset" -ne 0 ]; then
+	aligned_end_B="$(( $aligned_end_B + $alignment_offset - $io_size_S ))"
+    fi
+    aligned_end_L="$(( $aligned_end_B/$logical_block_size ))"
+    if [ "$aligned_end_L" -le "$aligned_start_L" ]; then
+	echo "WARNING: Partition ends before it starts." >&2
+    fi
+    if [ "$aligned_end_L" -ge "$size"  ]; then
+	echo "WARNING: Partition ends after the end of the disk." >&2
+    fi
+    aligned_end_s="${aligned_end_L}s"
+else
+    aligned_end_s="100%"
+fi
+
+if [ -n "$ARGS_ONLY" ]; then
+    echo "${aligned_start_s} ${aligned_end_s}"
+else
+    echo "While running 'parted $dev', do something like:"
+    echo "   mkpart {name} ext4 ${aligned_start_s} ${aligned_end_s}"
+    echo "   align-check optimal 1"
+    echo "   align-check minimal 1"
+fi

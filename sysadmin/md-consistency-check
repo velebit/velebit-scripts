@@ -1,0 +1,24 @@
+#!/bin/bash
+
+# start the MD array check
+/usr/share/mdadm/checkarray --all --idle || exit 1
+
+# wait for the check to complete for all arrays
+while true; do
+    status="$(/usr/share/mdadm/checkarray --all --idle --status)"
+    echo ""
+    date
+    echo "$status"
+    grep 'check =' /proc/mdstat
+    case "$status" in
+	"")
+	    echo "Status output is empty, giving up!" >&2
+	    exit 2
+	    ;;
+	*': check'*) ;;
+	*)
+	    break
+	    ;;
+    esac
+    sleep 300
+done
