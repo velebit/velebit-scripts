@@ -2,67 +2,85 @@
 import argparse
 import regex
 
-from budget_transactions import read_csv_data, combine_data, write_csv_data
+from budget_transactions import read_csv_data, combine_data, write_csv_data, \
+    Date, Money, apply_remapping, Column
 
-DATE_KEY = 'Datetime'
-FROM_KEY = 'From'
-TO_KEY = 'To'
-CATEGORY_KEY = 'Who'
-AMOUNT_KEY = 'Amount (total)'
-SUMMARY_KEY = 'Summary'
+SRC_KEY_DATE = 'Datetime'
+SRC_KEY_TYPE = 'Type'
+SRC_KEY_NOTE = 'Note'
+SRC_KEY_FROM = 'From'
+SRC_KEY_TO = 'To'
+SRC_KEY_AMOUNT = 'Amount (total)'
+
+# Types where "From" and "To" are reversed, compared to the other fields
+SRC_TYPES_BACKWARDS = ('Charge')
 
 
 def read_venmo_data(file):
     reader = read_csv_data(file, remove_until=(lambda ln:
-                                               regex.search(DATE_KEY, ln)))
+                                               regex.search(SRC_KEY_DATE, ln)))
     return [{k: v for k, v in row.items() if k != '' or v != ''}
-            for row in reader if row[DATE_KEY] != '']
+            for row in reader if row[SRC_KEY_DATE] != '']
 
 
-def write_collated(data, collation_keys, file):
-    cat_totals = {}
-    for row in data:
-        cat = None
-        # Venmo swaps TO and FROM based on who made the request.
-        # We pick not-Dvornik
-        for k in collation_keys:
-            if not regex.search(r'Dvornik', row[k]):
-                cat = row[k]
-                break
-        if cat not in cat_totals:
-            cat_totals[cat] = [0, 0, 0]
-        cat_totals[cat][0] += 1
-        amount = float(regex.sub(r',', '',
-                                 regex.sub(r'\s*\$', '', row[AMOUNT_KEY])))
-        if amount < 0:
-            cat_totals[cat][1] += amount
-        else:
-            cat_totals[cat][2] += amount
-    cat_summary = []
-    for k in sorted(cat_totals.keys(), key=lambda x: -sum(cat_totals[x][1:3])):
-        instances = cat_totals[k][0]
-        val_minus = ("{:.2f}".format(cat_totals[k][1]) if cat_totals[k][1] != 0
-                     else '')
-        val_plus = ("{:.2f}".format(cat_totals[k][2]) if cat_totals[k][2] != 0
-                    else '')
-        # print(f"{instances:2d} {k:50.50s} {val_minus:>10.10s}"
-        #       f" {val_plus:>10.10s}")
-        cat_summary.append({'#': instances, SUMMARY_KEY: k,
-                            'Sent': val_minus, 'Received': val_plus})
-    write_csv_data(cat_summary, file)
+def get_us_and_them(row):
+    if row[SRC_KEY_TYPE] in SRC_TYPES_BACKWARDS:
+        dst, src = row[SRC_KEY_FROM], row[SRC_KEY_TO]
+    else:
+        src, dst = row[SRC_KEY_FROM], row[SRC_KEY_TO]
+    if Money.parse(row[SRC_KEY_AMOUNT]).amount > 0:
+        return dst, src
+    else:
+        return src, dst
+
+
+def get_source(row):
+    return "Venmo - " + get_us_and_them(row)[0]
+
+
+def get_category(row):
+    return '(Venmo other)'
+
+
+def get_description(row):
+    return get_us_and_them(row)[1]
+
+
+def get_comment(row):
+    return row[SRC_KEY_NOTE] + ' [' + row[SRC_KEY_TYPE] + ']'
+
+
+def make_uniform_row(row):
+    amount = Money.parse(row[SRC_KEY_AMOUNT])
+    info = {
+        Column.DATE: Date.parse(row[SRC_KEY_DATE]).format(),
+        Column.POSTED_DATE: Date.parse(row[SRC_KEY_DATE]).format(),
+        Column.DEBIT: amount.if_negative().format(),
+        Column.CREDIT: amount.if_positive().format(),
+        Column.SOURCE: get_source(row),
+        Column.CATEGORY: get_category(row),
+        Column.DESCRIPTION: get_description(row),
+        Column.COMMENT: get_comment(row),
+    }
+    return info
+
+
+def make_uniform(data):
+    return apply_remapping([make_uniform_row(row) for row in data])
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Read Venmo CSV')
-    # 'Venmo-combined.csv'
+    parser = argparse.ArgumentParser(
+        description='Preprocess Venmo CSV')
     parser.add_argument('FILE', nargs='*', help='CSV file(s)')
     opts = parser.parse_args()
     data = None
     for f in opts.FILE:
         data = combine_data(data, read_venmo_data(f))
+    data = sorted(data, key=lambda d: Date.parse(d[SRC_KEY_DATE]).format())
     write_csv_data(data, 'Venmo-combined.csv')
-    # XXX TODO
-    # write_collated(data, (TO_KEY, FROM_KEY), 'Venmo-summary.csv')
+    data = make_uniform(data)
+    write_csv_data(data, 'Venmo-uniform.csv')
 
 
 if __name__ == '__main__':
