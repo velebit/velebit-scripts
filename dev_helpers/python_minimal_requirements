@@ -1,0 +1,37 @@
+#!/usr/bin/env python
+# Generate minimal requirements.txt information. Unlike `pip freeze`,
+# does not include packages that are dependencies of another package.
+#
+# Core implementation stolen from
+# https://github.com/pypa/pip/issues/8981#issuecomment-707051457
+# (Maybe should switch to https://github.com/rbanffy/pip-chill ?)
+
+
+import importlib.metadata
+from packaging.requirements import Requirement
+import re
+
+
+def normalize(name):
+    return re.sub(r"[-_.]+", "-", name).lower()
+
+
+dependencies = dict()
+all_packages = set()
+for dist in importlib.metadata.distributions():
+    name = normalize(dist.metadata["name"])
+    all_packages.add(name)
+    if dist.requires:
+        for req in dist.requires:
+            dep = normalize(Requirement(req).name)
+            if dep not in dependencies:
+                dependencies[dep] = set()
+            dependencies[dep].add(name)
+
+for name in sorted(all_packages):
+    if name not in dependencies:
+        print(f"{name} >= {importlib.metadata.version(name)}")
+    else:
+        upstreams = ", ".join(sorted(dependencies[name]))
+        print(f"# {name} >= {importlib.metadata.version(name)}"
+              f" is present, but required by {upstreams}")
