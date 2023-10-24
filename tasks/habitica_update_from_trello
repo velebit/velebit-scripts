@@ -1,0 +1,238 @@
+#!/home/bert/.local/lib/python/venv/tasks/bin/python3
+# Create Habitica todos based on a list of cards read from Trello API
+# See also: ~/scripts/user/habitica_add_todo
+import argparse
+import enum
+import regex
+import sys
+import trello.exceptions
+import bert_habitica as bh
+import bert_trello as bt
+from bert_task_utilities import select_all, select_one
+
+TRELLO_BOARD_ID, TRELLO_BOARD_NAME = \
+    '6531ac71f384b1da10602fce', 'bert active'
+TRELLO_ACTIVE_LIST_INDEX = 0
+TRELLO_ACTIVE_LIST_NAME_REGEX = ' 🔥🔥🔥$'
+TRELLO_IN_PROGRESS_LIST_NAME = 'In progress 🚛'
+TRELLO_DONE_LIST_NAME = 'Done ✅'
+
+
+def get_trello_board(verbosity=0):
+    try:
+        board = bt.get_board(board_id=TRELLO_BOARD_ID,
+                             board_name=TRELLO_BOARD_NAME,
+                             verbosity=verbosity)
+    except trello.exceptions.Unauthorized:
+        board = bt.get_board(board_id=TRELLO_BOARD_ID,
+                             board_name=TRELLO_BOARD_NAME,
+                             verbosity=verbosity,
+                             auth=bt.create_auth_token(bt.read_auth_data()))
+    return board
+
+
+def item_name_matches(item_regex):
+    return lambda i: regex.search(item_regex, i.name) and True
+
+
+class Status(enum.Enum):
+    ACTIVE = enum.auto()
+    DONE = enum.auto()
+    IDLE = enum.auto()
+
+
+def get_trello_list_map(board, verbosity=0):
+    all_lists = board.open_lists()
+    assert len(all_lists) > 0, "Board has no lists!"
+
+    active_lists = select_all(
+        all_lists, item_name_matches(TRELLO_ACTIVE_LIST_NAME_REGEX))
+    if all_lists[TRELLO_ACTIVE_LIST_INDEX] not in active_lists:
+        if verbosity >= 0:
+            if len(active_lists) == 0:
+                print("(T) No active lists were found by name",
+                      file=sys.stderr)
+            else:
+                print("(T) Active lists found by name did not include list 0",
+                      file=sys.stderr)
+        active_lists = [all_lists[TRELLO_ACTIVE_LIST_INDEX], *active_lists]
+    assert len(all_lists) > 0, "Board has no lists!"
+    if verbosity >= 1 or (len(active_lists) > 1 and verbosity >= 0):
+        for tlist in active_lists:
+            print(f"(T) Found active list '{tlist.name}' ({tlist.id})",
+                  file=sys.stderr)
+
+    in_progress_list = select_one(
+        all_lists, bt.item_name_is(TRELLO_IN_PROGRESS_LIST_NAME))
+    assert in_progress_list is not None
+    assert in_progress_list not in active_lists
+    if verbosity >= 1:
+        tlist = in_progress_list
+        print(f"(T) Found in-progress list '{tlist.name}' ({tlist.id})",
+              file=sys.stderr)
+
+    done_list = select_one(
+        all_lists, bt.item_name_is(TRELLO_DONE_LIST_NAME))
+    assert done_list is not None
+    assert done_list not in active_lists
+    if verbosity >= 1:
+        tlist = done_list
+        print(f"(T) Found done list '{tlist.name}' ({tlist.id})",
+              file=sys.stderr)
+
+    mapping = {tlist.id: Status.IDLE for tlist in all_lists}
+    for tlist in active_lists:
+        mapping[tlist.id] = Status.ACTIVE
+    mapping[in_progress_list.id] = Status.ACTIVE
+    mapping[done_list.id] = Status.DONE
+    return mapping
+
+
+def read_trello_board(board, verbosity=0):
+    list_map = get_trello_list_map(board, verbosity=verbosity)
+    tasks = []
+    for card in board.open_cards():
+        tasks.append({'name': regex.sub(r'\s+', ' ', card.name.strip()),
+                      'trello_card': card,
+                      'status': list_map[card.list_id],
+                      })
+    return tasks
+
+
+def read_habitica_active_todos(client, verbosity=0):
+    tasks = []
+    for task in client.get_todos_active():
+        tasks.append({'name': regex.sub(r'\s+', ' ', task['text'].strip()),
+                      'habitica_task': task,
+                      'status': Status.ACTIVE})
+    return tasks
+
+
+def read_habitica(client, verbosity=0):
+    tasks = read_habitica_active_todos(client, verbosity=verbosity)
+    for task in client.get_todos_completed():  # note: a partial list only!!!
+        tasks.append({'name': regex.sub(r'\s+', ' ', task['text'].strip()),
+                      'habitica_task': task,
+                      'status': Status.DONE})
+    for task in client.get_habits():
+        tasks.append({'name': regex.sub(r'\s+', ' ', task['text'].strip()),
+                      'habitica_task': task,
+                      'status': Status.IDLE})
+    for task in client.get_dailies():
+        tasks.append({'name': regex.sub(r'\s+', ' ', task['text'].strip()),
+                      'habitica_task': task,
+                      'status': Status.IDLE})
+    return tasks
+
+
+def deduplicate_tasks(tasks):
+    result_tasks = []
+    skip_names = set()
+    for info in tasks:
+        if info['name'] not in skip_names:
+            result_tasks.append(info)
+            skip_names.add(info['name'])
+    return result_tasks
+
+
+def sanitize_tasks(tasks, verbosity=0):
+    def is_sane(task, verbosity=0):
+        if not regex.match(r'\S', task['name']):
+            if verbosity >= 0:
+                print(f"Refusing to create card '{task['name']}'"
+                      " (name is empty)", file=sys.stderr)
+            return False
+        else:
+            return True
+
+    return [t for t in tasks if is_sane(t, verbosity)]
+
+
+def update_habitica_from_trello(trello_tasks, habitica_tasks, habitica_client,
+                                verbosity=0):
+    habitica_tasks_by_name = {t['name']: t for t in habitica_tasks}
+    tasks = deduplicate_tasks(trello_tasks)
+    tasks = sanitize_tasks(tasks, verbosity=verbosity)
+    for ttask in tasks:
+        if ttask['name'] not in habitica_tasks_by_name:
+            if ttask['status'] == Status.ACTIVE:
+                if True:
+                    habitica_client.add_todo(text=ttask['name'], notes=None)
+                    if verbosity >= 0:
+                        print(f"(H) Created todo '{ttask['name']}'",
+                              file=sys.stderr)
+                else:
+                    if verbosity >= 0:
+                        print(f"(H) Would create todo '{ttask['name']}'",
+                              file=sys.stderr)
+        else:
+            htask = habitica_tasks_by_name[ttask['name']]
+            if ttask['status'] == Status.ACTIVE:
+                if htask['status'] == Status.DONE:
+                    if verbosity >= 0:
+                        print(f"(H) Task '{ttask['name']}' is marked done"
+                              " in Habitica", file=sys.stderr)
+                # other Habitica statuses require no action/message
+            elif ttask['status'] == Status.DONE:
+                if htask['status'] != Status.DONE:
+                    if verbosity >= 0:
+                        print(f"(H) Task '{ttask['name']}' is marked done"
+                              " in Trello", file=sys.stderr)
+            else:
+                if htask['status'] == Status.ACTIVE:
+                    pass  # will result in deletion, but later
+                # other Habitica statuses require no action/message
+
+
+def update_trello_from_habitica(habitica_tasks, trello_tasks, verbosity=0):
+    trello_tasks_by_name = {t['name']: t for t in trello_tasks}
+    for htask in habitica_tasks:
+        if htask['name'] not in trello_tasks_by_name:
+            if htask['status'] == Status.ACTIVE and verbosity >= 1:
+                print(f"(H) Task '{htask['name']}' does not exist"
+                      " in Trello (p2)", file=sys.stderr)
+        else:
+            ttask = trello_tasks_by_name[htask['name']]
+            if htask['status'] == Status.ACTIVE:
+                if ttask['status'] == Status.DONE:
+                    # TODO duplicate
+                    if verbosity >= 0:
+                        print(f"(H) Task '{htask['name']}' is marked done"
+                              " in Trello (p2)", file=sys.stderr)
+                elif ttask['status'] == Status.IDLE:
+                    if verbosity >= 0:
+                        print(f"(H) Task '{htask['name']}' is not on deck"
+                              " in Trello (p2)", file=sys.stderr)
+                # other Habitica statuses require no action/message
+            elif htask['status'] == Status.DONE:
+                if ttask['status'] != Status.DONE:
+                    # TODO duplicate
+                    if verbosity >= 0:
+                        print(f"(H) Task '{htask['name']}' is marked done"
+                              " in Habitica (p2)", file=sys.stderr)
+
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    # parser.add_argument('-m', '--move', action='store_true')
+    parser.add_argument('-v', '--verbose', action='count', default=0)
+    settings = parser.parse_args()
+    return settings
+
+
+def main():
+    settings = parse_args()
+
+    trello_board = get_trello_board(verbosity=settings.verbose)
+    trello_tasks = read_trello_board(trello_board, verbosity=settings.verbose)
+    habitica_client = bh.Habitica(verbosity=settings.verbose)
+    habitica_tasks = read_habitica(habitica_client, verbosity=settings.verbose)
+
+    update_habitica_from_trello(trello_tasks, habitica_tasks, habitica_client,
+                                verbosity=settings.verbose)
+    update_trello_from_habitica(habitica_tasks, trello_tasks,
+                                verbosity=settings.verbose)
+
+
+if __name__ == "__main__":
+    main()

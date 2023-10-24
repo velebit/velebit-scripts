@@ -159,10 +159,13 @@ def get_or_create_labels(board, names, verbosity=0):
 
 def get_list(board, list_id, list_name, verbosity=0):
     verbosity_threshold, extra_msg = 1, ''
-    tlist = get_any_list_by_id(board, list_id)
-    if tlist is None:
+    tlist = None
+    if list_id is not None:
+        tlist = get_any_list_by_id(board, list_id)
+    if tlist is None and list_name is not None:
         tlist = get_any_list_by_name(board, list_name)
-        verbosity_threshold, extra_msg = 0, '*by name*, fix the ID!'
+        if list_id is not None:
+            verbosity_threshold, extra_msg = 0, '*by name*, fix the ID!'
     if tlist is not None:
         if verbosity >= verbosity_threshold:
             print(f"(T) Selected list  '{tlist.name}' ({tlist.id}){extra_msg}",

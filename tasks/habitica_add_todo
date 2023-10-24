@@ -1,0 +1,27 @@
+#!/home/bert/.local/lib/python/venv/tasks/bin/python3
+# Add todos to Habitica
+import argparse
+import bert_habitica as bh
+
+
+def add_todo(settings, verbosity=0):
+    client = bh.Habitica(verbosity=verbosity)
+    client.add_todo(text=settings.title, notes=settings.description)
+
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('title')
+    parser.add_argument('description', nargs='?')
+    parser.add_argument('-v', '--verbose', action='count', default=0)
+    settings = parser.parse_args()
+    return settings
+
+
+def main():
+    settings = parse_args()
+    add_todo(settings, verbosity=settings.verbose)
+
+
+if __name__ == "__main__":
+    main()
