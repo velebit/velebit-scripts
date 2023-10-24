@@ -78,8 +78,9 @@ add_if "$is_primary_os"     kpartx
 add_if "$is_primary_os"     archivemount
 add_if "$is_primary_os"     squashfs-tools
 add_if always               perl perl-doc
-add_if always               python3 ipython3 python3-pip
+add_if always               python3 ipython3
 add_if "!$is_headless"      python3-tk
+#add_if always               python3-pip
 #add_if "!$is_headless"      python3-numpy python3-scipy python3-matplotlib
 #add_if "!$is_headless"      python3-sympy
 ##add_if "!$is_headless"      python3-imageio python3-eyed3
