@@ -1,0 +1,50 @@
+#!/home/bert/.py_venv/tasks_000/bin/python3
+import json
+
+with open("trello-hopper.json", "r", encoding="utf-8") as f:
+    j = json.load(f)
+
+list_order = []
+list_names = {}
+for list_info in j["lists"]:
+    list_order.append(list_info["name"])
+    list_names[list_info["id"]] = list_info["name"]
+
+if False:
+    with open("trello-cards-dump.txt", "w", encoding="utf-8") as f:
+        import pprint
+        pprint.pprint(j["cards"], indent=4, stream=f)
+
+
+def label_text(label_info):
+    if "name" in label_info and len(label_info["name"]) > 0:
+        return label_info["name"]
+    if "color" in label_info and len(label_info["color"]) > 0:
+        return label_info["color"]
+    return None
+
+
+def not_none(it):
+    return [x for x in it if x is not None]
+
+
+cards_in_list = {x: [] for x in list_order}
+for card_info in j["cards"]:
+    if "closed" in card_info and card_info["closed"]:
+        continue
+    list_name = list_names[card_info["idList"]]
+    card_name = card_info["name"]
+    if "labels" in card_info and len(card_info["labels"]) > 0:
+        labels = ", ".join(
+            not_none([label_text(x) for x in card_info["labels"]]))
+        card_name += f" {{{labels}}}"
+    if "desc" in card_info and len(card_info["desc"]) > 0:
+        card_name += " +++"  # just mark it as having a description in Trello
+    cards_in_list[list_name].append(card_name)
+
+with open("trello-tasks.txt", "w", encoding="utf-8") as f:
+    for list_name in list_order:
+        print(f"*** {list_name} ***", file=f)
+        for card_name in cards_in_list[list_name]:
+            print(card_name, file=f)
+        print("", file=f)

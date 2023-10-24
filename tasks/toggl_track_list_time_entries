@@ -1,0 +1,108 @@
+#!/home/bert/.py_venv/tasks_000/bin/python3
+# List all time entries for the specified or default workspace
+import argparse
+import datetime as dt
+import dateparser
+from typing import List, Tuple
+import tzlocal as tz
+import bert_toggl_track as trk
+
+
+def get_week(settings: argparse.Namespace) -> Tuple[dt.datetime, dt.datetime]:
+    "Return the (beginning, end) of the desired week based on the settings."
+
+    if settings.week_of_day is not None:
+        now_here = dateparser.parse(
+            settings.week_of_day,
+            settings={'DATE_ORDER': 'YMD', 'RETURN_AS_TIMEZONE_AWARE': True,
+                      'REQUIRE_PARTS': ['year', 'month', 'day']})
+        if now_here is None:
+            raise ValueError(f"Bad date '{settings.week_of_day}'")
+        settings.weeks_ago = 0
+    else:
+        now_here = dt.datetime.now(tz=tz.get_localzone())
+    # datetime seems to treat adding X days as keeping the same h:m:s
+    # even across DST changes, so most of the shenanigans below are
+    # probably not needed. But we know they would work even with a
+    # more painful time system.
+    today_noon = now_here.replace(
+        hour=12, minute=0, second=0, microsecond=0)
+    monday_based_weekday = today_noon.weekday()
+    monday_noon = today_noon - dt.timedelta(days=monday_based_weekday)
+    if settings.weeks_ago is not None:
+        weeks_ago = settings.weeks_ago
+    else:  # automatic week selection
+        if monday_based_weekday <= 1:  # Mon and Tue
+            weeks_ago = 1
+        else:  # Wed through Sun
+            weeks_ago = 0
+    week_start_noon = monday_noon - dt.timedelta(days=7*weeks_ago)
+    week_start = week_start_noon.replace(
+        hour=0, minute=0, second=0, microsecond=0)
+    week_after_start_noon = week_start_noon + dt.timedelta(days=7)
+    week_after_start = week_after_start_noon.replace(
+        hour=0, minute=0, second=0, microsecond=0)
+    week_end = week_after_start - dt.timedelta(seconds=1)
+    return week_start, week_end
+
+
+def fetch_time_entry_data(workspace_key: str,
+                          range_start: dt.datetime, range_end: dt.datetime) \
+                          -> List[Tuple[str, str, str]]:
+    tt = trk.create_client()
+    daily = []
+    for entry in tt.time_entries(start=range_start, end=range_end):
+        if workspace_key is not None and entry.workspace_id != workspace_key:
+            continue
+        project = entry.project
+        label = project.name if project is not None else '?'
+        daily.append((entry.start, entry.end, label))
+    return daily
+
+
+def process_time_entries(workspace_key: str, settings: argparse.Namespace):
+    range_start, range_end = get_week(settings)
+    daily = fetch_time_entry_data(workspace_key, range_start, range_end)
+    f_long, f_short = "%Y-%m-%d %H:%M:%S", "%H:%M:%S"
+    for start, end, label in daily:
+        start_fmt = start.astimezone(tz.get_localzone()).strftime(f_long)
+        if end is None:
+            end_fmt = '        '
+        elif (start.year == end.year and start.month == end.month
+                and start.day == end.day):
+            end_fmt = end.astimezone(tz.get_localzone()).strftime(f_short)
+        else:
+            end_fmt = end.astimezone(tz.get_localzone()).strftime(f_long)
+        print(f"{start_fmt} -- {end_fmt}  {label}")
+
+
+def parse_args():
+    def as_mins(t: dt.timedelta):
+        return round(t / dt.timedelta(minutes=1))
+    parser = argparse.ArgumentParser(
+        description="Generate time sheet from Toggl Track data")
+    parser.add_argument('-v', '--verbose', action='count', default=0,
+                        help="increase verbosity; can be repeated")
+    weeks = parser.add_mutually_exclusive_group()
+    weeks.add_argument('--this-week', action='store_const', const=0,
+                       dest='weeks_ago',
+                       help="generate data for this week (aka -w 0)")
+    weeks.add_argument('--last-week', action='store_const', const=1,
+                       dest='weeks_ago',
+                       help="generate data for last week (aka -w 1)")
+    weeks.add_argument('-w', '--weeks-ago', type=int,
+                       help=("generate data for this many weeks ago"
+                             " [default: use a weekday-based heuristic]"))
+    weeks.add_argument('-d', '--week-of-day', '--day', type=str)
+    parser.add_argument('workspace', nargs='?', type=int, default=None)
+    settings = parser.parse_args()
+    return settings
+
+
+def main():
+    settings = parse_args()
+    process_time_entries(settings.workspace, settings)
+
+
+if __name__ == "__main__":
+    main()

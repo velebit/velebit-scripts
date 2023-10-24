@@ -1,0 +1,56 @@
+#!/home/bert/.py_venv/tasks_000/bin/python3
+# Create tasks based on arguments.
+import argparse
+import sys
+import trello.exceptions
+from bert_trello import get_board, get_any_list_by_id, get_any_list_by_name, \
+    maybe_create_card, create_auth_token, read_auth_data
+
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('board')
+    parser.add_argument('list')
+    parser.add_argument('title')
+    parser.add_argument('description', nargs='?')
+    parser.add_argument('-v', '--verbose', action='count', default=0)
+    settings = parser.parse_args()
+    return settings
+
+
+def get_list_by_id_or_name(board, list_id_or_name, verbosity=0):
+    tlist = get_any_list_by_id(board, list_id_or_name)
+    if tlist is not None:
+        if verbosity >= 1:
+            print("Selected list  '{name}' ({id}) by ID"
+                  .format(name=tlist.name,
+                          id=tlist.id),
+                  file=sys.stderr)
+    else:
+        tlist = get_any_list_by_name(board, list_id_or_name)
+        if tlist is not None:
+            if verbosity >= 1:
+                print("Selected list  '{name}' ({id}) by name"
+                      .format(name=tlist.name,
+                              id=tlist.id),
+                      file=sys.stderr)
+    assert tlist is not None, "No list found"
+    return tlist
+
+
+def main():
+    settings = parse_args()
+    try:
+        board = get_board(settings.board, settings.board,
+                          verbosity=settings.verbose)
+    except trello.exceptions.Unauthorized:
+        board = get_board(settings.board, settings.board,
+                          verbosity=settings.verbose,
+                          auth=create_auth_token(read_auth_data()))
+    tlist = get_list_by_id_or_name(board, settings.list)
+    maybe_create_card(tlist, settings.title, description=settings.description,
+                      verbosity=settings.verbose)
+
+
+if __name__ == "__main__":
+    main()

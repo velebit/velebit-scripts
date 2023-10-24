@@ -1,0 +1,18 @@
+#!/home/bert/.py_venv/tasks_000/bin/python3
+# List all boards (name and ID) for the current user.
+
+from bert_miro import create_client
+
+
+def print_boards():
+    client = create_client()
+    for board in client.boards():
+        print("    {}, {}".format(repr(board.id), repr(board.name)))
+
+
+def main():
+    print_boards()
+
+
+if __name__ == "__main__":
+    main()

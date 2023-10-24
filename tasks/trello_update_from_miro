@@ -1,0 +1,221 @@
+#!/home/bert/.py_venv/tasks_000/bin/python3
+# Create tasks based on a list of Miro tasks read from files or API.
+# See also: ~/scripts/user/trello_add_card
+import argparse
+import codecs
+import csv
+import regex
+import trello.exceptions
+import bert_miro as bm
+import bert_trello as bt
+
+MIRO_BOARD_ID, MIRO_BOARD_NAME = \
+    'uXjVPdpN6Vw=', 'Dvorniki tasks'
+MIRO_LONG_TERM_FRAME_ID, MIRO_LONG_TERM_FRAME_NAME = \
+    '3458764531582079790', 'Backlog'
+MIRO_WAITING_FRAME_ID, MIRO_WAITING_FRAME_NAME = \
+    '3458764531582079791', 'Waiting'
+MIRO_HOLD_FRAME_ID, MIRO_HOLD_FRAME_NAME = \
+    '3458764531582079792', 'On Hold / Blocked / Interrupted'
+MIRO_IN_PROGRESS_FRAME_ID, MIRO_IN_PROGRESS_FRAME_NAME = \
+    '3458764531582079793', 'In Progress'
+MIRO_DONE_FRAME_ID, MIRO_DONE_FRAME_NAME = \
+    '3458764531582079794', '*DONE*'
+
+TRELLO_BOARD_ID, TRELLO_BOARD_NAME = \
+    '63bc5faad75d59032535fe63', 'bert active'
+TRELLO_INBOX_LIST_ID, TRELLO_INBOX_LIST_NAME = \
+    '63d6d0f09d5417731d053d19', 'Inbox 📥'
+TRELLO_LONG_TERM_LIST_ID, TRELLO_LONG_TERM_LIST_NAME = \
+    '63bc5faad75d59032535fe6a', 'Not right now 🧊'
+TRELLO_HOLD_LIST_ID, TRELLO_HOLD_LIST_NAME = \
+    '63bc5faad75d59032535fe6b', 'Interrupted / incomplete ⏹️'
+TRELLO_DELEGATED_LIST_ID, TRELLO_DELEGATED_LIST_NAME = \
+    '63bc5faad75d59032535fe6c', 'Delegated 👩\u200d👧\u200d👦'
+#    '63bc618e8e81dc03ce50053f', 'Waiting 🔥'
+#    '63bc5faad75d59032535fe6d', 'Today! 🔥🔥🔥'
+TRELLO_IN_PROGRESS_LIST_ID, TRELLO_IN_PROGRESS_LIST_NAME = \
+    '63bc5faad75d59032535fe6e', 'In progress 🚛'
+TRELLO_DONE_LIST_ID, TRELLO_DONE_LIST_NAME = \
+    '63bc5faad75d59032535fe6f', 'Done ✅'
+
+
+def read_miro_csv(file):
+    with codecs.open(file, "r", encoding='utf-8-sig') as csv_fh:
+        reader = csv.DictReader(csv_fh, fieldnames=('name', 'desc', 'tags'))
+        return [row for row in reader if row['name'] is not None]
+
+
+def read_miro_board_frames(verbosity=0):
+    board = bm.get_board(board_id=MIRO_BOARD_ID, board_name=MIRO_BOARD_NAME,
+                         verbosity=verbosity)
+    return [[
+        {'name': regex.sub(r'\s+', ' ', sn.text.strip()),
+         'desc': None, 'tags': None}
+        for sn in (bm.get_frame(board=board,
+                                frame_id=frame_id,
+                                frame_name=frame_name,
+                                verbosity=verbosity)
+                   .sticky_notes())
+        ] for frame_id, frame_name in
+            ((MIRO_LONG_TERM_FRAME_ID, MIRO_LONG_TERM_FRAME_NAME),
+             (MIRO_WAITING_FRAME_ID, MIRO_WAITING_FRAME_NAME),
+             (MIRO_HOLD_FRAME_ID, MIRO_HOLD_FRAME_NAME),
+             (MIRO_IN_PROGRESS_FRAME_ID, MIRO_IN_PROGRESS_FRAME_NAME),
+             (MIRO_DONE_FRAME_ID, MIRO_DONE_FRAME_NAME))
+    ]
+
+
+def deduplicate_tasks(*info_lists):
+    result_lists = []
+    skip_names = set()
+    for current_list in info_lists:
+        result_tasks = []
+        for info in current_list:
+            if info['name'] not in skip_names:
+                result_tasks.append(info)
+                skip_names.add(info['name'])
+        result_lists.append(result_tasks)
+    return result_lists
+
+
+def update_trello(settings, tasks_in_progress, tasks_hold,
+                  tasks_waiting, tasks_done, tasks_long_term):
+    common_label_rules = [
+        {bt.REMOVE_LABELS: ["ex-Miro"]},
+        {bt.ADD_LABELS: ["Miro"], bt.RETIRE_LABELS: ["ex-Miro"]},
+        {bt.REMOVE_LABELS: ["long term", "waiting", "hold/blocked",
+                            "in progress", "done"]}]
+    long_term_label_rules = [{bt.ADD_LABELS: ["long term"]}]
+    waiting_label_rules = [{bt.ADD_LABELS: ["waiting"]}]
+    hold_label_rules = [{bt.ADD_LABELS: ["hold/blocked"]}]
+    in_progress_label_rules = [{bt.ADD_LABELS: ["in progress"]}]
+    done_label_rules = [{bt.ADD_LABELS: ["done"]}]
+
+    try:
+        board = bt.get_board(board_id=TRELLO_BOARD_ID,
+                             board_name=TRELLO_BOARD_NAME,
+                             verbosity=settings.verbose)
+    except trello.exceptions.Unauthorized:
+        board = bt.get_board(board_id=TRELLO_BOARD_ID,
+                             board_name=TRELLO_BOARD_NAME,
+                             verbosity=settings.verbose,
+                             auth=bt.create_auth_token(bt.read_auth_data()))
+    inbox_list = bt.get_or_create_list(
+        board, list_id=TRELLO_INBOX_LIST_ID,
+        list_name=TRELLO_INBOX_LIST_NAME, verbosity=settings.verbose)
+    long_term_list = bt.get_or_create_list(
+        board, list_id=TRELLO_LONG_TERM_LIST_ID,
+        list_name=TRELLO_LONG_TERM_LIST_NAME, verbosity=settings.verbose)
+    hold_list = bt.get_or_create_list(
+        board, list_id=TRELLO_HOLD_LIST_ID,
+        list_name=TRELLO_HOLD_LIST_NAME, verbosity=settings.verbose)
+    delegated_list = bt.get_or_create_list(
+        board, list_id=TRELLO_DELEGATED_LIST_ID,
+        list_name=TRELLO_DELEGATED_LIST_NAME, verbosity=settings.verbose)
+    in_progress_list = bt.get_or_create_list(
+        board, list_id=TRELLO_IN_PROGRESS_LIST_ID,
+        list_name=TRELLO_IN_PROGRESS_LIST_NAME, verbosity=settings.verbose)
+    done_list = bt.get_or_create_list(
+        board, list_id=TRELLO_DONE_LIST_ID,
+        list_name=TRELLO_DONE_LIST_NAME, verbosity=settings.verbose)
+
+    common_label_rules = \
+        bt.look_up_label_objects_in_label_rules(board, common_label_rules,
+                                                verbosity=settings.verbose)
+    long_term_label_rules, waiting_label_rules, hold_label_rules, \
+        in_progress_label_rules, done_label_rules = (
+            (*common_label_rules,
+             *bt.look_up_label_objects_in_label_rules(
+                 board, rules, verbosity=settings.verbose))
+            for rules in (long_term_label_rules, waiting_label_rules,
+                          hold_label_rules,
+                          in_progress_label_rules, done_label_rules))
+
+    # Moving between lists (assumes lists are already deduplicated):
+    # - if Miro done, move to Trello done
+    # - if Trello delegated, ignore (unless done)
+    # - if Miro waiting, move any Trello done/in prog to Trello inbox
+    # - if Miro hold, move to Trello hold
+    # - if Miro in progress, move to Trello in progress
+    # Functions are defined here to have access to local variables.
+
+    def move_list_for_long_term(cards):
+        bt.move_cards_not_in_lists_to_list(
+            cards, [long_term_list], long_term_list,
+            verbosity=settings.verbose, dry_run=not settings.move)
+
+    def move_list_for_waiting(cards):
+        bt.move_cards_from_lists_to_list(
+            cards, [done_list, in_progress_list], inbox_list,
+            verbosity=settings.verbose, dry_run=not settings.move)
+
+    def move_list_for_hold(cards):
+        bt.move_cards_not_in_lists_to_list(
+            cards, [delegated_list, hold_list], hold_list,
+            verbosity=settings.verbose, dry_run=not settings.move)
+
+    def move_list_for_in_progress(cards):
+        bt.move_cards_not_in_lists_to_list(
+            cards, [delegated_list, in_progress_list], in_progress_list,
+            verbosity=settings.verbose, dry_run=not settings.move)
+
+    def move_list_for_done(cards):
+        bt.move_cards_not_in_lists_to_list(
+            cards, [done_list], done_list,
+            verbosity=settings.verbose, dry_run=not settings.move)
+
+    all_tasks = []
+    for tasks, create, move_list_func, rules in (
+            (tasks_long_term, False, move_list_for_long_term,
+             long_term_label_rules),
+            (tasks_waiting, True, move_list_for_waiting, waiting_label_rules),
+            (tasks_hold, True, move_list_for_hold, hold_label_rules),
+            (tasks_in_progress, True, move_list_for_in_progress,
+             in_progress_label_rules),
+            (tasks_done, False, move_list_for_done, done_label_rules)):
+        default_labels = bt.get_default_labels_from_rules(rules)
+        if create:
+            card_info = bt.get_or_create_cards_with_info(
+                inbox_list, tasks, default_labels, verbosity=settings.verbose)
+        else:
+            card_info = bt.get_cards_with_info(
+                board, tasks, verbosity=settings.verbose)
+        if move_list_func is not None:
+            move_list_func(bt.cards_from_info(card_info))
+        bt.update_card_labels(bt.cards_from_info(card_info), rules,
+                              verbosity=settings.verbose)
+        all_tasks.extend(tasks)
+    bt.update_orphan_labeled_tasks(board, common_label_rules, all_tasks,
+                                   verbosity=settings.verbose)
+
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--csv', nargs=3)
+    parser.add_argument('-m', '--move', action='store_true')
+    parser.add_argument('-v', '--verbose', action='count', default=0)
+    settings = parser.parse_args()
+    return settings
+
+
+def main():
+    settings = parse_args()
+    if settings.csv is not None:
+        tasks_waiting, tasks_hold, tasks_in_progress = \
+            (read_miro_csv(f) for f in settings.csv)
+        tasks_long_term, tasks_done = [], []
+    else:
+        tasks_long_term, tasks_waiting, tasks_hold, \
+            tasks_in_progress, tasks_done = \
+            read_miro_board_frames(verbosity=settings.verbose)
+    tasks_in_progress, tasks_hold, \
+        tasks_waiting, tasks_done, tasks_long_term = \
+        deduplicate_tasks(tasks_in_progress, tasks_hold,
+                          tasks_waiting, tasks_done, tasks_long_term)
+    update_trello(settings, tasks_in_progress, tasks_hold,
+                  tasks_waiting, tasks_done, tasks_long_term)
+
+
+if __name__ == "__main__":
+    main()
