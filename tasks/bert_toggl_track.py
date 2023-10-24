@@ -1,6 +1,7 @@
 #!/not-executable/python3
 import collections
 import datetime as dt
+import enum
 import json
 import os
 import re
@@ -88,7 +89,7 @@ class ObjectCache(object):
 
 # ===== Toggl Track client =====
 
-class Method(object):
+class Method(enum.StrEnum):
     """HTTP method names"""
 
     GET = 'GET'
@@ -253,7 +254,7 @@ class TogglTrack(object):
     def workspace(self, *, workspace_id=None) -> "Optional[Workspace]":
         if workspace_id is None:
             workspace_id = self.workspace_id
-        assert type(workspace_id) == int
+        assert type(workspace_id) is int
         if self.__workspaces.has_id(workspace_id):
             return self.__workspaces.get_id(workspace_id)
         url = f"https://api.track.toggl.com/api/v9/workspaces/{workspace_id}"
@@ -311,7 +312,7 @@ class TtObject(object):
     def __eq__(self, other) -> bool:
         return (isinstance(self, TtObject) and
                 isinstance(other, TtObject) and
-                type(self) == type(other) and
+                type(self) is type(other) and
                 self.__id is not None and
                 self.__id == other.__id)
 
@@ -382,7 +383,7 @@ class Workspace(TtNamedObject):
         return self.__projects.full_list()
 
     def project(self, *, project_id) -> "Optional[Project]":
-        assert type(project_id) == int
+        assert type(project_id) is int
         if self.__projects.has_id(project_id):
             return self.__projects.get_id(project_id)
         url = (f"https://api.track.toggl.com/api/v9/workspaces/{self.id}"
@@ -543,7 +544,7 @@ class TimeEntry(TtObject):
 def get_auth_file_name() -> str:
     home_dir = os.getenv("HOME")
     assert home_dir is not None, "HOME needs to be set"
-    return home_dir + "/.toggl_track_auth.json"
+    return home_dir + "/.config/bert_toggl_track/auth.json"
 
 
 def read_auth_data() -> Dict[str, str]:

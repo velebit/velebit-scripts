@@ -3,6 +3,9 @@ import json
 import os
 import sys
 import trello
+from bert_task_utilities import flatten, \
+    difference, union, intersection, \
+    select_one
 
 
 # ===== constants =====
@@ -13,31 +16,12 @@ REMOVE_LABELS = 'rm'
 RETIRE_LABELS = 'retire'
 
 
-# ===== generic utility functions =====
-
-def flatten(collection_of_collections):
-    return [element for collection in collection_of_collections
-            for element in collection]
-
-
-def intersection(first, *rest):
-    return frozenset(first).intersection(*(frozenset(s) for s in rest))
-
-
-def difference(first, *rest):
-    return frozenset(first).difference(*(frozenset(s) for s in rest))
-
-
-def union(first, *rest):
-    return frozenset(first).union(*(frozenset(s) for s in rest))
-
-
 # ===== authentication and client object management =====
 
 def get_auth_file_name():
     home_dir = os.getenv("HOME")
     assert home_dir is not None, "HOME needs to be set"
-    return home_dir + "/.trello_auth.json"
+    return home_dir + "/.config/bert_trello/auth.json"
 
 
 def read_auth_data():
@@ -98,15 +82,6 @@ def item_is_open():
     return lambda i: not i.closed
 
 
-def select_all(collection, *conditions):
-    return [i for i in collection if all([c(i) for c in conditions])]
-
-
-def select_one(collection, *conditions):
-    # return the first match or None
-    return [*select_all(collection, *conditions), None][0]
-
-
 # ===== accessing existing boards, labels and lists =====
 
 def get_open_board_by_id(client, id):
@@ -145,9 +120,10 @@ def get_open_list_by_name(board, name):
 
 def get_board(board_id, board_name, auth=None, verbosity=0):
     verbosity_threshold, extra_msg = 2, ''
-    board = get_open_board_by_id(create_client(auth=auth), board_id)
+    client = create_client(auth=auth)
+    board = get_open_board_by_id(client, board_id)
     if board is None:
-        board = get_open_board_by_name(create_client(auth=auth), board_name)
+        board = get_open_board_by_name(client, board_name)
         if board_name != board_id:
             verbosity_threshold, extra_msg = 1, '*by name*, fix the ID!'
     assert board is not None, "No open board found"
