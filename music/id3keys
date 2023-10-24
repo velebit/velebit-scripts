@@ -1,4 +1,4 @@
-#!/usr/bin/python3 -B
+#!/home/bert/.local/lib/python/venv/default/bin/python3 -B
 # Show ID3 tags present in a file
 
 import argparse
@@ -6,6 +6,7 @@ import eyed3
 import sys
 
 from id3tools import all_props, frame_props, abstract_props, key_info
+
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -18,6 +19,7 @@ def parse_args():
         settings.frames = settings.abstract = True
     return settings
 
+
 def show_file(file, settings):
     id3file = eyed3.load(file)
     if not id3file:
@@ -26,7 +28,7 @@ def show_file(file, settings):
     if not id3file.tag:
         print(f"No ID3 tag data in {file}!", file=sys.stderr)
         return
-    get_props=None
+    get_props = None
     if settings.frames and settings.abstract:
         get_props = all_props
     elif settings.frames:
@@ -41,11 +43,12 @@ def show_file(file, settings):
         else:
             print(info['id'])
 
+
 def main():
     settings = parse_args()
     for file in settings.files:
         show_file(file, settings)
 
+
 if __name__ == "__main__":
     main()
-

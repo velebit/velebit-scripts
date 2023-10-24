@@ -13,7 +13,7 @@ find . -name 'NCFO practice' -prune \
                         /^\.\.?$/&&next;
                         /^00_/&&next;  # playlists in mp3 dir
                         -d "$dir/$_" and next;
-                        s/^((?:\d-|LLM-|LLM|KC|SotR|ISW|OWS|WoL|GoS|Dar Williams - Dar Williams Folkadelphia Session 6-26-2015 - |Antiphony2002_cast._|RainDance._)?\d\d[a-z]?[- _\.]|Haman2010_Show\d_\d\d).*/$1/||next;
+                        s/^((?:\d{1,2}-|LLM-|LLM|KC|SotR|ISW|OWS|WoL|GoS|Dar Williams - Dar Williams Folkadelphia Session 6-26-2015 - |Antiphony2002_cast._|RainDance._)?\d\d[a-z]?[- _\.]|Haman2010_Show\d_\d\d).*/$1/||next;
                         print "$dir/$_"
                       }
                     }' "$dir"

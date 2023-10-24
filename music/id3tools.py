@@ -5,6 +5,8 @@ import os
 import re
 import shutil
 import struct
+import sys
+
 
 def load_unidecode():
     global unidecode
@@ -12,6 +14,7 @@ def load_unidecode():
         unidecode  # check if loaded
     except NameError:
         import unidecode  # load, throw if can't
+
 
 def quote_chars(text):
     # Use repr() to quote newlines, tabs, and other weird characters.
@@ -22,6 +25,7 @@ def quote_chars(text):
     assert text[0] in ("'", '"') and text[-1] == text[0]
     return re.sub(r'\\(\W)', r'\1', text[1:-1])
 
+
 def text(iterable, *, ascii=False, raw=False):
     if ascii:
         load_unidecode()
@@ -30,12 +34,14 @@ def text(iterable, *, ascii=False, raw=False):
         iterable = (quote_chars(s) for s in iterable)
     return iterable
 
+
 def uniq(iterable):
     seen = set()
     for element in iterable:
         if element not in seen:
             seen.add(element)
             yield element
+
 
 def get_description(fid):
     try:
@@ -54,10 +60,12 @@ def get_description(fid):
         pass
     return '?'
 
+
 latin1_encoding_name = 'latin1'
 utf_16_encoding_name = 'UTF-16'
 utf_16be_encoding_name = 'UTF-16-big-endian'
 utf_8_encoding_name = 'UTF-8'
+
 
 def encoding_name(encoding):
     if encoding == eyed3.id3.LATIN1_ENCODING:
@@ -71,6 +79,7 @@ def encoding_name(encoding):
     else:
         return "encoding " + " ".join(("x%02X" % b) for b in encoding)
 
+
 def encoding_code(name):
     if name == latin1_encoding_name:
         return eyed3.id3.LATIN1_ENCODING
@@ -83,6 +92,7 @@ def encoding_code(name):
     else:
         raise ValueError(f"Unknown encoding name '{name}'")
 
+
 def get_frame_summary_key_value(info):
     if 'text' in info:
         return (info.get('description', None), info['text'], True)
@@ -93,7 +103,7 @@ def get_frame_summary_key_value(info):
     if 'owner_id' in info and 'owner_data' in info:
         if ((info['owner_id'] == 'PeakValue'
              or info['owner_id'] == 'AverageLevel')
-            and len(info['owner_data']) == 4):
+                and len(info['owner_data']) == 4):
             return (info['owner_id'],
                     ("%d" % struct.unpack('<i', info['owner_data'])), True)
         else:
@@ -105,10 +115,11 @@ def get_frame_summary_key_value(info):
         return (None, ("(%d raw byte(s))" % len(info['data'])), False)
     return (None, "(exists)", False)
 
+
 def get_frame_summary(frame, *, ascii=False, raw=False):
-    summary = { 'id': frame.id.decode('ASCII'),
-                'id_description': get_description(frame.id),
-                'frame': frame }
+    summary = {'id': frame.id.decode('ASCII'),
+               'id_description': get_description(frame.id),
+               'frame': frame}
     try:
         summary['text'] = frame.text
     except AttributeError:
@@ -215,24 +226,26 @@ def get_frame_summary(frame, *, ascii=False, raw=False):
 
     return summary
 
+
 def frame_props(tag, *, ascii=False, raw=False):
     return tuple(get_frame_summary(frame, ascii=ascii, raw=raw)
                  for frame in tag.frame_set.getAllFrames())
 
+
 def abstract_props(tag, *, ascii=False, raw=False):
     props = (
-        { 'id': 'title', 'id_description': 'Track title',
-          'value': tag.title },
-        { 'id': 'artist', 'id_description': 'Track artist',
-          'value': tag.artist },
-        { 'id': 'album_artist', 'id_description': 'Album artist',
-          'value': tag.album_artist },
-        { 'id': 'album', 'id_description': 'Album title',
-          'value': tag.album },
-        { 'id': 'track_num', 'id_description': 'Track number',
-          'value': tag.track_num[0] },
-        { 'id': 'num_tracks', 'id_description': 'Number of tracks in album',
-          'value': tag.track_num[1] },
+        {'id': 'title', 'id_description': 'Track title',
+         'value': tag.title},
+        {'id': 'artist', 'id_description': 'Track artist',
+         'value': tag.artist},
+        {'id': 'album_artist', 'id_description': 'Album artist',
+         'value': tag.album_artist},
+        {'id': 'album', 'id_description': 'Album title',
+         'value': tag.album},
+        {'id': 'track_num', 'id_description': 'Track number',
+         'value': tag.track_num[0]},
+        {'id': 'num_tracks', 'id_description': 'Number of tracks in album',
+         'value': tag.track_num[1]},
     )
     props = tuple(p for p in props if p['value'] is not None)
     for p in props:
@@ -240,12 +253,15 @@ def abstract_props(tag, *, ascii=False, raw=False):
         p['pretty'] = p['value']
     return props
 
+
 def abstract_props_map(tag, *, ascii=False, raw=False):
-    return { f['id']: f for f in abstract_props(tag, ascii=ascii, raw=raw) }
+    return {f['id']: f for f in abstract_props(tag, ascii=ascii, raw=raw)}
+
 
 def all_props(tag, *, ascii=False, raw=False):
-    return ( *frame_props(tag, ascii=ascii, raw=raw),
-             *abstract_props(tag, ascii=ascii, raw=raw) )
+    return (*frame_props(tag, ascii=ascii, raw=raw),
+            *abstract_props(tag, ascii=ascii, raw=raw))
+
 
 def key_info(props):
     return tuple({'id': x[0], 'id_description': x[1]}
@@ -255,11 +271,26 @@ def key_info(props):
 def wipe_file(file):
     eyed3.id3.Tag.remove(file, version=eyed3.id3.ID3_ANY_VERSION)
 
+
+def copy_id3(src_path, dst_path):
+    file_src = eyed3.load(src_path)
+    assert file_src
+    if not file_src.tag:
+        wipe_file(dst_path)
+        return
+    file_dst = eyed3.load(dst_path)
+    assert file_dst
+    file_dst.tag.frame_set = file_src.tag.frame_set
+    # Use the old version, instead of hardcoding eyed3.id3.ID3_V2_3
+    file_dst.tag.save(version=file_src.tag.version)
+
+
 def remove_frame_from_frameset(frame_set, frame):
     frame_list = frame_set[frame.id]
     frame_list.remove(frame)  # error if missing
     if len(frame_list) == 0:
         del frame_set[frame.id]  # error if missing
+
 
 def remove_frames_from_file(file, condition, *, restore_file_time=False):
     orig_stat = os.stat(file)
@@ -285,10 +316,10 @@ def make_backup(file, *, revert=True, quiet=False):
         os.unlink(backup)
     except FileNotFoundError:
         pass  # if unlink fails b/c no old backup file, that's OK
-    os.replace(file, backup)  # if can't rename, exception already has filenames
+    os.replace(file, backup)  # if can't rename, exception has filenames
     try:
         shutil.copy2(backup, file, follow_symlinks=True)
-    except:
+    except Exception:
         if revert:  # on failed copy, try undoing the previous rename
             try:
                 os.replace(backup, file)
@@ -297,7 +328,7 @@ def make_backup(file, *, revert=True, quiet=False):
                     print(f"While reverting '{backup}' -> '{file}': {e!r}",
                           file=sys.stderr)
                 pass  # ignore error in inner rename
-        raise  #  propagate error in copy
+        raise  # propagate error in copy
 
 
 """

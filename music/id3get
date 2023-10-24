@@ -1,4 +1,4 @@
-#!/usr/bin/python3 -B
+#!/home/bert/.local/lib/python/venv/default/bin/python3 -B
 # Extract ID3 tags present in a file
 
 import argparse
@@ -6,6 +6,7 @@ import eyed3
 import sys
 
 from id3tools import all_props
+
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -17,6 +18,7 @@ def parse_args():
     settings = parser.parse_args()
     return settings
 
+
 def show_file(file, settings):
     id3file = eyed3.load(file)
     if not id3file:
@@ -26,14 +28,15 @@ def show_file(file, settings):
         print(f"No ID3 tag data in {file}!", file=sys.stderr)
         return
     for info in all_props(id3file.tag, ascii=settings.ascii, raw=settings.raw):
-       if info['id'] == settings.frame_id:
-           print(info['pretty'])
+        if info['id'] == settings.frame_id:
+            print(info['pretty'])
+
 
 def main():
     settings = parse_args()
     for file in settings.files:
         show_file(file, settings)
 
+
 if __name__ == "__main__":
     main()
-

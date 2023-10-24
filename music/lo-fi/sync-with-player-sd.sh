@@ -7,22 +7,22 @@ DEST="/media/bert/PLAYER_SD/Music"
 if [ ! -d "$DEST" ]; then exit 2; fi
 
 include=(
-    "./Lofi Girl"
+    "Lofi Girl"
 )
 
 ignore=(
-    "./came_with_SanDisk_player"
+    #"/came_with_SanDisk_player"
 )
 
 exclude_patterns=( '*.sh' '*~' )
 
-
 # Check if a directory is in the list, or a parent of any in the list.
 is_match_or_parent_of () {
     local dir="$1"; shift
+    if [ "($dir)" = "(.)" ]; then return 0; fi
     for i in "$@"; do
-        case "$i" in
-            "$dir"|"$dir"/*)  return 0 ;;  # true
+        case "${i##/}" in
+            "$dir"|"$dir"/*|.)  return 0 ;;  # true
         esac
     done
     return 1  # false
@@ -32,10 +32,11 @@ is_match_or_parent_of () {
 remove_unlisted () {
     local prunes_o=()
     for i in "$@"; do
-        prunes_o+=(-path "$i" -prune -o)
+        prunes_o+=(-path "./${i##/}" -prune -o)
     done
     (cd "$DEST" && find . "${prunes_o[@]}" -print0) |
         while read -r -d '' entry; do
+            entry="${entry#./}"
             if is_match_or_parent_of "$entry" "$@"; then
                 :  # is included (or parent), keep
             elif [ ! -e "$DEST/$entry" ]; then
@@ -54,10 +55,14 @@ remove_unlisted () {
 remove_matching () {
     local names=(-false)
     for i in "$@"; do
-        names+=(-o -name "$i")
+        case "$i" in
+            */*)    names+=(-o -path "./${i##/}") ;;
+            *)      names+=(-o -name "$i") ;;
+        esac
     done
     (cd "$DEST" && find . \( "${names[@]}" \) -print0) |
         while read -r -d '' entry; do
+            entry="${entry#./}"
             if [ ! -e "$DEST/$entry" ]; then
                 :  # already removed, ignore
             elif [ -d "$DEST/$entry" ]; then
@@ -74,6 +79,8 @@ remove_matching () {
 #remove_matching "${exclude_patterns[@]}"
 
 
+#    --debug=filter3,backup2,flist4 \
+
 rsync --info=progress2,flist2,stats2,skip,symsafe --human-readable \
     "${ignore[@]/#/--exclude=}" \
     "${exclude_patterns[@]/#/--exclude=}" \
@@ -82,5 +89,5 @@ rsync --info=progress2,flist2,stats2,skip,symsafe --human-readable \
 # Hint: add -n -v to debug what would happen
 
 
-remove_unlisted "${include[@]}" "${ignore[@]}"
+remove_unlisted "${include[@]}" "${ignore[@]##/}"
 remove_matching "${exclude_patterns[@]}"
