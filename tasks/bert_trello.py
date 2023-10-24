@@ -376,12 +376,20 @@ def update_orphan_labeled_tasks(board, label_rules, tasks, verbosity=0):
     for card in cards_not_in_tasks_list:
         want_labels = frozenset(card.labels)
         for rule in label_rules:
-            # Only look at rules that have both RETIRE and ADD specified.
-            # For those rules, if -ADD removes anything, do +RETIRE.
-            if ADD_LABELS in rule and RETIRE_LABELS in rule:
-                extra = intersection(card.labels, rule[ADD_LABELS])
+            # Only look at rules that have RETIRE and either ADD or REMOVE
+            # specified. For those rules, if either -ADD or -REMOVE removes
+            # anything, also do +RETIRE.
+            if RETIRE_LABELS not in rule:
+                continue
+            try_remove = []
+            if ADD_LABELS in rule:
+                try_remove.extend(rule[ADD_LABELS])
+            if REMOVE_LABELS in rule:
+                try_remove.extend(rule[REMOVE_LABELS])
+            if len(try_remove):
+                extra = intersection(card.labels, try_remove)
                 if len(extra) > 0:
-                    want_labels = difference(want_labels, rule[ADD_LABELS])
+                    want_labels = difference(want_labels, try_remove)
                     want_labels = union(want_labels, rule[RETIRE_LABELS])
         add_labels_to_card(card, difference(want_labels, card.labels),
                            verbosity=verbosity)
