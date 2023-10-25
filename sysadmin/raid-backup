@@ -48,7 +48,7 @@ backup=
 
 full_backup="common/users common/shared common/scratch home"
 tar_backup="root boot common"
-ignore="proc sys dev run media common/backups common/tmp"
+ignore="proc sys dev run tmp var/tmp media common/backups common/tmp"
 check_ignore_only=""
 tar_type=".tar.gz"
 last_backup=/common/backups
@@ -514,6 +514,8 @@ dump_disk_setup () {
             smartctl -x "$d"
         fi
     done
+
+    return 0
 }
 
 write_disk_setup () {

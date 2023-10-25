@@ -1,6 +1,13 @@
 #!/bin/bash
+# THIS FILE HAS BEEN SUPPLANTED BY VENV CONFIGURATION IN
+# .local/lib/python/venv/requirements.default_000.txt
 
-py_install='pip3 install --disable-pip-version-check -U'
+#py_install='pip3 install --disable-pip-version-check -U'
+
+dump () {
+    for i in "$@"; do echo "$i"; done | sort | uniq
+}
+py_install=dump
 
 packages=()
 
