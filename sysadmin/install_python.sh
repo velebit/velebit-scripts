@@ -76,4 +76,18 @@ packages+=( \
     `# hyde <= 0.8.x imposes dependency on very old markdown` \
 )
 
+# Packages that once upon a time had scripts installed in .local/bin,
+# either directly as dependencies
+##packages+=( \
+##    cheroot \
+##    cherrypy \
+##    commonmark \
+##    coverage \
+##    flask \
+##    guessit \
+##    rpyc \
+##    tempora \
+##    zxcvbn \
+##)
+
 $py_install "${packages[@]}"
