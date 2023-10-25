@@ -1,4 +1,4 @@
-#!/home/bert/.py_venv/tasks_000/bin/python3
+#!/home/bert/.local/lib/python/venv/tasks/bin/python3
 # List all frames (text label and ID) for the specified board.
 import argparse
 import sys
@@ -6,6 +6,7 @@ from bert_miro import get_board
 
 
 def print_sticky_notes(board_key, verbosity=0, print_note_id=False,
+                       print_color=True,
                        print_frame=True, print_frame_id=False):
     board = get_board(board_key, board_key, verbosity=verbosity)
     note_list = []
@@ -25,6 +26,7 @@ def print_sticky_notes(board_key, verbosity=0, print_note_id=False,
             else:
                 note_list.append({'id':  note_id,
                                   'name': note_name,
+                                  'fill_color': note.fill_color,
                                   'frame_id':  frame_id,
                                   'frame_name': frame_name})
 
@@ -34,6 +36,7 @@ def print_sticky_notes(board_key, verbosity=0, print_note_id=False,
         if len([n for n in note_list if n['id'] == note_id]) == 0:
             note_list.append({'id':  note_id,
                               'name': note_name,
+                              'fill_color': note.fill_color,
                               'frame_id':  None,
                               'frame_name': None})
 
@@ -42,6 +45,8 @@ def print_sticky_notes(board_key, verbosity=0, print_note_id=False,
         if print_note_id:
             to_print.append(note_info['id'])
         to_print.append(note_info['name'])
+        if print_color:
+            to_print.append(note_info['fill_color'])
         if print_frame_id:
             to_print.append(note_info['frame_id'])
         if print_frame:
@@ -61,6 +66,7 @@ def parse_args():
 def main():
     settings = parse_args()
     print_sticky_notes(settings.board, verbosity=settings.verbose,
+                       print_color=(settings.verbose >= 2),
                        print_note_id=settings.id, print_frame_id=settings.id)
 
 

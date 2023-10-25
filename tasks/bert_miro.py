@@ -482,7 +482,7 @@ Text._register_subclass('text')
 def get_auth_file_name():
     home_dir = os.getenv("HOME")
     assert home_dir is not None, "HOME needs to be set"
-    return home_dir + "/.miro_auth.json"
+    return home_dir + "/.config/bert_miro/auth.json"
 
 
 def read_auth_data():
@@ -549,7 +549,7 @@ def get_frame(board, frame_id, frame_name, verbosity=0):
         pass  # getting by name is unimplemented
         # ... verbosity_threshold, extra_msg = 0, '*by name*, fix the ID!'
     assert frame is not None, "No frame found"
-    assert type(frame) == Frame, "Bad type for frame"
+    assert type(frame) is Frame, "Bad type for frame"
     if verbosity >= verbosity_threshold:
         print(f"(M) Selected frame '{frame.text}' ({frame.id}){extra_msg}",
               file=sys.stderr)

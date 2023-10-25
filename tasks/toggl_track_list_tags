@@ -1,4 +1,4 @@
-#!/home/bert/.py_venv/tasks_000/bin/python3
+#!/home/bert/.local/lib/python/venv/tasks/bin/python3
 # List all tags (name and ID) for the specified or default workspace
 import argparse
 import bert_toggl_track as trk

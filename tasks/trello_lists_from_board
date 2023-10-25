@@ -1,25 +1,36 @@
-#!/home/bert/.py_venv/tasks_000/bin/python3
+#!/home/bert/.local/lib/python/venv/tasks/bin/python3
 # List all lists (name and ID) for the specified board.
 import argparse
+import sys
 import trello
 from bert_trello import get_board, create_auth_token, read_auth_data
 
 
-def print_lists(board_key, verbosity=0):
+def print_lists(board_key, settings):
     try:
-        board = get_board(board_key, board_key, verbosity=verbosity)
+        board = get_board(board_key, board_key, verbosity=settings.verbose)
     except trello.exceptions.Unauthorized:
-        board = get_board(board_key, board_key, verbosity=verbosity,
+        board = get_board(board_key, board_key, verbosity=settings.verbose,
                           auth=create_auth_token(read_auth_data()))
     for tlist in board.list_lists():
-        if not tlist.closed or verbosity >= 1:
-            print("{}   {}, {}".format(('#' if tlist.closed else ' '),
-                                       repr(tlist.id), repr(tlist.name)))
+        if not tlist.closed or settings.print_archived:
+            fields = []
+            if settings.verbose > 0:
+                fields.append(tlist.id)
+            fields.append(tlist.name)
+            print("{:3s} {}".format(('#' if tlist.closed else ' '),
+                                    ", ".join([repr(f) for f in fields])))
+        if settings.delete_archived and tlist.closed:
+            name = tlist.name
+            tlist.delete()  # No longer available?!
+            print(f"(T) List '{name}' deleted.", file=sys.stderr)
 
 
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('-v', '--verbose', action='count', default=0)
+    parser.add_argument('-a', '--print-archived', action='store_true')
+    parser.add_argument('-d', '--delete-archived', action='store_true')
     parser.add_argument('board')
     settings = parser.parse_args()
     return settings
@@ -27,7 +38,7 @@ def parse_args():
 
 def main():
     settings = parse_args()
-    print_lists(settings.board, verbosity=settings.verbose)
+    print_lists(settings.board, settings)
 
 
 if __name__ == "__main__":

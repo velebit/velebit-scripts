@@ -1,4 +1,4 @@
-#!/home/bert/.py_venv/tasks_000/bin/python3
+#!/home/bert/.local/lib/python/venv/tasks/bin/python3
 # List all lists (name and ID) for the specified board.
 import argparse
 import sys
@@ -13,11 +13,24 @@ def process_cards(board_key, settings):
         board = get_board(board_key, board_key, verbosity=settings.verbose,
                           auth=create_auth_token(read_auth_data()))
     for card in board.all_cards():
-        closed = card.closed
+        tlist = card.get_list()
+        closed = (card.closed or tlist.closed)
         if not closed or settings.print_archived:
-            print("{}   {}, {}".format(('#' if card.closed else ' '),
-                                       repr(card.id), repr(card.name)))
-        if closed and settings.delete_archived:
+            status, fields = '', []
+            if settings.list:
+                status += ('#' if tlist.closed else ' ')
+                status += ('#' if card.closed else ' ')
+                if settings.verbose > 0:
+                    fields.append(tlist.id)
+                fields.append(tlist.name)
+            else:
+                status += ('#' if closed else ' ')
+            if settings.verbose > 0:
+                fields.append(card.id)
+            fields.append(card.name)
+            print("{:3s} {}".format(status,
+                                    ", ".join([repr(f) for f in fields])))
+        if settings.delete_archived and closed:
             name = card.name
             card.delete()
             print(f"(T) Card '{name}' deleted.", file=sys.stderr)
@@ -28,6 +41,8 @@ def parse_args():
     parser.add_argument('-v', '--verbose', action='count', default=0)
     parser.add_argument('-a', '--print-archived', action='store_true')
     parser.add_argument('-d', '--delete-archived', action='store_true')
+    parser.add_argument('--list', action=argparse.BooleanOptionalAction,
+                        default=True)
     parser.add_argument('board')
     settings = parser.parse_args()
     return settings

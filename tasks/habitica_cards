@@ -1,0 +1,75 @@
+#!/home/bert/.local/lib/python/venv/tasks/bin/python3
+# List all habits, dailies and/or todos from Habitica
+import argparse
+import bert_habitica as bh
+
+
+def task_status(task):
+    active, done = ' ', ' '
+    if 'completed' in task and task['completed']:
+        if task['type'] == 'todo':
+            active = done = '#'
+        else:
+            done = '+'
+    if 'isDue' in task and not task['isDue']:
+        active = '@'
+    return active + done
+
+
+def print_tasks(settings, verbosity=0):
+    client = bh.Habitica(verbosity=verbosity)
+    tasks = []
+    if settings.habits:
+        tasks.extend(client.get_habits())
+    if settings.dailies:
+        tasks.extend(client.get_dailies())
+    if settings.todos:
+        tasks.extend(client.get_todos_active())
+        if settings.print_completed:
+            tasks.extend(client.get_todos_completed())
+
+    for task in tasks:
+        if settings.skip_not_due and 'isDue' in task and not task['isDue']:
+            continue
+        status = task_status(task)
+        fields = []
+        fields.append(task['type'])
+        if settings.id:
+            fields.append(task['id'])
+        fields.append(task['text'])
+        print("{:3s} {}".format(status,
+                                ", ".join([repr(f) for f in fields])))
+
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-v', '--verbose', action='count', default=0)
+    parser.add_argument('-i', '--id',
+                        action=argparse.BooleanOptionalAction)
+    parser.add_argument('-H', '--habits', default=None,
+                        action=argparse.BooleanOptionalAction)
+    parser.add_argument('-D', '--dailies', default=None,
+                        action=argparse.BooleanOptionalAction)
+    parser.add_argument('-T', '--todos', default=None,
+                        action=argparse.BooleanOptionalAction)
+    parser.add_argument('-s', '--skip-not-due',
+                        action=argparse.BooleanOptionalAction)
+    parser.add_argument('-c', '--print-completed',
+                        action=argparse.BooleanOptionalAction)
+    settings = parser.parse_args()
+    if settings.habits is None and settings.dailies is None \
+       and settings.todos is None:
+        settings.habits = settings.dailies = settings.todos = True
+    settings.habits = (settings.habits or False)
+    settings.dailies = (settings.dailies or False)
+    settings.todos = (settings.todos or False)
+    return settings
+
+
+def main():
+    settings = parse_args()
+    print_tasks(settings, verbosity=settings.verbose)
+
+
+if __name__ == "__main__":
+    main()

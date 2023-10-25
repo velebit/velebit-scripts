@@ -3,6 +3,9 @@ import json
 import os
 import sys
 import trello
+from bert_task_utilities import flatten, \
+    difference, union, intersection, \
+    select_one
 
 
 # ===== constants =====
@@ -13,31 +16,12 @@ REMOVE_LABELS = 'rm'
 RETIRE_LABELS = 'retire'
 
 
-# ===== generic utility functions =====
-
-def flatten(collection_of_collections):
-    return [element for collection in collection_of_collections
-            for element in collection]
-
-
-def intersection(first, *rest):
-    return frozenset(first).intersection(*(frozenset(s) for s in rest))
-
-
-def difference(first, *rest):
-    return frozenset(first).difference(*(frozenset(s) for s in rest))
-
-
-def union(first, *rest):
-    return frozenset(first).union(*(frozenset(s) for s in rest))
-
-
 # ===== authentication and client object management =====
 
 def get_auth_file_name():
     home_dir = os.getenv("HOME")
     assert home_dir is not None, "HOME needs to be set"
-    return home_dir + "/.trello_auth.json"
+    return home_dir + "/.config/bert_trello/auth.json"
 
 
 def read_auth_data():
@@ -98,15 +82,6 @@ def item_is_open():
     return lambda i: not i.closed
 
 
-def select_all(collection, *conditions):
-    return [i for i in collection if all([c(i) for c in conditions])]
-
-
-def select_one(collection, *conditions):
-    # return the first match or None
-    return [*select_all(collection, *conditions), None][0]
-
-
 # ===== accessing existing boards, labels and lists =====
 
 def get_open_board_by_id(client, id):
@@ -145,9 +120,10 @@ def get_open_list_by_name(board, name):
 
 def get_board(board_id, board_name, auth=None, verbosity=0):
     verbosity_threshold, extra_msg = 2, ''
-    board = get_open_board_by_id(create_client(auth=auth), board_id)
+    client = create_client(auth=auth)
+    board = get_open_board_by_id(client, board_id)
     if board is None:
-        board = get_open_board_by_name(create_client(auth=auth), board_name)
+        board = get_open_board_by_name(client, board_name)
         if board_name != board_id:
             verbosity_threshold, extra_msg = 1, '*by name*, fix the ID!'
     assert board is not None, "No open board found"
@@ -183,10 +159,13 @@ def get_or_create_labels(board, names, verbosity=0):
 
 def get_list(board, list_id, list_name, verbosity=0):
     verbosity_threshold, extra_msg = 1, ''
-    tlist = get_any_list_by_id(board, list_id)
-    if tlist is None:
+    tlist = None
+    if list_id is not None:
+        tlist = get_any_list_by_id(board, list_id)
+    if tlist is None and list_name is not None:
         tlist = get_any_list_by_name(board, list_name)
-        verbosity_threshold, extra_msg = 0, '*by name*, fix the ID!'
+        if list_id is not None:
+            verbosity_threshold, extra_msg = 0, '*by name*, fix the ID!'
     if tlist is not None:
         if verbosity >= verbosity_threshold:
             print(f"(T) Selected list  '{tlist.name}' ({tlist.id}){extra_msg}",
@@ -400,12 +379,20 @@ def update_orphan_labeled_tasks(board, label_rules, tasks, verbosity=0):
     for card in cards_not_in_tasks_list:
         want_labels = frozenset(card.labels)
         for rule in label_rules:
-            # Only look at rules that have both RETIRE and ADD specified.
-            # For those rules, if -ADD removes anything, do +RETIRE.
-            if ADD_LABELS in rule and RETIRE_LABELS in rule:
-                extra = intersection(card.labels, rule[ADD_LABELS])
+            # Only look at rules that have RETIRE and either ADD or REMOVE
+            # specified. For those rules, if either -ADD or -REMOVE removes
+            # anything, also do +RETIRE.
+            if RETIRE_LABELS not in rule:
+                continue
+            try_remove = []
+            if ADD_LABELS in rule:
+                try_remove.extend(rule[ADD_LABELS])
+            if REMOVE_LABELS in rule:
+                try_remove.extend(rule[REMOVE_LABELS])
+            if len(try_remove):
+                extra = intersection(card.labels, try_remove)
                 if len(extra) > 0:
-                    want_labels = difference(want_labels, rule[ADD_LABELS])
+                    want_labels = difference(want_labels, try_remove)
                     want_labels = union(want_labels, rule[RETIRE_LABELS])
         add_labels_to_card(card, difference(want_labels, card.labels),
                            verbosity=verbosity)
