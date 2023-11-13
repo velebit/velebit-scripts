@@ -274,12 +274,12 @@ def wipe_file(file):
 
 def copy_id3(src_path, dst_path):
     file_src = eyed3.load(src_path)
-    assert file_src
+    assert file_src, f"Could not load source {src_path!r}"
     if not file_src.tag:
         wipe_file(dst_path)
         return
     file_dst = eyed3.load(dst_path)
-    assert file_dst
+    assert file_dst, f"Could not load destination {dst_path!r}"
     file_dst.tag.frame_set = file_src.tag.frame_set
     # Use the old version, instead of hardcoding eyed3.id3.ID3_V2_3
     file_dst.tag.save(version=file_src.tag.version)

@@ -119,7 +119,7 @@ while [ "$#" -gt 0 ]; do
 			"$out_dir/$new_dir/$new_file" \
 			< /dev/null
                     case "$arg" in
-                        *.[mM][pP]3|*.[mM]4[aA])
+                        *.[mM][pP]3)
 		            if ! $run $id3copy "$arg" \
                                  "$out_dir/$new_dir/$new_file"; then
                                 echo "@ Could not copy ID3 information!" >&2
@@ -129,7 +129,9 @@ while [ "$#" -gt 0 ]; do
 		            if [ -n "$run" ]; then
                                 echo "@ Would only update ID3 version." >&2
                             elif [ -n "$verbose" ]; then
-                                echo "@ Only updating ID3 version." >&2
+                                echo "@ Could not copy full ID3 data from" \
+                                     "non-MP3 file! Only updating ID3" \
+                                     "version." >&2
                             fi
 		            if ! $run eyeD3 --to-v2.3 \
                                  "$out_dir/$new_dir/$new_file"; then
