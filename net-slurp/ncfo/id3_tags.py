@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/home/bert/.local/lib/python/venv/default/bin/python3 -B
 
 import argparse
 import eyed3
@@ -8,20 +8,23 @@ import multiprocessing
 import os
 import os.path
 import re
-import subprocess
 import sys
+
 
 def get_default_album_prefix():
     return os.path.basename(os.path.dirname(os.getcwd())) + ': '
+
+
 def get_default_num_processes():
     try:
         num_available_cores = len(os.sched_getaffinity(0))
         num_processes = int(num_available_cores * 2 + 0.01)
-    except:
+    except Exception:
         print("Could not get available cores, defaulting to 1 process!",
               file=sys.stderr)
         num_processes = 1
     return num_processes
+
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -93,13 +96,17 @@ def parse_args():
 def keep_all(text):
     return text
 
+
 def make_keep_word(pos):
     assert pos != 0
     if pos > 0:
         pos = pos - 1
+
     def keep_word_N(text):
         return text.split()[pos]
+
     return keep_word_N
+
 
 def keep_paren(text):
     match = re.search(r'\(([^()]*)\)', text)
@@ -107,15 +114,19 @@ def keep_paren(text):
         return ''
     return match.group(1)
 
+
 def keep_none(text):
     return ""
+
 
 def strip_number(text):
     return re.sub(r'^[0-9][0-9]*[ _-]?', '', text)
 
+
 def skip_error_line(line, verbose):
     return (verbose < 1 and
             re.search(r"Frame 'RVA2' is not yet supported", line))
+
 
 def get_tag_args(remove_version, out_version):
     if remove_version is None:
@@ -137,6 +148,7 @@ def get_tag_args(remove_version, out_version):
         print("Unknown out_version ", out_version)
         version_args = ('--to-v2.3',)
     return remove_args + version_args
+
 
 def update_file_tags(data):
     with open(data['log'], 'a') as logfile:
@@ -161,15 +173,10 @@ def update_file_tags(data):
                          encoding=None,  # or select based on out_version?
                          max_padding=(64*1024))
         os.utime(file, ns=(orig_stat.st_atime_ns, orig_stat.st_mtime_ns))
-        #print(result.stdout, end='', file=logfile)
-        #print(result.stderr, end='', file=logfile)
-        #if data['verbose'] >= 2:
-        #    print(result.stdout, end='', file=sys.stdout)
-        #for line in re.split(r'(?<=\n)', result.stderr):
-        #    if not skip_error_line(line, data['verbose']):
-        #        print(line, end='', file=sys.stderr)
+
 
 command_queue = []
+
 
 def queue_tags_from_playlist(playlist, settings, log=os.devnull):
     who = os.path.splitext(os.path.basename(playlist))[0]
@@ -195,16 +202,17 @@ def queue_tags_from_playlist(playlist, settings, log=os.devnull):
         file = tracks[i]
         name = os.path.splitext(os.path.basename(file))[0]
         name = settings.id3_track_strip(name)
-        data = { 'file': file, 'name': name, 'artist': settings.id3_artist,
-                 'album': album, 'track': track, 'num_tracks': num_tracks,
-                 'remove_version': settings.remove_version,
-                 'out_version': settings.out_version,
-                 'log': log, 'verbose': settings.verbose }
+        data = {'file': file, 'name': name, 'artist': settings.id3_artist,
+                'album': album, 'track': track, 'num_tracks': num_tracks,
+                'remove_version': settings.remove_version,
+                'out_version': settings.out_version,
+                'log': log, 'verbose': settings.verbose}
         if settings.dry_run:
             print(f"WOULD update tags for {file}")
         else:
             global command_queue
             command_queue.append(data)
+
 
 def process_queue():
     global command_queue
@@ -212,7 +220,7 @@ def process_queue():
     try:
         num_available_cores = len(os.sched_getaffinity(0))
         num_processes = int(num_available_cores * 1.5 + 0.01)
-    except:
+    except Exception:
         print("Could not get available cores, defaulting to 1 process!",
               file=sys.stderr)
         num_processes = 1
@@ -226,9 +234,11 @@ def process_queue():
             pool.map(update_file_tags, command_queue)
             pool.close()
 
+
 def default_playlists():
     return [p for p in sorted(glob.glob('*.m3u'))
             if not re.search(r'(?:^|\s)X-', p)]
+
 
 def process_playlist(playlist, settings):
     print(f"Preparing tags for playlist {settings.dir_prefix}{playlist}...")
@@ -238,6 +248,7 @@ def process_playlist(playlist, settings):
     except FileNotFoundError:
         pass
     queue_tags_from_playlist(playlist, settings, log=log)
+
 
 def process_playlist_args(args, settings):
     for playlist in args:
@@ -250,12 +261,13 @@ def main():
     os.chdir("../" + settings.dir_prefix)
 
     if not settings.playlists:
-        for l in glob.glob('id3_tags.*.log'):
-            os.unlink(l)
+        for logf in glob.glob('id3_tags.*.log'):
+            os.unlink(logf)
         process_playlist_args(default_playlists(), settings)
     else:
         process_playlist_args(settings.playlists, settings)
     process_queue()
+
 
 if __name__ == "__main__":
     main()

@@ -70,8 +70,8 @@ sub fixed_gain ( $ ) {
     -f $out and system('eyeD3', '-Q', @EYED3_ARGS, $out);
     open STDERR, '>&', $MESSAGES or die "Cannot dup STDERR to STDERR: $!";
     # "Legacy" ID3 tags make eyeD3 --to-v2.3 choke later, so don't use them.
-    -f $out and (system('replaygain', '--mp3-format', 'replaygain.org', $out)
-		 and print $MESSAGES "replaygain ($out) failed.\n");
+    -f $out and (system('r128gain', $out)
+		 and print $MESSAGES "r128gain ($out) failed.\n");
     open STDOUT, '>&', $MESSAGES or die "Cannot dup STDERR to STDOUT: $!";
     -f $out and (system('touch', '-r', $in, $out)
 		 and print $MESSAGES "Updating timestamp ($out) failed.\n");

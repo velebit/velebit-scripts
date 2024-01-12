@@ -8,7 +8,7 @@ linked_paths=()
 while read -r path; do
     found+=("$path")
 done < <( find mixed from-midi \
-	       -name '*.aup' -o -type d -name '*_data' -prune \
+	       -name '*.aup3' -o -type d -name '*_data' -prune \
 	       -o -type f -print | sort )
 
 while read -r path; do
@@ -16,7 +16,7 @@ while read -r path; do
     lp="$(readlink "$path")"
     linked_paths+=("$lp")
     linked_files+=("$(basename "$lp")")
-done < <( find mp3-extras.* -type l -print | sort )
+done < <( find mp3-extras/* -type l -print | sort )
 
 in_list () {
     local val="$1"; shift

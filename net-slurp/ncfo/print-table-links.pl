@@ -40,6 +40,7 @@ Data selection options:
 Data ordering options:
   --sort-by-line        (-sl)  Order links by row *and line* before column.
   --output-by-line      (-ol)  Do --sort-by-line and repeat single-line links.
+  --repeat-span          (-r)  Repeat links in row/column spans.
 Output options (extra fields printed before URI, separated by tabs):
   --show-heading         (-h)  Show text of <h#> or <title> tag before table.
   --show-heading1       (-h1)  Show text of <h1> tag before table.
@@ -62,6 +63,9 @@ Output options (extra fields printed before URI, separated by tabs):
   --show-same-entry-text-after-link
                         (-ea)  Show the text of the entry (line or cell)
                                following the last link.  (See also: -ibr.)
+  --show-text-at ROW,COLUMN
+                        (-at)  Show the text of the cell (TODO: entry?)
+                               in row ROW and column COLUMN.
   --show-text-at-column COLUMN
                         (-ec)  Show the text of the entry (line or cell) in
                                column COLUMN, and the same row/line as the link.
@@ -99,6 +103,7 @@ use constant CELL_LINE_NUMBER => 'cell_line';
 use constant SAME_ENTRY_TEXT => 'same_entry';
 use constant SAME_ENTRY_TEXT_BEFORE_LINK => 'same_entry_before';
 use constant SAME_ENTRY_TEXT_AFTER_LINK => 'same_entry_after';
+use constant ENTRY_TEXT_AT_ROW_COL_prefix => 'at_row_col=';
 use constant SAME_ROW_ENTRY_TEXT_AT_COLUMN_prefix => 'same_row_at_col=';
 use constant SAME_COLUMN_ENTRY_TEXT_AT_ROW_prefix => 'same_col_at_row=';
 use constant SAME_ROW_TEXT => 'same_row';
@@ -154,6 +159,7 @@ our $MERGE_LINKS = 0;
 our $SPLIT_AT_LINE_BREAKS = 1;
 our $CELL_SEPARATOR = ' // ';
 our $REORDER_BY_LINE = 0;
+our $REPEAT_SPAN = 0;
 our $REPEAT_SINGLE_LINE = 0;
 
 GetOptions('verbose|v+' => \$VERBOSITY,
@@ -166,6 +172,7 @@ GetOptions('verbose|v+' => \$VERBOSITY,
            'sort-by-line|sl!' => \$REORDER_BY_LINE,
            'output-by-line|by-line|ol!' =>
            sub { $REORDER_BY_LINE = $REPEAT_SINGLE_LINE = $_[1] },
+           'repeat-span|r!' => \$REPEAT_SPAN,
            'show-heading|h!' =>
            sub { add_rm_field PRE_TABLE_HEADING, $_[1] },
            'show-heading1|h1!' =>
@@ -186,6 +193,9 @@ GetOptions('verbose|v+' => \$VERBOSITY,
            sub { add_rm_field SAME_ENTRY_TEXT_BEFORE_LINK, $_[1] },
            'show-same-entry-text-after-link|entry-after|ea!' =>
            sub { add_rm_field SAME_ENTRY_TEXT_AFTER_LINK, $_[1] },
+           'show-text-at|at=s' =>
+           sub { my ($r, $c) = ($_[1] =~ /^(\d+),(\d+)$/) or die;
+                 add_rm_field ENTRY_TEXT_AT_ROW_COL_prefix . "$r,$c", 1 },
            'show-text-at-column|at-column|ec=i' =>
            sub { add_rm_field SAME_ROW_ENTRY_TEXT_AT_COLUMN_prefix . $_[1], 1 },
            'show-text-at-row|at-row|er=i' =>
@@ -559,7 +569,8 @@ print STDERR "done.\n" if $VERBOSITY;
 
 if (@tables) {
   printf STDERR "    %-67s ", "Building tables..." if $VERBOSITY;
-  for my $table (@tables) {
+  for my $t (0..$#tables) {
+    my $table = $tables[$t];
     my @rows = $table->{tag}->content_list;
     @rows == 1 and $rows[0]->tag eq 'tbody' and @rows = $rows[0]->content_list;
     @rows = grep $_->tag eq 'tr', @rows;
@@ -592,10 +603,15 @@ if (@tables) {
     for my $r (0..($table->{rows}-1)) {
       my $n0 = $table->{columns};
       my $nR = @{$cells[$r]};
-      $nR < $n0 and warn("warning: too few cells ($nR < $n0) in row $r" .
-                         " (near @{[$cells[$r][-1]->as_HTML]})");
-      $nR > $n0 and warn("warning: too many cells ($nR > $n0) in row $r" .
-                         " (near @{[$cells[$r][-1]->as_HTML]})");
+      if ($nR != $n0) {
+        my $context = ' (no context available)';
+        $context = " (near @{[$cells[$r][-1]->as_HTML]})"
+          if $nR > 0 and defined $cells[$r][-1];
+        $nR < $n0 and warn("warning: too few cells ($nR < $n0) in table $t," .
+                           " row $r$context");
+        $nR > $n0 and warn("warning: too many cells ($nR > $n0) in table $t," .
+                           " row $r$context");
+      }
     }
   }
   print STDERR "done.\n" if $VERBOSITY;
@@ -630,6 +646,8 @@ if (@tables) {
           $links{$tag}{+ROW_NUMBER} = $r;
           $links{$tag}{+COLUMN_NUMBER} = $c;
           $links{$tag}{+CELL_LINE_NUMBER} = undef;
+          $links{$tag}{row_span} = ($cell->attr('rowspan') || 1);
+          $links{$tag}{column_span} = ($cell->attr('colspan') || 1);
           my $line_number =
             count_line_breaks_in get_in_between_nodes $cell, $tag
             if defined $cell_num_lines[$c];
@@ -646,6 +664,29 @@ if (@tables) {
   print STDERR "done.\n" if $VERBOSITY;
 }
 
+sub replicate_span ( $ ) {
+  my ($link) = @_;
+  return $link if ! defined $link->{row_span};
+  return $link if ! defined $link->{column_span};
+  return $link if ($link->{row_span} == 1 and $link->{column_span} == 1);
+
+  my @copies;
+  for my $ri (0..($link->{row_span} - 1)) {
+    for my $ci (0..($link->{column_span} - 1)) {
+      my %link_copy = %$link;
+      $link_copy{+ROW_NUMBER} += $ri;
+      $link_copy{+COLUMN_NUMBER} += $ci;
+      delete $link_copy{row_span}; delete $link_copy{column_span};
+      push @copies, \%link_copy;
+    }
+  }
+
+  # HACK: fix up %links bookkeeping too, as a side effect (!).
+  $links{$copies[0]{tag}} = $copies[0];
+
+  @copies;
+}
+
 sub replicate_if_single_line ( $ ) {
   my ($link) = @_;
   return $link if defined $link->{+CELL_LINE_NUMBER};
@@ -659,6 +700,16 @@ sub replicate_if_single_line ( $ ) {
 
   @copies;
 }
+
+if ($REPEAT_SPAN) {
+  if (scalar grep((($_->{row_span} || 0) > 1 or ($_->{column_span} || 0) > 1),
+                  @links)) {
+    printf STDERR "    %-67s ", "Replicating spans..." if $VERBOSITY;
+    @links = map replicate_span($_), @links;
+    print STDERR "done.\n" if $VERBOSITY;
+  }
+}
+
 
 if ($REPEAT_SINGLE_LINE) {
   if (scalar grep((! defined $_->{+CELL_LINE_NUMBER}
@@ -761,6 +812,22 @@ if (has_field SAME_ENTRY_TEXT_AFTER_LINK) {
   print STDERR "done.\n" if $VERBOSITY;
 }
 
+
+{
+  my @fields = get_matching_fields ENTRY_TEXT_AT_ROW_COL_prefix;
+  if (@fields) {
+    printf STDERR "    %-67s ", "Extracting fixed cells..." if $VERBOSITY;
+    for my $field (@fields) {
+      my ($row, $column) = split /,/,
+        strip_prefix $field, ENTRY_TEXT_AT_ROW_COL_prefix;
+      for my $link (@links) {
+        $link->{$field} = get_text get_entry($link->{table},
+                                             $row, $column, undef);
+      }
+    }
+    print STDERR "done.\n" if $VERBOSITY;
+  }
+}
 
 {
   my @fields = get_matching_fields SAME_ROW_ENTRY_TEXT_AT_COLUMN_prefix;
