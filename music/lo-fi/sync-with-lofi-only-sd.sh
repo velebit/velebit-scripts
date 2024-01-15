@@ -3,41 +3,22 @@
 cd "`dirname "$0"`" || exit 1
 if [ ! -e "`basename "$0"`" ]; then exit 1; fi
 
-DEST="/media/bert/CLIP JAM/Music"
+DEST="/media/bert/PLAYER_SD/Music"
 if [ -d "$DEST/lo-fi" ]; then DEST="$DEST/lo-fi"; fi
 if [ ! -d "$DEST" ]; then exit 2; fi
 
 include=(
-    "Bob Dylan"
-    "Boiled in Lead"
-    "Chorallaries of M.I.T_"
-    "Cry Cry Cry"
-    "Dar Williams"
-    "David Haines"
-    "Depeche Mode"
-    "Emperor Norton's Stationary Marching Band"
-    "Fleetwood Mac"
-    "Genesis"
-    "kids"
-    "Kraftwerk"
-    "Kris Delmhorst"
-    "Leonard Cohen"
-    "musical"
-    "NCFO practice"
-    "NCFO Science Festival Chorus"
-    "North Cambridge Family Opera"
-    "Rockapella"
-    "Various Artists/The Hamilton Mixtape"
-    "Kristen Anderson-Lopez, Robert Lopez & Christophe Beck"
-    "Lin‐Manuel Miranda, Opetaia Foaʻi & Mark Mancina"
-    "The Pine Hill Project"
-    "Richard Shindell"
-    "Simon & Garfunkel"
-    "projects"
+    "Lofi Girl"
 )
 
 ignore=(
     #"/came_with_SanDisk_player"
+    "Lofi Girl/Lofi Records"
+    "Lofi Girl/Lofi Records - unlisted"
+    #"Lofi Girl/Lofi Girl - Synthwave"
+    #"Lofi Girl/Lofi Girl - Synthwave - unlisted"
+    "Lofi Girl/Lofi Girl"
+    "Lofi Girl/Lofi Girl - unlisted"
 )
 
 exclude_patterns=( '*.sh' '*~' )

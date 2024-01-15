@@ -3,16 +3,17 @@
 cd "`dirname "$0"`" || exit 1
 if [ ! -e "`basename "$0"`" ]; then exit 1; fi
 
-DEST="/media/bert/CLIP JAM/Music"
+DEST="/media/bert/ALL MUSIC"
+if [ -d "$DEST/lo-fi" ]; then DEST="$DEST/lo-fi"; fi
 if [ ! -d "$DEST" ]; then exit 2; fi
 
 include=(
-    "Lofi Girl"
+    "."
 )
 
 ignore=(
-    #"/came_with_SanDisk_player"
-    "/Lofi Girl/Lofi Records"
+    "/came_with_SanDisk_player"
+    "/projects"
 )
 
 exclude_patterns=( '*.sh' '*~' )
