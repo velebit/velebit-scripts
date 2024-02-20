@@ -36,16 +36,48 @@ class Who(enum.Enum):
     ME = enum.auto()
     JOINT = enum.auto()
     OTHER = enum.auto()
+    INACTIVE = enum.auto()
+
+
+sticky_colors_me_regular = frozenset(['blue'])
+sticky_colors_me_repeating = frozenset(['light_blue'])
+sticky_colors_joint_regular = frozenset(['light_yellow'])
+sticky_colors_joint_discussion = frozenset(['violet'])
+sticky_colors_joint_repeating = frozenset(['orange'])
+sticky_colors_other_regular = frozenset(['light_green'])
+sticky_colors_other_repeating = frozenset(['green', 'dark_green'])  # which?
+sticky_colors_inactive_repeating = frozenset(['gray'])  # actually white ;)
+
+who_sticky_colors = {
+    Who.ME: frozenset([*sticky_colors_me_regular,
+                       *sticky_colors_me_repeating]),
+    Who.JOINT: frozenset([*sticky_colors_joint_regular,
+                          *sticky_colors_joint_discussion,
+                          *sticky_colors_joint_repeating]),
+    Who.OTHER: frozenset([*sticky_colors_other_regular,
+                          *sticky_colors_other_repeating]),
+    Who.INACTIVE: frozenset([*sticky_colors_inactive_repeating]),
+}
+
+
+def get_clean_text_from_sticky(sticky):
+    text = regex.sub(r'\s+', ' ', sticky.text.strip())
+    return text
 
 
 def get_who_from_sticky(sticky):
     color = sticky.fill_color
-    if (color == 'light_blue' or color == 'cyan'):
-        return Who.ME
-    name = sticky.text.strip()
-    if regex.search(r'^(?:b[+\s]|\w+b\b)', name):
-        return Who.JOINT
-    return Who.OTHER
+    for k in who_sticky_colors:
+        if color in who_sticky_colors[k]:
+            return k
+
+    # name = get_clean_text_from_sticky(sticky)
+    # if regex.search(r'^(?:[bB]\s|[bB]\(?\+|(?:\w(?:\s*\()?\+){1,3}[bB]\b)',
+    #                name):
+    #     return Who.JOINT
+
+    # Default to INACTIVE, I guess? (That may default to the joint label.)
+    return Who.INACTIVE
 
 
 def read_miro_board_frames(verbosity=0):
@@ -62,7 +94,7 @@ def read_miro_board_frames(verbosity=0):
                                frame_name=frame_name,
                                verbosity=verbosity).sticky_notes():
             tasks_active.append(
-                {'name': regex.sub(r'\s+', ' ', sn.text.strip()),
+                {'name': get_clean_text_from_sticky(sn),
                  'desc': None, 'tags': None,
                  'src': frame_tag, 'who': get_who_from_sticky(sn),
                  })
@@ -97,23 +129,31 @@ def sanitize_tasks(tasks, verbosity=0):
 
 
 def update_trello(settings, tasks):
-    common_label_rules = [{bt.REMOVE_LABELS: ["Miro", "Miro: me",
-                                              "Miro: joint", "Miro: other",
-                                              "triage", "done"],
-                           bt.RETIRE_LABELS: ["ex-Miro"]},
+    common_label_rules = [{bt.REMOVE_LABELS: ["Miro: triage", "Miro: done"]},
                           {bt.REMOVE_LABELS: ["ex-Miro"]}]
+    orphan_label_rules = [{bt.REMOVE_LABELS: ["Miro: me", "Miro: joint",
+                                              "Miro: other"],
+                           bt.RETIRE_LABELS: ["ex-Miro"]}]
     src_label_rules = {
         Src.ACTIVE: [],
-        Src.TRIAGE: [{bt.ADD_LABELS: ["triage"]}],
-        Src.DONE: [{bt.ADD_LABELS: ["done"]}],
+        Src.TRIAGE: [{bt.ADD_LABELS: ["Miro: triage"]}],
+        Src.DONE: [{bt.ADD_LABELS: ["Miro: done"]}],
     }
     who_label_rules = {
         Who.ME: [{bt.ADD_LABELS: ["Miro: me"],
+                  bt.REMOVE_LABELS: ["Miro: joint", "Miro: other"],
                   bt.RETIRE_LABELS: ["ex-Miro"]}],
         Who.JOINT: [{bt.ADD_LABELS: ["Miro: joint"],
+                     bt.REMOVE_LABELS: ["Miro: me", "Miro: other"],
                      bt.RETIRE_LABELS: ["ex-Miro"]}],
         Who.OTHER: [{bt.ADD_LABELS: ["Miro: other"],
+                     bt.REMOVE_LABELS: ["Miro: me", "Miro: joint"],
                      bt.RETIRE_LABELS: ["ex-Miro"]}],
+        Who.INACTIVE: [{bt.IF_MISSING_ALL_LABELS: ["Miro: me", "Miro: joint",
+                                                   "Miro: other"],
+                        bt.ADD_LABELS: ["Miro: joint"],
+                        bt.REMOVE_LABELS: ["Miro: me", "Miro: other"],
+                        bt.RETIRE_LABELS: ["ex-Miro"]}],
     }
 
     try:
@@ -134,6 +174,9 @@ def update_trello(settings, tasks):
 
     common_label_rules = \
         bt.look_up_label_objects_in_label_rules(board, common_label_rules,
+                                                verbosity=settings.verbose)
+    orphan_label_rules = \
+        bt.look_up_label_objects_in_label_rules(board, orphan_label_rules,
                                                 verbosity=settings.verbose)
     for k in Src:
         src_label_rules[k] = \
@@ -178,7 +221,9 @@ def update_trello(settings, tasks):
                                   verbosity=settings.verbose)
             all_tasks.extend(working)
     assert len(tasks) == 0
-    bt.update_orphan_labeled_tasks(board, common_label_rules, all_tasks,
+    bt.update_orphan_labeled_tasks(board,
+                                   (*common_label_rules, *orphan_label_rules),
+                                   all_tasks,
                                    verbosity=settings.verbose)
 
 

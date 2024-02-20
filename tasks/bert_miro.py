@@ -5,13 +5,17 @@ import os
 import requests
 import sys
 import urllib.parse
+import warnings
 
 
 # ===== general helpers =====
 
 def html2text(html):
-    return bs4.BeautifulSoup(html, features="lxml").get_text(
-        "\n\n", strip=True)
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore',
+                                category=bs4.MarkupResemblesLocatorWarning)
+        return bs4.BeautifulSoup(html, features="lxml").get_text(
+            "\n\n", strip=True)
 
 
 # ===== HTTP request error classes =====
@@ -146,7 +150,7 @@ class Client(object):
         self.__auth.refresh_token = None
         while (self.__auth.access_token is None
                 and self.__auth.refresh_token is None):
-            print("Enter your app's Access token.\n"
+            print("Enter your Miro app's Access token.\n"
                   "  You can generate this from the app's page, accessible\n"
                   "  from your Dev Team > Profile settings > Your apps >\n"
                   "  Created apps > (select the app). On the app's page,\n"
@@ -158,7 +162,7 @@ class Client(object):
             value = input("> ").strip()
             if value != "":
                 self.__auth.access_token = value
-            print("Enter your app's Refresh token.\n"
+            print("Enter your Miro app's Refresh token.\n"
                   "  You can generate this from the app's page, accessible\n"
                   "  from your Dev Team > Profile settings > Your apps >\n"
                   "  Created apps > (select the app). On the app's page,\n"
