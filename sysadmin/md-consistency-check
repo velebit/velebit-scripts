@@ -1,7 +1,25 @@
 #!/bin/bash
 
-# start the MD array check
-/usr/share/mdadm/checkarray --all --idle || exit 1
+status="$(/usr/share/mdadm/checkarray --all --idle --status)"
+case "$status" in
+    *': repair'*)
+	echo "Repairs are running, giving up!" >&2; exit 3 ;;
+    *': check'*)
+	echo "Some checks are already running, waiting for completion." >&2
+        ;;
+    *': idle'*)
+        # start the MD array check
+        if ! /usr/share/mdadm/checkarray --all --idle; then
+	    echo "Could not start checking the arrays!" >&2
+            exit 1
+        fi
+	echo "Check started..." >&2
+	;;
+    "")
+	echo "Initial status output is empty, giving up!" >&2; exit 3 ;;
+    *)
+	echo "Initial status output is unknown, giving up!" >&2; exit 3 ;;
+esac
 
 # wait for the check to complete for all arrays
 while true; do
