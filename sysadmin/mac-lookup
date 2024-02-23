@@ -1,0 +1,47 @@
+#!/usr/bin/perl
+use warnings;
+use strict;
+# use Getopt::Long;
+
+# Getopt::Long::Configure('no_ignore_case');
+# GetOptions('...|.!' => \$...,
+#           ) or die ("Usage: " . basename($0) .
+#                     " [...]\n");
+
+sub get_mac_info ( $ ) {
+  local ($_) = @_;
+  s/-/:/g;
+  return 'KVM/QEMU' if /^52:54:00:/i;
+  s/:/-/;
+  s/:/-/;
+  s/:.*/-00-00-00/;
+  sleep 1;
+  `wget -q -O- http://api.macvendors.com/"$_"`;
+}
+
+sub process_file ( $ ) {
+  my ($fh) = @_;
+  local $_;
+  while (<$fh>) {
+    s/ (?<!-|:|[[:xdigit:]])
+       ( [[:xdigit:]]{2} (?: : [[:xdigit:]]{2}){5} |
+         [[:xdigit:]]{2} (?: - [[:xdigit:]]{2}){5} )
+       (?!-|:|[[:xdigit:]]) / $1 . " [" . get_mac_info($1) . "]" /egx;
+    print;
+  }
+}
+
+@ARGV = ('-') if ! @ARGV;
+
+for my $arg (@ARGV) {
+  if ($arg eq '-') {
+    process_file \*STDIN;
+  } elsif ($arg =~ /^([[:xdigit:]]{2}(?::[[:xdigit:]]{2}){2,5})$/) {
+    print($arg . " [" . get_mac_info($arg) . "]\n");
+  } elsif ($arg =~ /^([[:xdigit:]]{2}(?:-[[:xdigit:]]{2}){2,5})$/) {
+    print($arg . " [" . get_mac_info($arg) . "]\n");
+  } else {
+    open my $FH, '<', $arg or die "open(<$arg): $!";
+    process_file $FH;
+  }
+}
