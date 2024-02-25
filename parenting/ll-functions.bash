@@ -207,6 +207,7 @@ lock_screen () {
                 lock_log="/tmp/lock_log.$$"
                 if ! run_as_user "$user" \
                      xscreensaver-command -lock > "$lock_log" 2>&1; then
+#                     light-locker-command --lock > "$lock_log" 2>&1; then
 #                     lxqt-leave --lockscreen > "$lock_log" 2>&1; then
                     sed -e 's/^/  /' "$lock_log"
                     case "$(cat "$lock_log")" in
@@ -222,6 +223,9 @@ lock_screen () {
                     esac
                 else
                     "${log[@]}" "...$(is_done)." >&2
+#                    echo "===v"
+#                    cat "$lock_log"
+#                    echo "===^"
                 fi
                 rm -f "$lock_log"
                 ;;

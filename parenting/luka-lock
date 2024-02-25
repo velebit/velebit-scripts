@@ -65,8 +65,8 @@ fi
 clear_relock_queue
 
 if [ -n "$down_down_down" ]; then
-    "${log[@]}" "Starting shutdown in 30s..." >&2
-    if ! "${run[@]}" shutdown -h 'now + 30 seconds'; then
+    "${log[@]}" "Scheduling shutdown in 1 minute..." >&2
+    if ! "${run[@]}" shutdown -h '+1'; then
         "${log[@]}" "...$(failed) to schedule a shutdown!" >&2
     else
         "${log[@]}" "...$(is_done)." >&2
