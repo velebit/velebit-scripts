@@ -1,7 +1,7 @@
 #!/home/bert/.local/lib/python/venv/tasks/bin/python3
 # List all lists (name and ID) for the specified board.
 import argparse
-import sys
+import itertools
 import trello.exceptions
 from bert_trello import get_board, create_auth_token, read_auth_data
 
@@ -12,7 +12,23 @@ def process_cards(board_key, settings):
     except trello.exceptions.Unauthorized:
         board = get_board(board_key, board_key, verbosity=settings.verbose,
                           auth=create_auth_token(read_auth_data()))
-    for card in board.all_cards():
+    cards_iter = None
+    if settings.filter_list is None:
+        if settings.print_archived:
+            cards_iter = board.all_cards()
+        else:
+            cards_iter = board.open_cards()
+    else:
+        tlists = [tlist for tlist in board.list_lists()
+                  if ((tlist.name == settings.filter_list or
+                       tlist.id == settings.filter_list)
+                      and (not tlist.closed or settings.print_archived))]
+        assert len(tlists) > 0, \
+            f"No lists matching '{settings.filter_list}' found"
+        cards_iter = itertools.chain.from_iterable(
+            [tlist.list_cards() for tlist in tlists])
+    assert cards_iter is not None
+    for card in cards_iter:
         tlist = card.get_list()
         closed = (card.closed or tlist.closed)
         if not closed or settings.print_archived:
@@ -30,21 +46,19 @@ def process_cards(board_key, settings):
             fields.append(card.name)
             print("{:3s} {}".format(status,
                                     ", ".join([repr(f) for f in fields])))
-        if settings.delete_archived and closed:
-            name = card.name
-            card.delete()
-            print(f"(T) Card '{name}' deleted.", file=sys.stderr)
 
 
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('-v', '--verbose', action='count', default=0)
     parser.add_argument('-a', '--print-archived', action='store_true')
-    parser.add_argument('-d', '--delete-archived', action='store_true')
+    parser.add_argument('-l', '--filter-list', metavar='LIST_NAME_OR_ID')
     parser.add_argument('--list', action=argparse.BooleanOptionalAction,
-                        default=True)
+                        default=None)
     parser.add_argument('board')
     settings = parser.parse_args()
+    if settings.list is None:
+        settings.list = (settings.filter_list is None)
     return settings
 
 
