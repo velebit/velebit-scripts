@@ -1,0 +1,50 @@
+#!/bin/bash
+cd "$(dirname "$0")" || exit 1
+rules="${1:-remapping_rules_EDITING.csv}"
+active_rules="${2:-remapping_rules.csv}"
+
+if [ ! -e "$rules" ]; then
+    echo "Error: '$rules' not found!" >&2; exit 1
+fi
+
+rules_backup="${rules%%.csv}.backup.csv"
+active_rules_backup="${active_rules%%.csv}.backup.csv"
+    
+if [ -e "$active_rules" ]; then
+    rm -f "$active_rules_backup" || exit 2
+    mv "$active_rules" "$active_rules_backup" || exit 2
+    echo "Backed up '$active_rules' to '$active_rules_backup'" >&2
+fi
+
+# assumes no columns other than 'out:category' could start with '?'
+grep -v ',?' "$rules" > "$active_rules" || exit 3
+./process_all || exit 3
+
+missed_rules_tmp=/tmp/missed_rules.csv
+rm -f "$missed_rules_tmp" || exit 4
+./draft_missed_rules.py > "$missed_rules_tmp" || exit 4
+
+# check compatibility
+read old_header < <(tr -d '\r' < "$active_rules")
+read new_header < <(tr -d '\r' < "$missed_rules_tmp")
+if [ "($old_header)" != "($new_header)" ]; then
+    echo "Error: old and new headers don't match!" >&2
+    echo "OLD: '$old_header'" >&2
+    echo "NEW: '$new_header'" >&2
+    exit 5
+fi
+
+combined_rules_tmp=/tmp/combined_rules.csv
+rm -f "$combined_rules_tmp" || exit 6
+tr -d '\r' < "$active_rules" > "$combined_rules_tmp" || exit 6
+tail -n +2 "$missed_rules_tmp" | tr -d '\r' >> "$combined_rules_tmp" || exit 6
+
+./sort_rules_csv.py "$combined_rules_tmp" || exit 7
+
+rm -f "$rules_backup" || exit 8
+mv "$rules" "$rules_backup" || exit 8
+echo "Backed up '$rules' to '$rules_backup'" >&2
+
+mv "$combined_rules_tmp" "$rules" || exit 9
+echo "Refreshed '$rules'" >&2
+rm -f "$missed_rules_tmp" "$combined_rules_tmp"
