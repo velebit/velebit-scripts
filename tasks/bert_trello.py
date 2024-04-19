@@ -14,6 +14,8 @@ from bert_task_utilities import flatten, \
 ADD_LABELS = 'add'
 REMOVE_LABELS = 'rm'
 RETIRE_LABELS = 'retire'
+IF_PRESENT_ANY_LABELS = 'if+any'
+IF_MISSING_ALL_LABELS = 'if-all'
 
 
 # ===== authentication and client object management =====
@@ -206,46 +208,59 @@ def reopen_list(tlist, *, verbosity=0, dry_run=False):
 
 # ===== creating cards =====
 
-def get_cards_with_info(board, cards, verbosity=0):
+def is_card_template(card):
+    # HACK: this accesses internal JSON data and may not be generally reliable.
+    #   But it will work fine for cards retrieved via board.open_cards(), since
+    #   the internal JSON data will be populated in that case.
+    json = card._json_obj
+    if 'cover' in json:
+        if 'isTemplate' in json['cover']:
+            return json['cover']['isTemplate']  # what the API docs specify
+    if 'isTemplate' in json:
+        return json['isTemplate']  # what the API actually currently returns
+    return False
+
+
+def get_cards_with_info(board, cards, /, include_templates=True, verbosity=0):
     existing = dict()
     for c in board.open_cards():
-        existing.setdefault(c.name, []).append(c)
+        if include_templates or not is_card_template(c):
+            existing.setdefault(c.name, []).append(c)
     cards = [{**info, 'cards': existing.get(info['name'], [])}
              for info in cards]
     for info in cards:
-        if len(info['cards']) > 0:
+        if len(info['cards']) == 1:
             if verbosity >= 1:
-                if len(info['cards']) == 1:
-                    print("(T) Card '{name}' already exists!"
-                          .format(name=info['name']),
-                          file=sys.stderr)
-                else:
-                    print("(T) {num} cards matching '{name}' already exist!"
-                          .format(name=info['name'], num=len(info['cards'])),
-                          file=sys.stderr)
+                print("(T) Card '{name}' already exists!"
+                      .format(name=info['name']),
+                      file=sys.stderr)
+        elif len(info['cards']) > 1:
+            if verbosity >= 0:
+                print("(T) {num} cards matching '{name}' already exist!"
+                      .format(name=info['name'], num=len(info['cards'])),
+                      file=sys.stderr)
+    return cards
+
+
+def create_cards_with_info(tlist, cards, labels=None, verbosity=0):
+    for info in cards:
+        reopen_list(tlist, verbosity=verbosity)
+        card = tlist.add_card(info['name'], desc=info['desc'],
+                              labels=labels)
+        if verbosity >= 0:
+            print("(T) Card '{name}' created.".format(name=card.name),
+                  file=sys.stderr)
+        info.setdefault('cards', []).append(card)
     return cards
 
 
 def get_or_create_cards_with_info(tlist, cards, labels=None, verbosity=0):
     cards = get_cards_with_info(tlist.board, cards, verbosity=verbosity)
-    for info in cards:
-        if len(info['cards']) == 0:
-            reopen_list(tlist, verbosity=verbosity)
-            card = tlist.add_card(info['name'], desc=info['desc'],
-                                  labels=labels)
-            if verbosity >= 0:
-                print("(T) Card '{name}' created.".format(name=card.name),
-                      file=sys.stderr)
-            info['cards'] = [card]
+    missing = [c for c in cards if 'cards' not in c or len(c['cards']) == 0]
+    if len(missing) > 0:
+        create_cards_with_info(tlist, missing,
+                               labels=labels, verbosity=verbosity)
     return cards
-
-
-# backwards compatibility
-def maybe_create_card(tlist, name, description=None, labels=None, verbosity=0):
-    cards = get_or_create_cards_with_info(
-        tlist, [{'name': name, 'desc': description}],
-        labels=labels, verbosity=verbosity)
-    return cards_from_info(cards)
 
 
 def cards_from_info(info):
@@ -346,23 +361,41 @@ def look_up_label_objects_in_label_rules(board, label_str_rules, verbosity=0):
 
 def get_default_labels_from_rules(label_rules):
     return frozenset(flatten(
-        (lr[ADD_LABELS] for lr in label_rules if ADD_LABELS in lr)))
+        (lr[ADD_LABELS] for lr in label_rules
+         if ADD_LABELS in lr and IF_PRESENT_ANY_LABELS not in lr)))
 
 
 def update_card_labels(cards, label_rules, verbosity=0):
     for card in cards:
         want_labels = frozenset(card.labels)
         for rule in label_rules:
+            # sanity check: if both ADD and REMOVE, there should be no overlap
+            if ADD_LABELS in rule and REMOVE_LABELS in rule:
+                add_and_remove = intersection(
+                    rule[ADD_LABELS], rule[REMOVE_LABELS])
+                assert len(add_and_remove) == 0, \
+                    f"Labels are being added AND removed: {add_and_remove}"
+            # sanity check: if multiple IFs, there should be no overlap
+            if IF_PRESENT_ANY_LABELS in rule and IF_MISSING_ALL_LABELS in rule:
+                present_and_missing = intersection(
+                    rule[IF_PRESENT_ANY_LABELS], rule[IF_MISSING_ALL_LABELS])
+                assert len(present_and_missing) == 0, \
+                    ("Checking for labels to be present AND missing:"
+                     f" {present_and_missing}")
+            # apply the rules
+            if IF_PRESENT_ANY_LABELS in rule:
+                present_labels = intersection(
+                    want_labels, rule[IF_PRESENT_ANY_LABELS])
+                if len(present_labels) == 0:
+                    continue  # rule's condition was not met
+            if IF_MISSING_ALL_LABELS in rule:
+                missing_labels = intersection(
+                    want_labels, rule[IF_MISSING_ALL_LABELS])
+                if len(missing_labels) > 0:
+                    continue  # rule's condition was not met
             if ADD_LABELS in rule:
-                missing = difference(rule[ADD_LABELS], want_labels)
-                # if both ADD and REMOVE, -REMOVE is conditional on +ADD
-                if len(missing) > 0:
-                    want_labels = union(want_labels, rule[ADD_LABELS])
-                    if REMOVE_LABELS in rule:
-                        want_labels = difference(want_labels,
-                                                 rule[REMOVE_LABELS])
-            elif REMOVE_LABELS in rule:
-                # if REMOVE with no ADD, -REMOVE is unconditional
+                want_labels = union(want_labels, rule[ADD_LABELS])
+            if REMOVE_LABELS in rule:
                 want_labels = difference(want_labels, rule[REMOVE_LABELS])
         add_labels_to_card(card, difference(want_labels, card.labels),
                            verbosity=verbosity)

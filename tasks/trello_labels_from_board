@@ -1,0 +1,72 @@
+#!/home/bert/.local/lib/python/venv/tasks/bin/python3
+# List all labels (name and ID) for the specified board.
+import argparse
+from collections import defaultdict
+from frozendict import frozendict
+import itertools
+import trello
+from bert_trello import get_board, create_auth_token, read_auth_data
+
+
+# Colors documented in the Trello API, in order shown in Trello GUI.
+base_color_gui_order = ('green', 'yellow', 'orange', 'red', 'purple', 'blue',
+                        'sky', 'lime', 'pink', 'black')
+
+# Color variations: *undocumented* in the API, but shown and set by the GUI.
+# The GUI hover popups calls these "subtle X", "X", and "bold X", respectively.
+all_color_gui_order = tuple((b+s for b in base_color_gui_order
+                             for s in ('_light', '', '_dark')))
+
+# Mapping from colors to ascending integers
+color_key = frozendict(zip(all_color_gui_order, itertools.count(1)))
+
+
+def get_label_uses(board):
+    label_uses = defaultdict(int)
+    filters = {'filter': 'open', 'fields': 'idLabels'}
+    board_info = board.client.fetch_json('/boards/' + board.id + '/cards/',
+                                         query_params=filters)
+    for card_info in board_info:
+        for label_id in card_info['idLabels']:
+            label_uses[label_id] += 1
+    return frozendict(label_uses)
+
+
+def print_labels(board_key, settings):
+    try:
+        board = get_board(board_key, board_key, verbosity=settings.verbose)
+    except trello.exceptions.Unauthorized:
+        board = get_board(board_key, board_key, verbosity=settings.verbose,
+                          auth=create_auth_token(read_auth_data()))
+    label_uses = None
+    if settings.count or settings.verbose >= 2:
+        label_uses = get_label_uses(board)
+    # The GUI orders labels by color, then alphabetically within each color
+    for label in sorted(sorted(board.get_labels(), key=lambda i: i.name),
+                        key=lambda i: color_key.get(i.color, 9999)):
+        fields = []
+        if settings.verbose > 0:
+            fields.append(label.id)
+        fields.append(label.name)
+        fields.append(label.color)
+        if label_uses is not None:
+            fields.append(label_uses.get(label.id, 0))
+        print("  {}".format(", ".join([repr(f) for f in fields])))
+
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-v', '--verbose', action='count', default=0)
+    parser.add_argument('-c', '--count', action='store_true')
+    parser.add_argument('board')
+    settings = parser.parse_args()
+    return settings
+
+
+def main():
+    settings = parse_args()
+    print_labels(settings.board, settings)
+
+
+if __name__ == "__main__":
+    main()

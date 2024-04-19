@@ -20,6 +20,12 @@ def print_lists(board_key, settings):
             fields.append(tlist.name)
             print("{:3s} {}".format(('#' if tlist.closed else ' '),
                                     ", ".join([repr(f) for f in fields])))
+            if settings.verbose >= 2:
+                import unicodedata
+                nfc_name = unicodedata.normalize('NFC', tlist.name)
+                if tlist.name != nfc_name:
+                    print("      Note: name is different from its NFC form "
+                          f"{nfc_name!r}")
         if settings.delete_archived and tlist.closed:
             name = tlist.name
             tlist.delete()  # No longer available?!
