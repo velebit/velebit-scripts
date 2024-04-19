@@ -1,4 +1,4 @@
-#!/usr/bin/python3 -B
+#!/home/bert/.local/lib/python/venv/default/bin/python3 -B
 # dump ID3 tags from a file
 
 import argparse
@@ -8,6 +8,7 @@ import re
 import sys
 
 from id3tools import frame_props, abstract_props_map
+
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -26,17 +27,20 @@ def parse_args():
         or any((settings.table, settings.compact)), "-a/-r require -t/-c"
     return settings
 
+
 def wfmt_dot(width, text):
     length = len(text)
     if length <= width:
         return text + (' ' * (width - length))
     return text[0:(width-3)] + '...'
 
+
 def wfmt_trunc(width, text):
     length = len(text)
     if length <= width:
         return text + (' ' * (width - length))
     return text[0:width]
+
 
 def field(fixed, width, val, *, truncate=None):
     if val is None:
@@ -50,14 +54,17 @@ def field(fixed, width, val, *, truncate=None):
     else:
         return wfmt_dot(width, val)
 
+
 def version(tag):
     return 'ID3' + eyed3.id3.versionToString(tag.version)
+
 
 def compact_version(tag):
     return re.sub(r'[\s\.]', '',
                   re.sub(r'/.*', '+',
                          re.sub(r'^v', '',
                                 eyed3.id3.versionToString(tag.version))))
+
 
 def varsify(obj, *, depth=1):
     if depth <= 0:
@@ -66,13 +73,15 @@ def varsify(obj, *, depth=1):
         top = vars(obj)
     except TypeError:
         return obj
-    return { '<self>': obj, **{k: varsify(v, depth=(depth-1))
-                               for k, v in top.items()} }
+    return {'<self>': obj, **{k: varsify(v, depth=(depth-1))
+                              for k, v in top.items()}}
+
 
 def pretty_format(obj, *, initial_indent=4, width=80, **kwargs):
     return re.sub(r'(?m)^', (' ' * initial_indent),
                   pprint.pformat(obj, compact=False,
                                  width=(width-initial_indent), **kwargs))
+
 
 def show_frames(tag, settings):
     for info in frame_props(tag, ascii=settings.ascii, raw=settings.raw):
@@ -95,6 +104,7 @@ def show_frames(tag, settings):
             print(pretty_format(varsify(frame, depth=2),
                                 initial_indent=8, indent=2))
 
+
 def get_fields(obj, *keys):
     for k in keys:
         if obj is None:
@@ -102,19 +112,21 @@ def get_fields(obj, *keys):
         obj = obj.get(k)
     return obj
 
+
 def show_table(tag, fixed, settings):
     props = abstract_props_map(tag, ascii=settings.ascii, raw=settings.raw)
     if 'track_num' in props:
         track = ("%2s" % (props['track_num']['value'],))
-        #track = track[-2:]
+        # track = track[-2:]
     else:
         track = '  '
     ver = compact_version(tag)
     print(field(fixed, 20, get_fields(props, 'artist', 'value')) + '|' +
-	  field(fixed, 26, get_fields(props, 'title', 'value')) + '|' +
-	  track + '|' +
-	  field(fixed, 22, get_fields(props, 'album', 'value')) + '<' +
-	  'v' + field(fixed, 4, ver, truncate=True))
+          field(fixed, 26, get_fields(props, 'title', 'value')) + '|' +
+          track + '|' +
+          field(fixed, 22, get_fields(props, 'album', 'value')) + '<' +
+          'v' + field(fixed, 4, ver, truncate=True))
+
 
 def show_file(file, show_func, *args):
     id3file = eyed3.load(file)
@@ -125,6 +137,7 @@ def show_file(file, show_func, *args):
         print(f"No ID3 tag data in {file}!", file=sys.stderr)
         return
     show_func(id3file.tag, *args)
+
 
 def main():
     settings = parse_args()
@@ -139,6 +152,7 @@ def main():
     if settings.table:
         for file in settings.files:
             show_file(file, show_table, True, settings)
+
 
 if __name__ == "__main__":
     main()

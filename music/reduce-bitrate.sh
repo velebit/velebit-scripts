@@ -28,6 +28,7 @@ elif avconv -version >/dev/null 2>&1; then
 else
     echo "Warning: ffmpeg/avconv not found!" >&2
 fi
+id3copy="$HOME/scripts/music/id3copy -f"
 
 verbose=
 log_level='-v info -nostats'
@@ -117,6 +118,27 @@ while [ "$#" -gt 0 ]; do
 			-i "$arg" -vn -b:a "$audio_rate" \
 			"$out_dir/$new_dir/$new_file" \
 			< /dev/null
+                    case "$arg" in
+                        *.[mM][pP]3)
+		            if ! $run $id3copy "$arg" \
+                                 "$out_dir/$new_dir/$new_file"; then
+                                echo "@ Could not copy ID3 information!" >&2
+                            fi
+                            ;;
+                        *)
+		            if [ -n "$run" ]; then
+                                echo "@ Would only update ID3 version." >&2
+                            elif [ -n "$verbose" ]; then
+                                echo "@ Could not copy full ID3 data from" \
+                                     "non-MP3 file! Only updating ID3" \
+                                     "version." >&2
+                            fi
+		            if ! $run eyeD3 --to-v2.3 \
+                                 "$out_dir/$new_dir/$new_file"; then
+                                echo "@ Could not update ID3 version!" >&2
+                            fi
+                            ;;
+                    esac
 		fi
 	    fi
 	    ;;
@@ -147,6 +169,7 @@ while [ "$#" -gt 0 ]; do
 			-i "$arg" -b:a "$audio_rate" \
 			"$out_dir/$new_dir/$new_file" \
 			< /dev/null
+                    # video file; no need to copy ID3 info
 		fi
 	    fi
 	    ;;

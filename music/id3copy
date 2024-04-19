@@ -1,9 +1,8 @@
 #!/home/bert/.local/lib/python/venv/default/bin/python3 -B
-# *Utterly erase* ID3 tags from a file
+# Copy ID3 tags from one file to another
 
 import argparse
-
-from id3tools import make_backup, wipe_file
+from id3tools import make_backup, copy_id3
 
 
 def parse_args():
@@ -12,21 +11,21 @@ def parse_args():
                         action='store_false', dest='backup', default=True)
     parser.add_argument('--backup',
                         action='store_true', dest='backup', default=True)
-    parser.add_argument('files', nargs='*')
+    parser.add_argument('source_file')
+    parser.add_argument('destination_file')
     settings = parser.parse_args()
     return settings
 
 
-def process_file(file, settings):
+def process_file(src_file, dst_file, settings):
     if settings.backup:
-        make_backup(file)
-    wipe_file(file)
+        make_backup(dst_file)
+    copy_id3(src_file, dst_file)
 
 
 def main():
     settings = parse_args()
-    for file in settings.files:
-        process_file(file, settings)
+    process_file(settings.source_file, settings.destination_file, settings)
 
 
 if __name__ == "__main__":
