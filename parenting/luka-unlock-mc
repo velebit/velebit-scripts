@@ -1,0 +1,58 @@
+#!/bin/bash
+
+source "$(dirname "$(realpath "$0")")"/ll-functions.bash
+
+today="$(date +%Y-%m-%d)"
+case " ${no_unlock_days[*]} " in
+    *" $today "*)
+        echo "Today is not a screen day." >&2
+        exit 33 ;;
+esac
+
+case "$1" in
+    --child)    shift ;;
+    *)          exec sudo "$0" --child "$@" ; exit 1 ;;
+esac
+
+user=luka
+unmute=yes
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        -n)     run=(echo '>'); shift ;;
+        -q)     log=(true); shift ;;
+        -u)     user="$2"; shift; shift ;;
+        -a)     unmute=; shift ;;
+        -*)     echo "$(bad)Unknown flag '$1'!$(end)" >&2; exit 1 ;;
+        *)      break ;;
+    esac
+done
+
+lock_timespec="$1"; shift  # note: okay if missing
+if [ "$#" -gt 0 ]; then
+    echo "$(bad)Unexpected argument '$1'!$(end)" >&2; exit 1
+fi
+
+lock_timestamp="$(parse_schedule_time "$lock_timespec")"
+if [ -z "$lock_timestamp" ]; then
+    exit 2
+fi
+
+unlock_account "$user"
+
+# unlock binaries for ALL users
+unlock_dir /opt/minecraft-launcher
+unlock_executable_file /usr/bin/minecraft-launcher
+unlock_executable_file /bin/minecraft-launcher
+unlock_dir /opt/multimc
+unlock_dir /home/luka/.minecraft
+unlock_dir /home/luka/.local/share/multimc
+unlock_flatpak io.mrarm.mcpelauncher
+unlock_flatpak com.valvesoftware.Steam
+unlock_flatpak com.discordapp.Discord
+
+if [ -n "$unmute" ]; then
+    unmute_all "$user"
+fi
+
+schedule_lock "$user" "$lock_timestamp"

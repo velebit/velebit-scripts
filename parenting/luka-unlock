@@ -1,0 +1,83 @@
+#!/bin/bash
+
+source "$(dirname "$(realpath "$0")")"/ll-functions.bash
+
+today="$(date +%Y-%m-%d)"
+case " ${no_unlock_days[*]} " in
+    *" $today "*)
+        echo "Today is not a screen day." >&2
+        exit 33 ;;
+esac
+
+case "$1" in
+    --child)    shift ;;
+    *)          exec sudo "$0" --child "$@" ; exit 1 ;;
+esac
+
+user=luka
+kill=yes
+unmute=yes
+unlock_discord=
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        -n)     run=(echo '>'); shift ;;
+        -q)     log=(true); shift ;;
+        -u)     user="$2"; shift; shift ;;
+        -o)     kill=; shift ;;
+        -a)     unmute=; shift ;;
+        -D)     unlock_discord=yes; shift ;;
+        -*)     echo "$(bad)Unknown flag '$1'!$(end)" >&2; exit 1 ;;
+        *)      break ;;
+    esac
+done
+
+lock_timespec="$1"; shift  # note: okay if missing
+if [ "$#" -gt 0 ]; then
+    echo "$(bad)Unexpected argument '$1'!$(end)" >&2; exit 1
+fi
+
+lock_timestamp="$(parse_schedule_time "$lock_timespec")"
+if [ -z "$lock_timestamp" ]; then
+    exit 2
+fi
+
+unlock_account "$user"
+
+# lock binaries for ALL users
+lock_dir /opt/minecraft-launcher
+lock_executable_file /usr/bin/minecraft-launcher
+lock_executable_file /bin/minecraft-launcher
+lock_dir /opt/multimc
+lock_dir /home/luka/.minecraft
+lock_dir /home/luka/.local/share/multimc
+lock_flatpak_graphics io.mrarm.mcpelauncher
+lock_flatpak_graphics com.valvesoftware.Steam
+if [ -z "$unlock_discord" ]; then
+    lock_flatpak_graphics com.discordapp.Discord
+else
+    unlock_flatpak com.discordapp.Discord
+fi
+
+if [ -n "$kill" ]; then
+    kill_user_minecraft "$user"
+    kill_user_process "$user" minecraft-launcher
+    kill_user_process "$user" MultiMC
+    kill_flatpak_user_app "$user" io.mrarm.mcpelauncher
+    kill_flatpak_user_app "$user" com.valvesoftware.Steam
+    if [ -z "$unlock_discord" ]; then
+        kill_flatpak_user_app "$user" com.discordapp.Discord
+    fi
+fi
+
+if [ -n "$unmute" ]; then
+    unmute_all "$user"
+fi
+
+schedule_lock "$user" "$lock_timestamp"
+
+if [ -z "$unlock_discord" ]; then
+    "${log[@]}" "(Note: Minecraft, Discord and other apps are LOCKED.)" >&2
+else
+    "${log[@]}" "(Note: Discord is unlocked; Minecraft and other apps are LOCKED.)" >&2
+fi

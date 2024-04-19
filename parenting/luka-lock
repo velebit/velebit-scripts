@@ -1,0 +1,77 @@
+#!/bin/bash
+
+source "$(dirname "$(realpath "$0")")"/ll-functions.bash
+
+case "$1" in
+    --child)    shift ;;
+    *)          exec sudo "$0" --child "$@" ; exit 1 ;;
+esac
+
+user=luka
+kill=yes
+mute=yes
+unlock_discord=
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        -n)     run=(echo '>'); shift ;;
+        -q)     log=(true); shift ;;
+        -u)     user="$2"; shift; shift ;;
+        -o)     kill=; shift ;;
+        -a)     mute=; shift ;;
+        -D)     unlock_discord=yes; shift ;;
+        -*)     echo "Unknown flag '$1'!" >&2; exit 1 ;;
+        *)      echo "Unknown argument '$1'!" >&2; exit 1 ;;
+    esac
+done
+
+lock_account "$user"
+
+down_down_down=
+if ! lock_screen; then
+    down_down_down=yes
+fi
+
+# lock binaries for ALL users
+lock_dir /opt/minecraft-launcher
+lock_executable_file /usr/bin/minecraft-launcher
+lock_executable_file /bin/minecraft-launcher
+lock_dir /opt/multimc
+lock_dir /home/luka/.minecraft
+lock_dir /home/luka/.local/share/multimc
+lock_flatpak_graphics io.mrarm.mcpelauncher
+lock_flatpak_graphics com.valvesoftware.Steam
+if [ -z "$unlock_discord" ]; then
+    lock_flatpak_graphics com.discordapp.Discord
+else
+    unlock_flatpak com.discordapp.Discord
+fi
+
+if [ -n "$kill" ]; then
+    kill_user_minecraft "$user"
+    kill_user_process "$user" minecraft-launcher
+    kill_user_process "$user" MultiMC
+    kill_flatpak_user_app "$user" io.mrarm.mcpelauncher
+    kill_flatpak_user_app "$user" com.valvesoftware.Steam
+    if [ -z "$unlock_discord" ]; then
+        kill_flatpak_user_app "$user" com.discordapp.Discord
+    fi
+fi
+
+if [ -n "$mute" ]; then
+    mute_all "$user"
+fi
+
+clear_relock_queue
+
+if [ -n "$down_down_down" ]; then
+    "${log[@]}" "Starting shutdown in 30s..." >&2
+    if ! "${run[@]}" shutdown -h 'now + 30 seconds'; then
+        "${log[@]}" "...$(failed) to schedule a shutdown!" >&2
+    else
+        "${log[@]}" "...$(is_done)." >&2
+    fi
+fi
+if [ -n "$unlock_discord" ]; then
+    "${log[@]}" "(Note: Discord is unlocked!)" >&2
+fi

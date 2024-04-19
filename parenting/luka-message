@@ -1,0 +1,63 @@
+#!/bin/bash
+
+source "$(dirname "$(realpath "$0")")"/ll-functions.bash
+
+case "$1" in
+    --child)    shift ;;
+    *)          exec sudo "$0" --child "$@" ; exit 1 ;;
+esac
+
+user=luka
+icon=
+
+# Icon names:
+# https://specifications.freedesktop.org/icon-naming-spec/icon-naming-spec-latest.html
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        -n)     run=(echo '>'); shift ;;
+        -q)     log=(true); shift ;;
+        -u)     user="$2"; shift; shift ;;
+        --icon=lock|-ilock|-ilk)
+                icon=system-lock-screen ; shift ;;
+        --icon=shutdown|-ishutdown|-isd)
+                icon=system-shutdown ; shift ;;
+        --icon=talk|-italk)
+                icon=user-available ; shift ;; # (talk bubble?)
+        --icon=clock|--icon=soon|-iclock|-isoon|-iclk)
+                icon=appointment-soon ; shift ;;
+        --icon=past|-ipast)
+                icon=appointment-missed ; shift ;;
+        --icon=info|-iinfo|-ii)
+                icon=dialog-information ; shift ;;
+        --icon=warning|--icon=warn|-iwarning|-iwarn|-iw)
+                icon=dialog-warning ; shift ;;
+        --icon=error|--icon=err|-ierror|-ierr|-ie)
+                icon=dialog-error ; shift ;;
+        --icon) ii="$2"; shift; shift
+                if [ -z "$ii" ]; then
+                    echo "Unknown icon ''!" >&2; exit 1
+                else
+                    set -- "--icon=$ii" "$@"
+                fi ;;
+        -i)     ii="$2"; shift; shift
+                if [ -z "$ii" ]; then
+                    echo "Unknown icon ''!" >&2; exit 1
+                else
+                    set -- "-i$ii" "$@"
+                fi ;;
+        --icon=*)
+                echo "Unknown icon '${1#--icon=}'!" >&2; exit 1 ;;
+        -i*)
+                echo "Unknown icon '${1#-i}'!" >&2; exit 1 ;;
+        -*)     echo "Unknown flag '$1'!" >&2; exit 1 ;;
+        *)      break ;;
+    esac
+done
+
+case "${SUDO_USER:-$USER}" in
+    bert) src="your dad says" ;;
+    abbe) src="your mom says" ;;
+    *)    src="your parents say" ;;
+esac
+notify "$user" "${1:-It\'s time to stop!}" "$2" "$icon" "$src"

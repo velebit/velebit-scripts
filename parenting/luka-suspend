@@ -1,0 +1,45 @@
+#!/bin/bash
+
+source "$(dirname "$(realpath "$0")")"/ll-functions.bash
+
+case "$1" in
+    --child)    shift ;;
+    *)          exec sudo "$0" --child "$@" ; exit 1 ;;
+esac
+
+user=luka
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        -n)     run=(echo '>'); shift ;;
+        -q)     log=(true); shift ;;
+        -u)     user="$2"; shift; shift ;;
+        -*)     echo "Unknown flag '$1'!" >&2; exit 1 ;;
+        *)      echo "Unknown argument '$1'!" >&2; exit 1 ;;
+    esac
+done
+
+## suspend the session via LXQT
+#session_found=
+#for s in $(get_user_sessions "$user"); do
+#    session_found=yes
+#    case "$s" in
+#        lxqt-session)
+#            "${log[@]}" "Trying to suspend..." >&2
+#            if ! run_as_user "$user" \
+#                     lxqt-leave --suspend; then
+#                "${log[@]}" "...$(failed)." >&2
+#            else
+#                "${log[@]}" "...$(is_done)." >&2
+#            fi
+#            ;;
+#        *)
+#            "${log[@]}" "Unknown session '$s', locking skipped." >&2
+#            ;;
+#    esac
+#done
+#if [ -z "$session_found" ]; then
+#    "${log[@]}" "$(user2name "$user") does not seem to be logged in." >&2
+#fi
+
+systemctl suspend
