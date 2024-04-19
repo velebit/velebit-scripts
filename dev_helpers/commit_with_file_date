@@ -1,0 +1,55 @@
+#!/bin/bash
+# Commit file(s) and set the Git author date based on the file date(s).
+# Useful when teasing apart a giant pile of old uncommitted files.
+
+all_files_exist_or_are_known () {
+    local retval=0
+    local f status
+    for f in "$@"; do
+        if [ ! -e "$f" ]; then
+            # check if it's a known but deleted file
+            status="$(git status --porcelain=1 --untracked-files=no "$f")"
+            if [ -z "$status" ]; then
+                echo "File not found: '$f'" >&2
+                retval=1
+            fi
+        fi
+    done
+    return "$retval"
+}
+
+has_staged_git_changes () {
+    local entry
+    while IFS=$'\n' read entry; do
+        case "$entry" in
+            " "?" "*) ;;
+            *)        return 0 ;;
+        esac
+    done < <( git status --porcelain=1 --untracked-files=no . )
+    return 1
+}
+
+get_latest_modification_timestamp () {
+    stat --format='%Y' "$@" | sort -n | tail -1
+}
+
+get_time_zone () {
+    local tz="$(stat --format='%y' "$1" | awk '{print $NF}')"
+    case "$tz" in
+        -[0-9][0-9][0-9][0-9]|+[0-9][0-9][0-9][0-9])
+            echo "$tz" ;;
+        *)  echo "Unexpected timezone format from stat: '$tz'" >&2 ;;
+    esac
+}
+
+if [ "$#" -eq 0 ]; then
+    echo "Usage: $(basename "$0") FILES..." >&2; exit 1
+elif ! all_files_exist_or_are_known "$@"; then
+    exit 2  # message already printed
+elif has_staged_git_changes; then
+    echo "Staged changes are present in Git, giving up." >&2; exit 3
+else
+    git add -- "$@" || exit 10
+    git commit --date="$(get_latest_modification_timestamp "$@")" \
+        --only -- "$@" || exit 11
+fi

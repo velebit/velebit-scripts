@@ -1,0 +1,96 @@
+#!/bin/bash
+# Select specific paths from a branch and cherry-pick their commits
+# onto the current branch.
+
+has_staged_git_changes () {
+    local entry
+    while IFS=$'\n' read entry; do
+        case "$entry" in
+            " "?" "*) ;;
+            *)        return 0 ;;
+        esac
+    done < <( git status --porcelain=1 --untracked-files=no . )
+    return 1
+}
+
+recovery () {
+    local msg="$1"; shift
+    echo $'\e[33;7m'"$msg"$', starting shell\e[0m'
+    echo $'\e[33m  (Create .STOP file to quit further processing.)\e[0m'
+    rm -f .STOP
+    bash
+    if [ -e .STOP ]; then
+        echo $'\e[31;7mStop requested, exiting script.\e[0m'
+        rm -f .STOP; exit 10
+    fi
+    echo $'\e[33m  Recovery shell done, continuing.\e[0m'
+}
+
+mkregex () {
+    perl -e 's;[,];\\$&;g, for @ARGV;print "(?:".join("|",@ARGV).")"' "$@"
+}
+
+matches () {
+    local regex="$1"; shift
+    if [ -z "$regex" ]; then return 1; fi
+    regex="$(mkregex "$regex")"
+    local matches="$("$@" | perl -lne 'm,'"$regex"', and print')"
+    if [ -n "$matches" ]; then
+        echo "$matches"
+        return 0
+    else
+        return 1
+    fi
+}
+
+default_branch=remotes/old/master
+branch="$default_branch"
+manual_file_filter=
+manual_content_filter=
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        -b) branch="$2"; shift; shift ;;
+        -f) manual_file_filter="$2"; shift; shift ;;
+        -c) manual_content_filter="$2"; shift; shift ;;
+        -*) echo "Unknown flag '$1'!" >&2; exit 1 ;;
+        *)  break ;;
+    esac
+done
+
+if [ "$#" -eq 0 ]; then
+    cat <<EOF >&2
+Usage: $(basename "$0") [-b BRANCH] [-f REGEX] [-c REGEX] PATH_REGEXES...
+Options:
+    -b BRANCH     Transplants history from branch BRANCH.
+                  [default: $default_branch]
+    -f REGEX      Require manual intervention if a file name matches REGEX.
+    -c REGEX      Require manual intervention if a change matches REGEX.
+    PATH_REGEXES  Transplant commits whose files match one of the regexes.
+Example:
+    $(basename "$0") '^music/'
+EOF
+    exit 1
+elif has_staged_git_changes; then
+    echo "Staged changes are present in Git, giving up." >&2; exit 3
+else
+    regex="$(mkregex "$@")"
+    for c in $(git log --pretty=format:'@commit %H' --name-only "$branch" \
+                   | perl -lne '/^\@commit (\S+)$/ and $c=$1, next; m,'"$regex"', and (defined $c and print $c), $c=undef, next' \
+                   | tac); do
+        if ! git cherry-pick "$c"; then
+            recovery 'Cherry-pick failed'
+        elif matches "$manual_file_filter" \
+                     git diff --name-only HEAD~1 HEAD; then
+            recovery 'Manual intervention requested due to file name'
+        elif matches "$manual_content_filter" \
+                     git -c color.diff=always diff HEAD~1 HEAD; then
+            recovery 'Manual intervention requested due to change contents'
+        fi
+        if ! git commit --amend --reset-author \
+                 --date="$(git log -1 --pretty=format:%aD)"; then
+            recovery 'Amend failed'
+        fi
+    done
+    echo $'\e[32;7mCompleted!\e[0m'
+fi
