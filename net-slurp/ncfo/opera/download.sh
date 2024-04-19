@@ -7,9 +7,13 @@ file_dir="$mp3_dir"
 #log=download-"$type".log
 log=download.log
 
-all_uris=("$chorus_uri" "$solo_uri" "$demo_uri")
+raw_uris=("$chorus_uri" "$solo_uri" "$demo_uri")
+unique_uris=()
+while read u; do
+    unique_uris+=("$u")
+done < <(for u in "${raw_uris[@]}"; do echo "$u"; done | sort -u)
 
-for file in "${all_uris[@]##*/}"; do
+for file in "${unique_uris[@]##*/}"; do
     if [ -f "$html_dir/$file.html" ]; then
         rm -f "$html_dir/$file"
         mv "$html_dir/$file.html" "$html_dir/$file"
@@ -19,17 +23,17 @@ done
 if ! wget --load-cookies cookies.txt \
     -nd -P "$html_dir" -N --restrict-file-names=windows \
     --progress=bar:force \
-    "${all_uris[@]}" \
+    "${unique_uris[@]}" \
   > download-index.log 2>&1; then
     cat download-index.log
-    for file in "${all_uris[@]##*/}"; do
+    for file in "${unique_uris[@]##*/}"; do
         rm -f "$html_dir/$file"
         mv "$html_dir/$file".orig "$html_dir/$file.html"
     done
     exit 1
 fi
 cat download-index.log
-for file in "${all_uris[@]##*/}"; do
+for file in "${unique_uris[@]##*/}"; do
     rm -f "$html_dir/$file".orig
     rm -f "$html_dir/$file.html"; mv "$html_dir/$file" "$html_dir/$file.html"
 done

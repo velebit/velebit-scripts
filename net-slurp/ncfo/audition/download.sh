@@ -1,8 +1,8 @@
 #!/bin/sh
-page=Weedpatch_2018_Auditions
+page=2024_Rain_Dance_Auditions
 file="`basename "$page"`"
-type=mp3
-dir=mp3
+type=files
+dir=files
 log=download-"$type".log
 if [ -f "$dir"/index.html ]; then
     rm -f "$dir/$file"; mv "$dir"/index.html "$dir/$file"; fi

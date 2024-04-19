@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 TOP=/home/bert/scripts/net-slurp/ncfo
 
