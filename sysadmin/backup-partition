@@ -64,6 +64,12 @@ dev2uuid () {
     [ "$#" -eq 1 ] && echo "$1"
 }
 
+# Get the filesystem type for a device.
+dev2type () {
+    set -- `blkid -o value -s TYPE "$1"`
+    [ "$#" -eq 1 ] && echo "$1"
+}
+
 
 # Given a file or directory, get the device it resides on.
 get_path_device () {
@@ -95,6 +101,25 @@ get_device () {
             mount2dev "$1"
             ;;
     esac
+}
+
+# Get a device for the first partition, given the device path of another part.
+get_first_partition_device () {
+    local p=""
+    case "$1" in
+        /dev/*[0-9][0-9])   p="${1%[0-9][0-9]}1" ;;
+        /dev/*[0-9])        p="${1%[0-9]}1" ;;
+    esac
+    [ -n "$p" ] && [ -e "$1" ] && [ -e "$p" ] && echo "$p"
+}
+
+# Get the UUID for the EFI partition, given the device path of another part.
+get_efi_uuid () {
+    local efi_dev="`get_first_partition_device "$1"`"
+    [ -n "$efi_dev" ] || return 0
+    local efi_type="`dev2type "$efi_dev"`"
+    [ ".$efi_type" = ".vfat" ] || return 0
+    dev2uuid "$efi_dev"
 }
 
 # Find where a filesystem is mounted, or mount it ourselves.
@@ -233,6 +258,8 @@ restore_fstab () {
     local fstab_cur="${dst_path%%/}/etc/fstab"
     local fstab_new="${dst_path%%/}/etc/fstab.source"
 
+    [ -d "${dst_path%%/}/etc" ] || return 0  # if no /etc, just keep going
+
     # Fallback: if there's no new file, we need to create one from cur/old.
     file_fallback fstab "$fstab_old" "$fstab_cur" "$fstab_new" || return 1
 
@@ -252,8 +279,10 @@ propagate_fstab () {
 
 edit_fstab () {
     local dst_path="$1"
-    local src_uuid="$2"
+    local src_uuid="$2"  # unused
     local dst_uuid="$3"
+    local src_efi_uuid="$4"  # unused
+    local dst_efi_uuid="$5"
     local source_fstab="${dst_path%%/}/etc/fstab"
     local edited_fstab="${dst_path%%/}/etc/fstab.edited"
 
@@ -269,11 +298,16 @@ edit_fstab () {
     rm -f "$edited_fstab" 2>/dev/null
     cp -p "$source_fstab" "$edited_fstab"
     awk '{
-           if (/^ *#/||($2!="/")) {
+           if (/^ *#/) {
              print
-           } else {
+           } else if (($2=="/")&&("'"$dst_uuid"'"!="")) {
              orig=$0; $1="'"UUID=$dst_uuid"'";
              print; print "### " orig ORS
+           } else if (($2=="/boot/efi")&&("'"$dst_efi_uuid"'"!="")) {
+             orig=$0; $1="'"UUID=$dst_efi_uuid"'";
+             print; print "### " orig ORS
+           } else {
+             print
            }
          }' "$source_fstab" > "$edited_fstab"
 }
@@ -283,6 +317,8 @@ restore_grub_cfg () {
     local grub_cfg_old="${dst_path%%/}/boot/grub/grub.cfg.edited"
     local grub_cfg_cur="${dst_path%%/}/boot/grub/grub.cfg"
     local grub_cfg_new="${dst_path%%/}/boot/grub/grub.cfg.source"
+
+    [ -d "${dst_path%%/}/boot/grub" ] || return 0  # if no dir, just keep going
 
     # Fallback: if there's no new file, we need to create one from cur/old.
     file_fallback grub.cfg "$grub_cfg_old" "$grub_cfg_cur" "$grub_cfg_new" \
@@ -339,6 +375,9 @@ update_initrd () {
         mount --bind /dev "$prefix/dev"
         mount --bind /sys "$prefix/sys"
 
+        # create temporary directory, needed by update-initramfs
+        mkdir -p "$prefix/var/tmp"
+
         local retval=0
         # NB: we want a failure when chroot fails; requires Bash's "-o pipefail"
         chroot "$dst_path" "$update_bin" -u -k all | sed -e 's/^/    /' \
@@ -353,8 +392,12 @@ update_initrd () {
 }
 
 begin_root_copy () {
-    local src_path="$1"
+    local src_path="$1"  # unused
     local dst_path="$2"
+    local src_dev="$3"  # unused
+    local dst_dev="$4"  # unused
+    local src_uuid="$5"  # unused
+    local dst_uuid="$6"  # unused
 
     if ! restore_fstab "$dst_path"; then
         return 6
@@ -369,10 +412,16 @@ begin_root_copy () {
 finish_root_copy () {
     local src_path="$1"
     local dst_path="$2"
-    local src_uuid="$3"
-    local dst_uuid="$4"
+    local src_dev="$3"
+    local dst_dev="$4"
+    local src_uuid="$5"
+    local dst_uuid="$6"
 
-    if ! edit_fstab "$dst_path" "$src_uuid" "$dst_uuid"; then
+    local src_efi_uuid="`get_efi_uuid "$src_dev"`"
+    local dst_efi_uuid="`get_efi_uuid "$dst_dev"`"
+
+    if ! edit_fstab "$dst_path" "$src_uuid" "$dst_uuid" \
+             "$src_efi_uuid" "$dst_efi_uuid"; then
         return 8
     fi
     if ! edit_grub_cfg "$dst_path" "$src_uuid" "$dst_uuid"; then
@@ -440,6 +489,7 @@ sync_partition () {
 
     if [ -n "$begin_hook" ]; then
         if ! "$begin_hook" "$src_path" "$dst_path" \
+                "$src_dev" "$dst_dev" \
                 "$src_uuid" "$dst_uuid"; then
             echo "...FAILED!"
             return 6
@@ -453,6 +503,7 @@ sync_partition () {
 
     if [ -n "$finish_hook" ]; then
         if ! "$finish_hook" "$src_path" "$dst_path" \
+                "$src_dev" "$dst_dev" \
                 "$src_uuid" "$dst_uuid"; then
             echo "...FAILED!"
             return 8

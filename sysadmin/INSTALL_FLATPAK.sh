@@ -74,7 +74,7 @@ add_if "!$is_headless"      org.musicbrainz.Picard
 add_if "!$is_headless"      org.darktable.Darktable
 add_if "!$is_headless"      org.inkscape.Inkscape
 add_if "!$is_headless"      org.kde.digikam
-add_if "$is_media"          io.github.Soundux
+#add_if "$is_media"          io.github.Soundux
 
 ### PDF tools (and related)
 add_if "!$is_headless"      net.scribus.Scribus
@@ -94,6 +94,7 @@ add_if "$is_media"          com.flashforge.FlashPrint
 add_if "$is_media"          com.prusa3d.PrusaSlicer
 
 #### comms
+add_if always               org.localsend.localsend_app
 add_if "!$is_headless"      com.discordapp.Discord
 add_if "!$is_headless"      org.signal.Signal
 add_if "$is_multiuser"      com.skype.Client
