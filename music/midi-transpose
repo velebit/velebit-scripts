@@ -1,0 +1,112 @@
+#!/usr/bin/perl
+# Transpose one or more of the tracks from the original input.
+# The notes in each track are transposed by some fixed number of half-steps.
+# We don't do anything fancy like key signature changes.
+#
+use warnings;
+use strict;
+use MIDI;
+use Getopt::Long;
+
+### usage stuff
+
+sub Usage ( @ ) {
+  print STDERR join "\n\n", @_, <<EndOfUsage;
+Usage:
+  $0 [-h <half_steps>[,...]] [-i] [-o outfile] [-n] files...
+
+A positive number of half-steps transposes up; a negative one transposes
+down; zero leaves this track alone.  You can specify one number, which will
+be applied to all tracks; or you can specify per-track amounts.  (If you
+specify fewer numbers than tracks, the number sequence will be repeated.  If
+you specify more numbers than tracks, the excess will be silently ignored.)
+
+Just so I don't forget =), 12 half-steps equals one octave.
+EndOfUsage
+  exit 1;
+}
+
+use vars qw( @AMOUNT $MODIFY $DRY_RUN @OUTPUT );
+GetOptions('half-steps|h=s'  => \@AMOUNT,
+	   'modify|i!'       => \$MODIFY,
+	   'output|o|to|t=s' => \@OUTPUT,
+	   'dry-run|n!'      => \$DRY_RUN,
+          ) or Usage;
+
+@ARGV
+  or  Usage "Error: you must specify at least one input file.";
+$MODIFY and @OUTPUT
+  and Usage "Error: --modify and --output are mutually exclusive.";
+@OUTPUT and @OUTPUT != 1
+  and Usage "Error: you must specify --output at most once.";
+@OUTPUT and @ARGV != 1
+  and Usage "Error: you must specify exactly one input when using --output.";
+
+@AMOUNT = map split(/,/), @AMOUNT;
+
+@AMOUNT
+  or  Usage "Error: you must specify the amount to transpose by.";
+
+### code to perform the MIDI transposition
+
+# the array index of the note (pitch) for each event that has it
+my %event_note_index = ( 'note_off'            => 3,
+			 'note_on'             => 3,
+			 'key_after_touch'     => 3,
+		       );
+
+sub event_transpose_note ( $$ ) {
+  my ($event, $interval) = @_;
+
+  my $event_name = $event->[0];
+  exists $event_note_index{$event_name} or return 0;
+
+  $event->[ $event_note_index{$event_name} ] += $interval;
+  1;
+}
+
+sub transpose_opus ( $$ ) {
+  my ($opus, $amounts) = @_;
+  ($amounts and UNIVERSAL::isa($amounts, 'ARRAY') and @$amounts) or die;
+
+  my @a;
+  for my $t ($opus->tracks) {
+    @a = @$amounts unless @a;
+    my $interval = shift(@a);
+    #print "[transposing track by $interval]\n";
+    event_transpose_note($_, $interval) for $t->events;
+  }
+  # TODO: warn if @a wasn't used up?
+  $opus;
+}
+
+sub update_opus ( $$ ) {
+  my ($in, $out) = @_;
+
+  my $opus = MIDI::Opus->new({from_file => $in}) or die;
+
+  transpose_opus $opus, [ @AMOUNT ];
+
+  $opus->write_to_file($out) unless $DRY_RUN;
+}
+
+### do it!
+
+sub make_output_name ( $ ) {
+  my ($file) = @_;
+  return shift @OUTPUT if @OUTPUT;
+  return $file if $MODIFY;
+
+  $file =~ s/\.midi?$//i;
+  $file =~ /_transp$/
+    and die("I refuse to auto-generate a file name for an already modified"
+	    . " file\n    '$_[0]'\n ");
+  $file . "_transp.mid";
+}
+
+for my $input (@ARGV) {
+  my $output = make_output_name $input;
+  print "WOULD DO: " if $DRY_RUN;
+  print "$input -> $output\n";
+  update_opus($input, $output);
+}

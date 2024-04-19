@@ -1,0 +1,147 @@
+#!/usr/bin/perl
+# Flatten the tracks from the original input into a single track.
+#
+# This is done by moving channel-specific events from other tracks into the
+# first one.  Non-channel events in the tracks other than first are discarded!
+#
+# TODO: If there is a control-only track, we should probably keep it separate!
+#
+use warnings;
+use strict;
+use MIDI;
+use Getopt::Long;
+
+### usage stuff
+
+sub Usage ( @ ) {
+  print STDERR join "\n\n", @_, <<EndOfUsage;
+Usage:
+  $0 [-i] [-o outfile] [-n] files...
+EndOfUsage
+  exit 1;
+}
+
+use vars qw( $MODIFY @OUTPUT $KEEP_CHANNELS $DRY_RUN );
+GetOptions('modify|i!'        => \$MODIFY,
+	   'output|o|to|t=s'  => \@OUTPUT,
+	   'keep-channels|k!' => \$KEEP_CHANNELS,
+	   'dry-run|n!'       => \$DRY_RUN,
+          ) or Usage;
+
+my $RENUMBER = ! $KEEP_CHANNELS;
+
+@ARGV
+  or  Usage "Error: you must specify at least one input file.";
+$MODIFY and @OUTPUT
+  and Usage "Error: --modify and --output are mutually exclusive.";
+@OUTPUT and @OUTPUT != 1
+  and Usage "Error: you must specify --output at most once.";
+@OUTPUT and @ARGV != 1
+  and Usage "Error: you must specify exactly one input when using --output.";
+
+### code to perform the MIDI track flattening
+
+# the array index of the channel for each *score* event that has it
+my %score_channel_index = ( 'note'                => 3,
+			    'key_after_touch'     => 2,
+			    'control_change'      => 2,
+			    'patch_change'        => 2,
+			    'channel_after_touch' => 2,
+			    'pitch_wheel_change'  => 2,
+			  );
+
+sub score_event_set_channel ( $$ ) {
+  my ($event, $chan) = @_;
+
+  my $event_name = $event->[0];
+  exists $score_channel_index{$event_name} or return 0;
+
+  $event->[ $score_channel_index{$event_name} ] = $chan;
+  1;
+}
+
+sub set_channel_in_score_r ( $;$ ) {
+  my ($score, $channel) = @_;
+  $channel = 0 unless defined $channel;
+
+  my $changed = 0;
+  score_event_set_channel($_, $channel) and $changed = 1
+    for @$score;
+
+  return $changed;
+}
+
+sub should_keep_score_event ( $ ) {
+  my ($event) = @_;
+  # NB: we always keep all events from the 1st track, so none of this applies
+
+  # Skip all non-channel-related events
+  exists $score_channel_index{$event->[0]}
+    or return 0;
+
+  # When renumbering channels, skip patch changes and control changes too
+  # (since we don't want them "fighting").
+  $RENUMBER and $event->[0] =~ /^(?:patch_change|control_change)$/
+    and return 0;
+
+  1;
+}
+
+# the array index of the note (pitch) for each event that has it
+sub flatten_opus ( $ ) {
+  my ($opus) = @_;
+
+  my @tracks = $opus->tracks;
+  return $opus if ! @tracks;
+
+  my (@combined, $base_track);
+
+  for my $t (@tracks) {
+    my @score = @{ MIDI::Score::events_r_to_score_r($t->events_r) };
+    # other than the very first track, we only add channel-related events
+    if (! @combined) {
+      $base_track = $t;
+    } else {
+      @score = grep should_keep_score_event($_), @score;
+    }
+    push @combined, @score;
+  }
+
+  set_channel_in_score_r \@combined, 0 if $RENUMBER;
+
+  $base_track->events_r(MIDI::Score::score_r_to_events_r(\@combined));
+  $opus->tracks($base_track);
+
+  $opus;
+}
+
+sub update_opus ( $$ ) {
+  my ($in, $out) = @_;
+
+  my $opus = MIDI::Opus->new({from_file => $in}) or die;
+
+  flatten_opus $opus;
+
+  $opus->write_to_file($out) unless $DRY_RUN;
+}
+
+### do it!
+
+sub make_output_name ( $ ) {
+  my ($file) = @_;
+  return shift @OUTPUT if @OUTPUT;
+  return $file if $MODIFY;
+
+  $file =~ s/\.midi?$//i;
+  $file =~ /_flat$/
+    and die("I refuse to auto-generate a file name for an already modified"
+	    . " file\n    '$_[0]'\n ");
+  $file . "_flat.mid";
+}
+
+for my $input (@ARGV) {
+  my $output = make_output_name $input;
+  print "WOULD DO: " if $DRY_RUN;
+  print "$input -> $output\n";
+  update_opus($input, $output);
+}

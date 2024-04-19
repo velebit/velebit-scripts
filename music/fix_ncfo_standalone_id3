@@ -1,0 +1,72 @@
+#!/usr/bin/python3
+import eyed3
+import glob
+import os
+import regex
+import subprocess
+import unidecode
+
+def fix_file(path, *, album_artist, album, artist, title, track_num=None):
+    audio = eyed3.load(path)
+    if audio is None or audio.tag is None:
+        print(f"No audio data found in {path}")
+        return {"missing": 1}
+    else:
+        at_tn = (tuple(audio.tag.track_num) if audio.tag.track_num is not None
+                 else None)
+        tn = (tuple(track_num) if track_num is not None else None)
+        if (audio.tag.album_artist == album_artist and audio.tag.album == album and audio.tag.artist == artist and audio.tag.title == title and at_tn == tn):
+            return {"total": 1}
+        else:
+            audio.tag.album_artist = album_artist
+            audio.tag.album = album
+            audio.tag.artist = artist
+            audio.tag.title = title
+            audio.tag.track_num = track_num
+            try:
+                audio.tag.save(preserve_file_time=True)
+            except PermissionError as e:
+                audio.tag.save(preserve_file_time=False)
+            return {"total": 1, "updated": 1}
+
+def number_string(text):
+    text = regex.sub(r' \(\d+\)$', '', text)
+    return "_".join([f"{n:>010}" for n in regex.findall(r'\d+', text)])
+
+def fix_dir(directory, *, artist, album):
+    total = {"total": 0, "updated": 0, "missing": 0}
+    tracks = []
+    for f in (p for p in (os.path.join(r, f)
+                          for r, _, ff in os.walk(directory) for f in ff)
+              if regex.search(r'\.mp3$', p)):
+        track = unidecode.unidecode(
+            regex.sub(r'\s*\[[^][\s]+\]$', '',
+                      regex.sub(r'\.(?:mp3)$', '',
+                                regex.sub(r'^.*/', '', f))))
+        track = regex.sub(r'^ ', '',
+                         regex.sub(r' $', '',
+                                   regex.sub(r'\s+', ' ', track)))
+        tracks.append({'file': f, 'title': track})
+    tracks.sort(key=lambda t: t['title'])  # pre-sort for stable sorting
+    tracks.sort(key=lambda t: number_string(t['title']))
+    for t in range(len(tracks)):
+        info = fix_file(tracks[t]['file'], album_artist=None, album=album,
+                        artist=artist, title=tracks[t]['title'],
+                        track_num=(t+1, len(tracks)))
+        for k, v in info.items():
+            total[k] += v
+    always_show = ["total", "updated"]
+    print(", ".join(["{} {}".format(total[k], k)
+                     for k in total.keys()
+                     if k in always_show or total[k] > 0]))
+
+def fix_all():
+    album_prefix = '2023 CC '
+    for d in (p.path for p in os.scandir()
+              if p.is_dir() and not regex.search(r'/(?:small|src)$', p.path)):
+        channel = regex.sub(r' - Videos$', '', regex.sub(r'^\./', '', d))
+        print(f"*** {channel} ***")
+        fix_dir(d, artist='NCFO practice', album=(album_prefix + channel))
+
+if __name__ == "__main__":
+    fix_all()

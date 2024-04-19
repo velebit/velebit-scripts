@@ -1,0 +1,29 @@
+#!/usr/bin/python3 -B
+# *Utterly erase* ID3 tags from a file
+
+import argparse
+
+from id3tools import make_backup, wipe_file
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-f', '--force',
+                        action='store_false', dest='backup', default=True)
+    parser.add_argument('--backup',
+                        action='store_true', dest='backup', default=True)
+    parser.add_argument('files', nargs='*')
+    settings = parser.parse_args()
+    return settings
+
+def process_file(file, settings):
+    if settings.backup:
+        make_backup(file)
+    wipe_file(file)
+
+def main():
+    settings = parse_args()
+    for file in settings.files:
+        process_file(file, settings)
+
+if __name__ == "__main__":
+    main()

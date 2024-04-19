@@ -1,0 +1,144 @@
+#!/usr/bin/python3 -B
+# dump ID3 tags from a file
+
+import argparse
+import eyed3
+import pprint
+import re
+import sys
+
+from id3tools import frame_props, abstract_props_map
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-f', '--frames', action='store_true', default=False)
+    parser.add_argument('-t', '--table', action='store_true', default=False)
+    parser.add_argument('-c', '--compact', action='store_true', default=False)
+    parser.add_argument('-a', '--ascii', '--unidecode',
+                        action='store_true', default=False)
+    parser.add_argument('-r', '--raw', action='store_true', default=False)
+    parser.add_argument('-v', '--verbose', action='count', default=0)
+    parser.add_argument('files', nargs='*')
+    settings = parser.parse_args()
+    if not any((settings.frames, settings.table, settings.compact)):
+        settings.frames = True
+    assert not any((settings.ascii, settings.raw)) \
+        or any((settings.table, settings.compact)), "-a/-r require -t/-c"
+    return settings
+
+def wfmt_dot(width, text):
+    length = len(text)
+    if length <= width:
+        return text + (' ' * (width - length))
+    return text[0:(width-3)] + '...'
+
+def wfmt_trunc(width, text):
+    length = len(text)
+    if length <= width:
+        return text + (' ' * (width - length))
+    return text[0:width]
+
+def field(fixed, width, val, *, truncate=None):
+    if val is None:
+        val = ''
+    if not fixed:
+        return val
+    if truncate is None:
+        truncate = (width < 6)
+    if truncate:
+        return wfmt_trunc(width, val)
+    else:
+        return wfmt_dot(width, val)
+
+def version(tag):
+    return 'ID3' + eyed3.id3.versionToString(tag.version)
+
+def compact_version(tag):
+    return re.sub(r'[\s\.]', '',
+                  re.sub(r'/.*', '+',
+                         re.sub(r'^v', '',
+                                eyed3.id3.versionToString(tag.version))))
+
+def varsify(obj, *, depth=1):
+    if depth <= 0:
+        return obj
+    try:
+        top = vars(obj)
+    except TypeError:
+        return obj
+    return { '<self>': obj, **{k: varsify(v, depth=(depth-1))
+                               for k, v in top.items()} }
+
+def pretty_format(obj, *, initial_indent=4, width=80, **kwargs):
+    return re.sub(r'(?m)^', (' ' * initial_indent),
+                  pprint.pformat(obj, compact=False,
+                                 width=(width-initial_indent), **kwargs))
+
+def show_frames(tag, settings):
+    for info in frame_props(tag, ascii=settings.ascii, raw=settings.raw):
+        info = dict(info)  # shallow copy
+        what = info.pop('id')
+        desc = info.pop('id_description')
+        if 'language' in info:
+            what += '(' + info['language'] + ')'
+        if 'key' in info:
+            what += '[' + info.pop('key') + ']'
+        info.pop('value', None)
+        info.pop('pretty', None)
+        info.pop('raw_encoding', None)
+        info.pop('data', None)
+        frame = info.pop('frame', None)
+        print("%-23s ( %s )" % (what, desc))
+        if True:
+            print(pretty_format(info, initial_indent=4, indent=2))
+        if settings.verbose >= 1:
+            print(pretty_format(varsify(frame, depth=2),
+                                initial_indent=8, indent=2))
+
+def get_fields(obj, *keys):
+    for k in keys:
+        if obj is None:
+            return None
+        obj = obj.get(k)
+    return obj
+
+def show_table(tag, fixed, settings):
+    props = abstract_props_map(tag, ascii=settings.ascii, raw=settings.raw)
+    if 'track_num' in props:
+        track = ("%2s" % (props['track_num']['value'],))
+        #track = track[-2:]
+    else:
+        track = '  '
+    ver = compact_version(tag)
+    print(field(fixed, 20, get_fields(props, 'artist', 'value')) + '|' +
+	  field(fixed, 26, get_fields(props, 'title', 'value')) + '|' +
+	  track + '|' +
+	  field(fixed, 22, get_fields(props, 'album', 'value')) + '<' +
+	  'v' + field(fixed, 4, ver, truncate=True))
+
+def show_file(file, show_func, *args):
+    id3file = eyed3.load(file)
+    if not id3file:
+        print(f"Could not load {file}!", file=sys.stderr)
+        return
+    if not id3file.tag:
+        print(f"No ID3 tag data in {file}!", file=sys.stderr)
+        return
+    show_func(id3file.tag, *args)
+
+def main():
+    settings = parse_args()
+    if settings.frames:
+        for file in settings.files:
+            print(f"* {file} *")
+            if settings.frames:
+                show_file(file, show_frames, settings)
+    if settings.compact:
+        for file in settings.files:
+            show_file(file, show_table, False, settings)
+    if settings.table:
+        for file in settings.files:
+            show_file(file, show_table, True, settings)
+
+if __name__ == "__main__":
+    main()

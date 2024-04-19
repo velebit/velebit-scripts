@@ -1,0 +1,38 @@
+#!/usr/bin/python3 -B
+# erase known iTunes-specific ID3 tags from a file
+
+import argparse
+import eyed3.id3.frames
+import re
+
+from id3tools import make_backup, remove_frames_from_file
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--backup',
+                        action='store_true', dest='backup', default=False)
+    parser.add_argument('-f', '--force',
+                        action='store_false', dest='backup', default=False)
+    parser.add_argument('files', nargs='*')
+    settings = parser.parse_args()
+    return settings
+
+def is_itunes_frame(frame):
+    try:
+        fid, fdesc = frame.id, frame.description
+    except AttributeError:
+        return False
+    return fid == eyed3.id3.frames.COMMENT_FID and re.search(r'^iTun', fdesc)
+
+def process_file(file, settings):
+    if settings.backup:
+        make_backup(file)
+    remove_frames_from_file(file, is_itunes_frame)
+
+def main():
+    settings = parse_args()
+    for file in settings.files:
+        process_file(file, settings)
+
+if __name__ == "__main__":
+    main()

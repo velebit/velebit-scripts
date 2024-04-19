@@ -1,0 +1,77 @@
+#!/usr/bin/perl
+# Print per-track channel info from a MIDI file.
+#
+use warnings;
+use strict;
+use MIDI;
+use Getopt::Long;
+
+### usage stuff
+
+sub Usage ( @ ) {
+  print STDERR join "\n\n", @_, <<EndOfUsage;
+Usage:
+  $0 infiles...
+EndOfUsage
+  exit 1;
+}
+
+#use vars qw( ... );
+#GetOptions(...
+#          ) or Usage;
+
+@ARGV
+  or  Usage "Error: you must specify at least one input file.";
+#@OUTPUT and (@ARGV != 1 or @OUTPUT != 1)
+#  and Usage "Error: you can't use --to with more than one file.";
+
+### code to perform the MIDI info extraction
+
+# the array index of the channel for each eveny that has it
+my %event_channel_index = ( 'note_off'            => 2,
+			    'note_on'             => 2,
+			    'key_after_touch'     => 2,
+			    'control_change'      => 2,
+			    'patch_change'        => 2,
+			    'channel_after_touch' => 2,
+			    'pitch_wheel_change'  => 2,
+			  );
+
+sub event_channel ( $ ) {
+  my ($event) = @_;
+
+  my $event_name = $event->[0];
+  return $event->[ $event_channel_index{$event_name} ]
+    if exists $event_channel_index{$event_name};
+
+  return undef;
+}
+
+
+sub show_track_info ( $ ) {
+  my ($in) = @_;
+
+  my $opus = MIDI::Opus->new({from_file => $in}) or die;
+
+  my @tracks = $opus->tracks;
+  for my $t (0..$#tracks) {
+    my %chan;
+    defined($_) and ++$chan{$_}
+      foreach map event_channel($_), $tracks[$t]->events;
+
+    my @chan = sort { $a <=> $b } keys %chan;
+    my $chan = (@chan > 1 ? 'channels ' : 'channel  ') .
+      join ', ', map sprintf("%2d", $_), @chan;
+    $chan = 'no channels' if ! @chan;
+    printf "track %2d: %s\n", $t, $chan;
+  }
+}
+
+### do it!
+
+for my $input (@ARGV) {
+  print "\n--- $input ---\n";
+  show_track_info($input);
+}
+print "\n";
+__END__

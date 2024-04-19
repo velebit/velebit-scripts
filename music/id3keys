@@ -1,0 +1,51 @@
+#!/usr/bin/python3 -B
+# Show ID3 tags present in a file
+
+import argparse
+import eyed3
+import sys
+
+from id3tools import all_props, frame_props, abstract_props, key_info
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-v', '--verbose', action='count', default=0)
+    parser.add_argument('--frames', action='store_true', default=None)
+    parser.add_argument('--abstract', action='store_true', default=None)
+    parser.add_argument('files', nargs='*')
+    settings = parser.parse_args()
+    if settings.frames is None and settings.abstract is None:
+        settings.frames = settings.abstract = True
+    return settings
+
+def show_file(file, settings):
+    id3file = eyed3.load(file)
+    if not id3file:
+        print(f"Could not load {file}!", file=sys.stderr)
+        return
+    if not id3file.tag:
+        print(f"No ID3 tag data in {file}!", file=sys.stderr)
+        return
+    get_props=None
+    if settings.frames and settings.abstract:
+        get_props = all_props
+    elif settings.frames:
+        get_props = frame_props
+    elif settings.abstract:
+        get_props = abstract_props
+    else:
+        return
+    for info in key_info(get_props(id3file.tag)):
+        if settings.verbose > 0:
+            print("%-11s %s" % (info['id'], info['id_description']))
+        else:
+            print(info['id'])
+
+def main():
+    settings = parse_args()
+    for file in settings.files:
+        show_file(file, settings)
+
+if __name__ == "__main__":
+    main()
+

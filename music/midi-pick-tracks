@@ -1,0 +1,155 @@
+#!/usr/bin/perl
+# Select a subset of the tracks from a MIDI file.
+#
+use warnings;
+use strict;
+use MIDI;
+use Getopt::Long;
+
+### usage stuff
+
+sub Usage ( @ ) {
+  print STDERR join "\n\n", @_, <<EndOfUsage;
+Usage:
+  $0 [-t <track>[,...]] [-i] [-o outfile] [-c | -k] [-n] files...
+
+The default is --set-channels if there is more than one input file is
+being merged into a single output file.  Otherwise, the default is
+--keep-channels.
+EndOfUsage
+  exit 1;
+}
+
+use vars qw( @TRACKS $MODIFY @OUTPUT $RENUMBER $KEEP_CHANNELS $DRY_RUN );
+GetOptions('track|t=s'        => \@TRACKS,
+	   'modify|i!'        => \$MODIFY,
+	   'output|o=s'       => \@OUTPUT,
+	   'set-channels|c!'  => \$RENUMBER,
+	   'keep-channels|k!' => \$KEEP_CHANNELS,
+	   'dry-run|n!'       => \$DRY_RUN,
+          ) or Usage;
+
+@ARGV
+  or  Usage "Error: you must specify at least one input file.";
+$MODIFY and @OUTPUT
+  and Usage "Error: --modify and --output are mutually exclusive.";
+@OUTPUT and @OUTPUT != 1
+  and Usage "Error: you must specify --output at most once.";
+
+if (defined $RENUMBER and defined $KEEP_CHANNELS) {
+  $RENUMBER and $KEEP_CHANNELS
+    and Usage("Error: --set-channels and --keep-channels" .
+	      " are mutually exclusive.");
+  ! $RENUMBER and ! $KEEP_CHANNELS
+    and Usage("Error: --no-set-channels and --no-keep-channels" .
+	      " are mutually exclusive.");
+} elsif (defined $RENUMBER) {
+  $KEEP_CHANNELS = ! $RENUMBER;
+} elsif (defined $KEEP_CHANNELS) {
+  $RENUMBER = ! $KEEP_CHANNELS;
+} else {
+  # The default is --set-channels iff >1 input file is going to same output.
+  $RENUMBER = (@ARGV > 1 and @OUTPUT);
+  $KEEP_CHANNELS = ! $RENUMBER;
+}
+
+
+@TRACKS = map split(/,/), @TRACKS;
+#/^\d+$/ or die "Bad track number '$_'!" for @TRACKS;
+
+### code to perform the MIDI patch modification
+
+# the array index of the channel for each event that has it
+my %event_channel_index = ( 'note_off'            => 2,
+			    'note_on'             => 2,
+			    'key_after_touch'     => 2,
+			    'control_change'      => 2,
+			    'patch_change'        => 2,
+			    'channel_after_touch' => 2,
+			    'pitch_wheel_change'  => 2,
+			  );
+
+sub event_set_channel ( $$ ) {
+  my ($event, $chan) = @_;
+
+  my $event_name = $event->[0];
+  exists $event_channel_index{$event_name} or return 0;
+
+  $event->[ $event_channel_index{$event_name} ] = $chan;
+  1;
+}
+
+sub renumber_channels_in_tracks ( @ ) {
+  my (@tracks) = @_;
+
+  my $channel = 0;
+  for my $t (0..$#tracks) {
+    my $changed = 0;
+
+    event_set_channel($_, $channel) and $changed = 1
+      for $tracks[$t]->events;
+
+    ++$channel if $changed;
+  }
+}
+
+sub update_tracks ( $$ ) {
+  my ($in_list, $out) = @_;
+
+  my @opuses;
+  for my $in (@$in_list) {
+    my $opus = MIDI::Opus->new({from_file => $in}) or die;
+    push @opuses, $opus;
+  }
+  @opuses or die;
+  my @tracks = map $_->tracks, @opuses;
+
+  my @track_indices = @TRACKS;
+  @track_indices = 0..$#tracks if ! @track_indices;
+
+  (/^\d+$/ and $_ >= 0 and $_ < @tracks)
+    or die "Bad track number '$_'!"
+      foreach @track_indices;
+  @tracks = @tracks[@track_indices];
+
+  renumber_channels_in_tracks @tracks if $RENUMBER;
+
+  my $opus = $opuses[0];
+  $opus->tracks(@tracks);
+
+  my $desc;
+  if (@$in_list > 1) {
+    $desc = '   ' . join("\n + ", @$in_list) . "\n-> " . $out . "\n";
+  } else {
+    $desc = join(" + ", @$in_list) . " -> " . $out . "\n";
+  }
+  $desc =~ s/^/WOULD DO: /gm if $DRY_RUN;
+  print $desc;
+  $opus->write_to_file($out) unless $DRY_RUN;
+}
+
+### do it!
+
+sub make_output_name ( $ ) {
+  my ($file) = @_;
+  return shift @OUTPUT if @OUTPUT;
+  return $file if $MODIFY;
+
+  $file =~ s/\.midi?$//i;
+  $file =~ /_pick$/
+    and die("I refuse to auto-generate a file name for an already modified"
+	    . " file\n    '$_[0]'\n ");
+  $file . "_pick.mid";
+}
+
+if (! @OUTPUT) {
+  # one-at-a-time processing: process each input separately
+  for my $input (@ARGV) {
+    my $output = make_output_name $input;
+    update_tracks([$input], $output);
+  }
+} else {
+  # merge processing-- combine all inputs together
+  my $output = shift @OUTPUT;
+  update_tracks(\@ARGV, $output);
+}

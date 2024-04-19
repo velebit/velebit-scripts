@@ -1,0 +1,83 @@
+#!/usr/bin/perl
+# Change the speed/tempo of a MIDI file.
+# In other words, just like "midi-tweak --tempo" except it actually works.
+#
+use warnings;
+use strict;
+use MIDI;
+use Getopt::Long;
+
+### usage stuff
+
+sub Usage ( @ ) {
+  print STDERR join "\n\n", @_, <<EndOfUsage;
+Usage:
+  $0 [-s PERCENT[,PERCENT...]] infiles...
+or:
+  $0 -s PERCENT infile -o outfile
+EndOfUsage
+  exit 1;
+}
+
+use vars qw( @SPEED @OUTPUT $DRY_RUN );
+GetOptions('speed|s=s'       => \@SPEED,
+	   'output|o|to|t=s' => \@OUTPUT,
+	   'dry-run|n!'      => \$DRY_RUN,
+          ) or Usage;
+
+@ARGV
+  or  Usage "Error: you must specify at least one input file.";
+@OUTPUT and @OUTPUT != 1
+  and Usage "Error: you must specify --output at most once.";
+@OUTPUT and @ARGV != 1
+  and Usage "Error: you must specify exactly one input when using --output.";
+@OUTPUT and @SPEED != 1
+  and Usage "Error: you must specify -s exactly once when using --output.";
+
+@SPEED = map split(/,/), @SPEED;
+@SPEED = qw( 50 66.667 80 90 ) unless @SPEED;
+
+### code to perform the MIDI speed modification
+
+sub round ( $ ) { int($_[0] + .5); }
+
+sub change_tempo ( $$$ ) {
+  my ($in, $ratio, $out) = @_;
+
+  my $opus = MIDI::Opus->new({from_file => $in}) or die;
+
+  my @tracks = $opus->tracks;
+  for my $t (0..$#tracks) {
+    my $modified;
+    $_->[0] eq 'set_tempo' and $_->[2] = round($_->[2]*$ratio), ++$modified
+      for $tracks[$t]->events;
+    print "$modified tempo events modified in track $t.\n" if $modified;
+    print "  (Why aren't they in track 0?)\n" if $modified and $t;
+  }
+
+  print "WOULD DO: " if $DRY_RUN;
+  print "$in -> $out\n";
+  $opus->write_to_file($out) unless $DRY_RUN;
+}
+
+### do it!
+
+sub make_output_name ( $$ ) {
+  my ($file, $speed) = @_;
+  $file =~ s/\.midi?$//i;
+  $file =~ /_spd\d+$/
+    and die("I refuse to auto-generate a file name for an already modified"
+	    . " file\n    '$_[0]'\n ");
+  $file . sprintf("_spd%03.0f.mid", $speed);
+}
+
+for my $input (@ARGV) {
+  for my $speed (@SPEED) {
+    my $output = shift @OUTPUT;
+    $output = make_output_name $input, $speed unless defined $output;
+
+    print "\n";
+    change_tempo($input, 100/$speed, $output);
+  }
+}
+print "\n";
