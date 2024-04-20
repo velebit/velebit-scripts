@@ -43,6 +43,31 @@ matches () {
     fi
 }
 
+create_editor_script () {
+    local script="/tmp/th-editor.$$.sh"
+    cat <<'EOF' > "$script"
+#!/usr/bin/bash
+# auto-generated...
+
+sed_scripts=(
+    -e '/git-svn-id:/d'
+)
+
+input="/tmp/th-edit.$$.in"
+output="/tmp/th-edit.$$.out"
+for f in "$@"; do
+    if [ ! -e "$f" ]; then echo "Missing $f" >&2; exit 1; fi
+    rm -f "$input" "$output" || exit 2
+    cp "$f" "$input" || exit 3
+    sed "${sed_scripts[@]}" "$input" > "$output" || exit 4
+    cp "$output" "$f" || exit 5
+    rm -f "$input" "$output" || exit 6
+done
+EOF
+    chmod a+rx "$script" >&2
+    echo "$script"
+}
+
 default_branch=remotes/old/master
 branch="$default_branch"
 manual_file_filter=
@@ -74,6 +99,7 @@ EOF
 elif has_staged_git_changes; then
     echo "Staged changes are present in Git, giving up." >&2; exit 3
 else
+    editor_script="$(create_editor_script)"
     regex="$(mkregex "$@")"
     for c in $(git log --pretty=format:'@commit %H' --name-only "$branch" \
                    | perl -lne '/^\@commit (\S+)$/ and $c=$1, next; m,'"$regex"', and (defined $c and print $c), $c=undef, next' \
@@ -87,9 +113,16 @@ else
                      git -c color.diff=always diff HEAD~1 HEAD; then
             recovery 'Manual intervention requested due to change contents'
         fi
-        if ! git commit --amend --reset-author \
-                 --date="$(git log -1 --pretty=format:%aD)"; then
-            recovery 'Amend failed'
+        # --reset-author clears the date, so take steps to preserve it.
+        # But convert it to the current timezone.
+        date_orig="$(git log -1 --pretty=format:'%aD' HEAD)"
+        date_here="$(date --date="$date_orig" --rfc-email)"
+        if GIT_EDITOR="$editor_script" git commit --amend --reset-author \
+                                                  --date="$date_here"; then
+            echo $'\e[32mAutomatic amend succeeded.\e[0m'
+            git log --oneline -1 HEAD
+        else
+            recovery 'Automatic amend failed'
         fi
     done
     echo $'\e[32;7mCompleted!\e[0m'
