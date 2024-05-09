@@ -1,0 +1,31 @@
+#!/home/bert/.local/lib/python/venv/default/bin/python
+
+import argparse
+import icalendar.cal
+import sys
+
+
+def ical_sort(text, verbose=0):
+    cal = icalendar.cal.Calendar.from_ical(text)
+    cal.subcomponents.sort(key=lambda e: (e['dtstart'].dt, e['summary']))
+    return cal.to_ical(sorted=True)
+
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-v', '--verbose', action='count', default=0)
+    parser.add_argument('file', nargs='?', metavar='FILE|-')
+    settings = parser.parse_args()
+    return settings
+
+
+if __name__ == '__main__':
+    settings = parse_args()
+    if settings.file is None:
+        settings.file = '-'
+    if settings.file == '-':
+        data = sys.stdin.buffer.read()
+    else:
+        with open(settings.file, 'rb') as fh:
+            data = fh.read()
+    sys.stdout.buffer.write(ical_sort(data, verbose=settings.verbose))

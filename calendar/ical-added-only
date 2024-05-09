@@ -1,0 +1,44 @@
+#!/home/bert/.local/lib/python/venv/default/bin/python
+
+import argparse
+import icalendar.cal
+import sys
+
+
+def core_serialization(old_component):
+    # Create a facsimile of a component that whitelists "good" fields,
+    # instead of deep-copying and deleting "bad" fields.
+    new_component = type(old_component)()  # same type, no-arg construction
+    # Not copying subcomponents, so can just traverse items
+    for k, v in old_component.items():
+        if k in ('SUMMARY', 'DTSTART', 'DTEND'):
+            new_component.add(k, v)
+    return new_component.to_ical(sorted=True)
+
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-v', '--verbose', action='count', default=0)
+    parser.add_argument('old', metavar='OLD_FILE')
+    parser.add_argument('new', metavar='NEW_FILE')
+    settings = parser.parse_args()
+    return settings
+
+
+if __name__ == '__main__':
+    settings = parse_args()
+    with open(settings.old, 'rb') as fh:
+        old_cal = icalendar.cal.Calendar.from_ical(fh.read())
+    with open(settings.new, 'rb') as fh:
+        new_cal = icalendar.cal.Calendar.from_ical(fh.read())
+    old_serializations = frozenset(
+        (core_serialization(c) for c in old_cal.subcomponents))
+    new_cal.subcomponents = \
+        [c for c in new_cal.subcomponents
+         if core_serialization(c) not in old_serializations]
+    num_new = len(new_cal.subcomponents)
+    if num_new == 0:
+        print("No elements have been added.", file=sys.stderr)
+    else:
+        print(f"{num_new} elements have been added.", file=sys.stderr)
+        sys.stdout.buffer.write(new_cal.to_ical())

@@ -1,0 +1,230 @@
+#!/home/bert/.local/lib/python/venv/default/bin/python
+
+import argparse
+import arrow
+import convertdate
+import csv
+import datetime as dt
+# import dateutil
+# We used to use ics, but icalendar is better maintained
+import icalendar
+import pyluach.dates
+import re
+import sys
+
+# Note: the hebcal package's implementation just reuses pyluach, so skipping
+
+
+USE_PL = True
+USE_CD = True
+
+
+def gregorian2hebrew(date):
+    date = arrow.get(date)
+    gregorian_ymd = (date.year, date.month, date.day)
+    hebrew_ymd = None
+    if USE_PL:
+        h0 = pyluach.dates.GregorianDate(*gregorian_ymd).to_heb()
+        h_ymd0 = (h0.year, h0.month, h0.day)
+        if hebrew_ymd is None:
+            hebrew_ymd = h_ymd0
+        else:
+            assert hebrew_ymd == h_ymd0, "{} != {}".format(hebrew_ymd, h_ymd0)
+    if USE_CD:
+        h_ymd2 = tuple(convertdate.hebrew.from_gregorian(*gregorian_ymd))
+        if hebrew_ymd is None:
+            hebrew_ymd = h_ymd2
+        else:
+            assert hebrew_ymd == h_ymd2, "{} != {}".format(hebrew_ymd, h_ymd2)
+    assert hebrew_ymd is not None
+    return hebrew_ymd
+
+
+def hebrew2gregorian(hebrew_ymd):
+    hebrew_ymd = tuple(hebrew_ymd)
+    gregorian_ymd = None
+    if USE_PL:
+        g0 = pyluach.dates.HebrewDate(*hebrew_ymd).to_greg()
+        g_ymd0 = (g0.year, g0.month, g0.day)
+        if gregorian_ymd is None:
+            gregorian_ymd = g_ymd0
+        else:
+            assert gregorian_ymd == g_ymd0, \
+                "{} != {}".format(gregorian_ymd, g_ymd0)
+    if USE_CD:
+        g_ymd2 = tuple(convertdate.hebrew.to_gregorian(*hebrew_ymd))
+        if gregorian_ymd is None:
+            gregorian_ymd = g_ymd2
+        else:
+            assert gregorian_ymd == g_ymd2, \
+                "{} != {}".format(gregorian_ymd, g_ymd2)
+    assert gregorian_ymd is not None
+    gregorian_ymd = arrow.Arrow(*gregorian_ymd)
+    check_hebrew_ymd = gregorian2hebrew(gregorian_ymd)
+    assert check_hebrew_ymd == hebrew_ymd, \
+        "{} != {}".format(check_hebrew_ymd, hebrew_ymd)
+    return gregorian_ymd
+
+
+def hebrew2text(hebrew_ymd):
+    hebrew_ymd = tuple(hebrew_ymd)
+    text = None
+    if USE_PL:
+        h0 = pyluach.dates.HebrewDate(*hebrew_ymd)
+        t0 = (f"{h0:%-d %B %Y}"
+              .replace(' Tishrei ', ' Tishri ')
+              .replace(' Cheshvan ', ' Heshvan ')
+              .replace(' Teves ', ' Teveth ')
+              .replace(' Adar 1 ', ' Adar ')
+              .replace(' Adar 2 ', ' Adar Bet ')
+              .replace(' Nissan ', ' Nisan ')
+              .replace(' Iyar ', ' Iyyar ')
+              )
+        if text is None:
+            text = t0
+        else:
+            assert text == t0, "{} != {}".format(text, t0)
+    if USE_CD:
+        t2 = convertdate.hebrew.format(*hebrew_ymd)
+        if text is None:
+            text = t2
+        else:
+            assert text == t2, "{} != {}".format(text, t2)
+    assert text is not None
+    return text
+
+
+DEFAULT_END_DATE = "2100-01-01"
+WEEKDAY_SATURDAY = 5
+
+
+def capitalize_first(text):
+    # note: text.capitalize() doesn't work because it *lowercases* the rest
+    if len(text) == 0:
+        return text
+    return text[0].upper() + text[1:]
+
+
+def events(what, gregorian_start, gregorian_end=DEFAULT_END_DATE,
+           start_next_year=False, shabbat_before=False):
+    gregorian_start = arrow.get(gregorian_start)
+    gregorian_end = arrow.get(gregorian_end)
+    hebrew_ymd = list(gregorian2hebrew(gregorian_start))
+    events = []
+
+    if start_next_year:
+        hebrew_ymd[0] += 1  # first event is one year later
+    while True:
+        gregorian_date = hebrew2gregorian(hebrew_ymd)
+        if gregorian_date >= gregorian_end:
+            break
+
+        if shabbat_before:
+            if gregorian_date.weekday() != WEEKDAY_SATURDAY:
+                shabbat_before_date = (gregorian_date.shift(days=-7)
+                                       .shift(weekday=WEEKDAY_SATURDAY))
+                assert shabbat_before_date.weekday() == WEEKDAY_SATURDAY
+                assert shabbat_before_date > gregorian_date.shift(days=-7)
+                assert shabbat_before_date < gregorian_date
+                events.append({'name': f"Shabbat before {what}",
+                               'date': shabbat_before_date})
+
+        pretty_hebrew = hebrew2text(hebrew_ymd)
+        pretty_gregorian = gregorian_date.format('MMM D, YYYY')
+        events.append({'name': "{} ({} / {})".format(capitalize_first(what),
+                                                     pretty_hebrew,
+                                                     pretty_gregorian),
+                       'date': gregorian_date})
+        hebrew_ymd[0] += 1
+    return events
+
+
+def print_ical(entries):
+    cal = icalendar.Calendar(
+        prodid='hebrew-anniversaries - bert at mit dot edu', version='2.0')
+    alarm_back = dt.timedelta(hours=-12)
+    for e in entries:
+        date = arrow.get(e['date'])
+        event = icalendar.Event(summary=e['name'],
+                                dtstart=icalendar.vDate(date.date()),
+                                # end is the next day, as from hebcal.com
+                                dtend=icalendar.vDate(
+                                    date.shift(days=1).date()),
+                                transp='TRANSPARENT')
+        # Note: `event` doesn't currently contain a UID
+        alarm = icalendar.Alarm(action='DISPLAY', description='')
+        alarm.add('trigger', alarm_back)  # can't be passed to constructor!
+        event.add_component(alarm)
+        cal.add_component(event)
+    sys.stdout.buffer.write(cal.to_ical(sorted=True))
+
+
+def read_info(filename):
+    with open(filename, 'r', newline='') as fh:
+        csv_reader = csv.DictReader(fh)
+        return [event for event in csv_reader
+                if not event['what'].startswith('#')]
+
+
+def get_value(info, key, default=None, required=False, allow_empty=False):
+    if key not in info or info[key] is None:
+        if required:
+            raise KeyError(f"Error: missing {key} value in data")
+        return default
+    value = info[key].strip()
+    if value == '' and not allow_empty:
+        if required:
+            raise ValueError(f"Error: empty {key} value in data")
+        return default
+    return value
+
+
+def get_bool(info, key, default=True):
+    value = get_value(info, key, None)
+    if value is None or value == '':
+        return default
+    elif re.search(r'^(?:y|yes|t|true|da|1)$', value, flags=re.I):
+        return True
+    elif re.search(r'^(?:n|no|f|false|ne|0)$', value, flags=re.I):
+        return False
+    else:
+        print("Warning: unknown boolean value "
+              f"{value!r}, defaulting to {default!r}", file=sys.stderr)
+        return default
+
+
+def generate(arg_list):
+    entries = []
+    for event in arg_list:
+        entries.extend(events(
+            get_value(event, 'what', required=True),
+            get_value(event, 'start_date', required=True),
+            get_value(event, 'end_date', default=DEFAULT_END_DATE),
+            start_next_year=get_bool(event, 'start_next_year', False),
+            shabbat_before=get_bool(event, 'shabbat_before', True)))
+    entries.sort(key=lambda e: e['date'])
+    print_ical(entries)
+
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-v', '--verbose', action='count', default=0,
+                        help='increase verbosity (which may not do anything)')
+    parser.add_argument('csv', metavar='CSV_INFO',
+                        nargs='?', default='dates.csv',
+                        help=("a CSV file containing the information about the"
+                              " events. At a minimum, the fields in the CSV"
+                              " file must include 'what' (the name of the"
+                              " event) and 'start_date' (usually as"
+                              " YYYY-MM-DD, but any format that arrow"
+                              " understands will do). If 'what' starts with"
+                              " '#', the entry will be ignored. Events will be"
+                              " generated on Hebrew anniversaries of"
+                              " 'start_date', until (optional) 'end_date'."))
+    settings = parser.parse_args()
+    return settings
+
+
+if __name__ == '__main__':
+    settings = parse_args()
+    generate(read_info(settings.csv))

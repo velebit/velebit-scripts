@@ -1,0 +1,91 @@
+#!/home/bert/.local/lib/python/venv/default/bin/python
+
+import argparse
+import arrow
+import convertdate
+import datetime as dt
+# import dateutil
+import pyluach.dates
+
+# Note: the hebcal package's implementation just reuses pyluach, so skipping
+
+
+USE_PL = True
+USE_CD = True
+
+
+def gregorian2hebrew(date):
+    date = arrow.get(date)
+    gregorian_ymd = (date.year, date.month, date.day)
+    hebrew_ymd = None
+    if USE_PL:
+        h0 = pyluach.dates.GregorianDate(*gregorian_ymd).to_heb()
+        h_ymd0 = (h0.year, h0.month, h0.day)
+        if hebrew_ymd is None:
+            hebrew_ymd = h_ymd0
+        else:
+            assert hebrew_ymd == h_ymd0, "{} != {}".format(hebrew_ymd, h_ymd0)
+    if USE_CD:
+        h_ymd2 = tuple(convertdate.hebrew.from_gregorian(*gregorian_ymd))
+        if hebrew_ymd is None:
+            hebrew_ymd = h_ymd2
+        else:
+            assert hebrew_ymd == h_ymd2, "{} != {}".format(hebrew_ymd, h_ymd2)
+    assert hebrew_ymd is not None
+    return hebrew_ymd
+
+
+def hebrew2text(hebrew_ymd):
+    hebrew_ymd = tuple(hebrew_ymd)
+    text = None
+    if USE_PL:
+        h0 = pyluach.dates.HebrewDate(*hebrew_ymd)
+        t0 = (f"{h0:%-d %B %Y}"
+              .replace(' Tishrei ', ' Tishri ')
+              .replace(' Cheshvan ', ' Heshvan ')
+              .replace(' Teves ', ' Teveth ')
+              .replace(' Adar 1 ', ' Adar ')
+              .replace(' Adar 2 ', ' Adar Bet ')
+              .replace(' Nissan ', ' Nisan ')
+              .replace(' Iyar ', ' Iyyar ')
+              )
+        if text is None:
+            text = t0
+        else:
+            assert text == t0, "{} != {}".format(text, t0)
+    if USE_CD:
+        t2 = convertdate.hebrew.format(*hebrew_ymd)
+        if text is None:
+            text = t2
+        else:
+            assert text == t2, "{} != {}".format(text, t2)
+    assert text is not None
+    return text
+
+
+DEFAULT_END_DATE = "2100-01-01"
+WEEKDAY_SATURDAY = 5
+
+
+def print_info(date):
+    date = arrow.get(date)
+    gregorian_text = date.format('YYYY-MM-DD')
+    hebrew_ymd = tuple(gregorian2hebrew(date))
+    hebrew_text = hebrew2text(hebrew_ymd)
+    print(f"{gregorian_text} -> {hebrew_text} {hebrew_ymd!r}")
+
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('date',  nargs='+', help="One or more dates")
+    settings = parser.parse_args()
+    return settings
+
+
+if __name__ == '__main__':
+    settings = parse_args()
+    for d in settings.date:
+        try:
+            print_info(d)
+        except Exception as e:
+            print(e)
