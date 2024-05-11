@@ -6,6 +6,7 @@ import convertdate
 import csv
 import datetime as dt
 # import dateutil
+import enum
 # We used to use ics, but icalendar is better maintained
 import icalendar
 import pyluach.dates
@@ -17,6 +18,27 @@ import sys
 
 USE_PL = True
 USE_CD = True
+
+
+DEFAULT_END_DATE = "2100-01-01"
+
+WEEKDAY_SATURDAY = 5
+MONTH_ADAR = 12
+MONTH_ADAR_II = 13
+
+
+class AdarPreference(enum.Enum):
+    FIRST = enum.auto()
+    SECOND = enum.auto()
+    BOTH = enum.auto()
+
+
+# When an initial event happened in Adar of a non-leap year, the
+# customs about which Adar to use for its anniversaries in leap years
+# are complicated:
+# https://web.archive.org/web/20210803134534/https://schechter.edu/when-a-person-passed-away-in-adar-when-is-the-yahrzeit-observed-in-a-leap-year-responsa-in-a-moment-volume-5-issue-no-4-february-2011/
+def default_adar_preference():
+    raise NotImplementedError("I don't know how to deal with non-leap Adar")
 
 
 def gregorian2hebrew(date):
@@ -59,11 +81,38 @@ def hebrew2gregorian(hebrew_ymd):
             assert gregorian_ymd == g_ymd2, \
                 "{} != {}".format(gregorian_ymd, g_ymd2)
     assert gregorian_ymd is not None
-    gregorian_ymd = arrow.Arrow(*gregorian_ymd)
-    check_hebrew_ymd = gregorian2hebrew(gregorian_ymd)
+    gregorian_date = arrow.Arrow(*gregorian_ymd)
+    check_hebrew_ymd = gregorian2hebrew(gregorian_date)
     assert check_hebrew_ymd == hebrew_ymd, \
         "{} != {}".format(check_hebrew_ymd, hebrew_ymd)
-    return gregorian_ymd
+    return gregorian_date
+
+
+def hebrew_year_is_leap(hebrew_year):
+    is_leap = None
+    if USE_PL:
+        try:
+            _ = pyluach.dates.HebrewDate(hebrew_year, MONTH_ADAR_II, 1)
+            il0 = True
+        except ValueError:
+            il0 = False
+        if is_leap is None:
+            is_leap = il0
+        else:
+            assert is_leap == il0, "{} != {}".format(is_leap, il0)
+    if USE_CD:
+        # convertdate will return an incorrect result rather than throw an
+        # exception for month 13 in a non-leap year
+        rosh_hodesh_adar_ii = (hebrew_year, MONTH_ADAR_II, 1)
+        actual_hebrew_date = convertdate.hebrew.from_gregorian(
+            *convertdate.hebrew.to_gregorian(*rosh_hodesh_adar_ii))
+        il2 = (actual_hebrew_date == rosh_hodesh_adar_ii)
+        if is_leap is None:
+            is_leap = il2
+        else:
+            assert is_leap == il2, "{} != {}".format(is_leap, il2)
+    assert is_leap is not None
+    return is_leap
 
 
 def hebrew2text(hebrew_ymd):
@@ -75,8 +124,8 @@ def hebrew2text(hebrew_ymd):
               .replace(' Tishrei ', ' Tishri ')
               .replace(' Cheshvan ', ' Heshvan ')
               .replace(' Teves ', ' Teveth ')
-              .replace(' Adar 1 ', ' Adar ')
-              .replace(' Adar 2 ', ' Adar Bet ')
+              .replace(' Adar 1 ', ' Adar I ')
+              .replace(' Adar 2 ', ' Adar II ')
               .replace(' Nissan ', ' Nisan ')
               .replace(' Iyar ', ' Iyyar ')
               )
@@ -86,16 +135,15 @@ def hebrew2text(hebrew_ymd):
             assert text == t0, "{} != {}".format(text, t0)
     if USE_CD:
         t2 = convertdate.hebrew.format(*hebrew_ymd)
+        if hebrew_ymd[1] >= MONTH_ADAR and hebrew_year_is_leap(hebrew_ymd[0]):
+            t2 = (t2.replace(' Adar ', ' Adar I ')
+                  .replace(' Adar I Bet ', ' Adar II '))
         if text is None:
             text = t2
         else:
             assert text == t2, "{} != {}".format(text, t2)
     assert text is not None
     return text
-
-
-DEFAULT_END_DATE = "2100-01-01"
-WEEKDAY_SATURDAY = 5
 
 
 def capitalize_first(text):
@@ -105,15 +153,54 @@ def capitalize_first(text):
     return text[0].upper() + text[1:]
 
 
+def get_adar_preference(hebrew_ymd):
+    if hebrew_ymd[1] == MONTH_ADAR_II:
+        return AdarPreference.SECOND  # event was in Adar II, prefer that
+    elif hebrew_ymd[1] == MONTH_ADAR:
+        if hebrew_year_is_leap(hebrew_ymd[0]):
+            return AdarPreference.FIRST  # event was in Adar I, prefer that
+        else:
+            return default_adar_preference()  # use default for non-leap years
+    else:
+        return None  # event wasn't in Adar at all, nothing to worry about
+
+
+def apply_adar_preference(hebrew_ymd, preference):
+    hebrew_ymd = list(hebrew_ymd)
+    if hebrew_ymd[1] >= MONTH_ADAR:
+        if not hebrew_year_is_leap(hebrew_ymd[0]):
+            hebrew_ymd[1] = MONTH_ADAR  # non-leap year, there's only Adar
+        elif preference == AdarPreference.SECOND:
+            hebrew_ymd[1] = MONTH_ADAR_II  # leap year, preferring Adar II
+        else:
+            hebrew_ymd[1] = MONTH_ADAR  # leap year, preferring Adar I
+    return tuple(hebrew_ymd)
+
+
+def next_year(hebrew_ymd, adar_preference):
+    return apply_adar_preference((hebrew_ymd[0]+1, *hebrew_ymd[1:3]),
+                                 adar_preference)
+
+
+def next_instance(hebrew_ymd, adar_preference):
+    if (adar_preference == AdarPreference.BOTH
+            and hebrew_ymd[1] == MONTH_ADAR
+            and hebrew_year_is_leap(hebrew_ymd[0])):
+        return (hebrew_ymd[0], MONTH_ADAR_II, hebrew_ymd[2])
+    else:
+        return next_year(hebrew_ymd, adar_preference)
+
+
 def events(what, gregorian_start, gregorian_end=DEFAULT_END_DATE,
            start_next_year=False, shabbat_before=False):
     gregorian_start = arrow.get(gregorian_start)
     gregorian_end = arrow.get(gregorian_end)
-    hebrew_ymd = list(gregorian2hebrew(gregorian_start))
+    hebrew_ymd = gregorian2hebrew(gregorian_start)
+    adar_pref = get_adar_preference(hebrew_ymd)
     events = []
 
     if start_next_year:
-        hebrew_ymd[0] += 1  # first event is one year later
+        hebrew_ymd = next_year(hebrew_ymd, adar_pref)  # start one year later
     while True:
         gregorian_date = hebrew2gregorian(hebrew_ymd)
         if gregorian_date >= gregorian_end:
@@ -135,7 +222,7 @@ def events(what, gregorian_start, gregorian_end=DEFAULT_END_DATE,
                                                      pretty_hebrew,
                                                      pretty_gregorian),
                        'date': gregorian_date})
-        hebrew_ymd[0] += 1
+        hebrew_ymd = next_instance(hebrew_ymd, adar_pref)
     return events
 
 
@@ -201,7 +288,7 @@ def generate(arg_list):
             get_value(event, 'start_date', required=True),
             get_value(event, 'end_date', default=DEFAULT_END_DATE),
             start_next_year=get_bool(event, 'start_next_year', False),
-            shabbat_before=get_bool(event, 'shabbat_before', True)))
+            shabbat_before=get_bool(event, 'also_shabbat_before', True)))
     entries.sort(key=lambda e: e['date'])
     print_ical(entries)
 
