@@ -1,0 +1,53 @@
+#!/bin/bash
+# Generate a summary of package versions installed by pipx. Requires
+# pip-chill to be installed as a standalone pipx package (which sounds like
+# it doesn't make sense, but in this case it gives us an environment-
+# independent version to run).
+
+# Get installed packages
+pip_packages=()
+while read p; do
+    pip_packages+=("$p")
+done < <(pipx list --short 2>/dev/null | awk '{print $1}')
+if [[ "${#pip_packages[@]}" -eq 0 ]]; then
+    if [[ -z "$(pipx --version 2>/dev/null)" ]]; then
+        echo "Error: pipx not found." >&2; exit 1
+    else
+        echo "Error: No packages installed via pipx." >&2; exit 1
+    fi
+fi
+
+# Find a runnable pipx-chill script
+ver_pkg=pip-chill
+ver_subpath=cli.py
+case " ${pip_packages[*]} " in
+    *" $ver_pkg "*) ;;
+    *)
+        echo "Error: package '$ver_pkg' not installed via pipx!" >&2
+        exit 2 ;;
+esac
+ver_lib="$PIPX_HOME/venvs/$ver_pkg/lib"
+set -- \
+    "$ver_lib"/python*/site-packages/"${ver_pkg//-/_}/$ver_subpath"
+saw_multi=
+if [[ "$#" -gt 1 ]]; then saw_multi=yes; fi
+while [[ "$#" -gt 0 ]] && [[ ! -e "$1" ]]; do shift; done
+if [[ "$#" -eq 0 ]]; then
+    echo "Error: '$ver_subpath' not found under pipx package '$ver_pkg'!" >&2
+    exit 3
+elif [[ -n "$saw_multi" ]]; then
+    echo "Warning: multiple matches for '$ver_subpath' in '$ver_pkg'," \
+         " using '$1'!" >&2
+fi
+ver_script="$1"
+set --
+
+# OK, do it!
+for p in "${pip_packages[@]}"; do
+    python="$PIPX_HOME"/venvs/"$p"/bin/python
+    if [[ ! -x "$python" ]] && [[ ! -x "$python.exe" ]]; then
+        echo "Warning: '$python' not found, skipped!" >&2
+    else        
+        echo "$p: $(echo $("$python" "$ver_script"))"
+    fi
+done
