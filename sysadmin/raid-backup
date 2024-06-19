@@ -118,12 +118,33 @@ TestGood () {
     if [ -n "$dryrun" ]; then true;   else test "$@";  fi
 }
 
-CheckSpace () {
+CheckMounted () {
+    local msg_not_mounted="$1"; shift
+    local msg_not_writable="$1"; shift
+    if [ -n "$dryrun" ]; then return 0; fi
+    local mount_line="`mount | awk '($3 == "'"$backup"'")'`"
+    case "$mount_line" in
+        "")             fail "$backup $msg_not_mounted" ;;
+        *'(ro'[,\)]*)   fail "$backup $msg_not_writable" ;;
+        *'(rw'[,\)]*)   ;;
+        *)              status_fail "Can't tell if partition is writable," \
+                                    "continuing anyway." ;;
+    esac
+}
+InitialCheckMounted () {
+    CheckMounted "isn't mounted" "isn't writable"
+}
+ReCheckMounted () {
+    CheckMounted "became unmounted!!!" "became read-only!!!"
+}
+
+ShowSpace () {
     echo "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
+    # If /backup isn't mounted, this will be incorrect
     df -h "$backup"
     echo "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
 }
-disk_used_kb () {
+disk_used_kb () {  # unused
     df -k "$backup" | awk '($1~/^\/dev\//){print $3}'
 }
 disk_free_kb () {
@@ -187,16 +208,18 @@ run_backup () {
 
     set --
     for ext in '' '.tar' '.tar.gz' '.tar.bz2'; do
+        ReCheckMounted
         local xdst="$dst_base$ext"
         if [ -e "$xdst.old" -a -e "$xdst" ]; then
             status "Cleaning up previous $xdst..."
             Run rm -rf "$xdst.old" || fail "couldn't remove $xdst.old"
             TestBad -e "$xdst.old" && fail "didn't actually remove $xdst.old"
             status_ok "...done."
-            CheckSpace
+            ShowSpace
         fi
     done
     for ext in '.tar' '.tar.gz' '.tar.bz2'; do
+        ReCheckMounted
         local xdst="$dst_base$ext"
         if [ -e "$xdst" ]; then
             set -- "$@" "$xdst"
@@ -204,12 +227,14 @@ run_backup () {
         fi
     done
 
+    # If /backup isn't mounted, this will be incorrect
     local free_before="`disk_free_kb`"
 
     status "Backing up $src to $dst..."
     case "$dst" in
         *.tar.gz)
             for ((i=5; i >= 0; i--)); do
+                ReCheckMounted
                 if TimeRun tar -C "$src" \
                         --one-file-system $(excludes_for_tar "$src") \
                         -czf "$dst" .; then
@@ -225,6 +250,7 @@ run_backup () {
             ;;
         *.tar.bz2)
             for ((i=5; i >= 0; i--)); do
+                ReCheckMounted
                 if TimeRun tar -C "$src" \
                         --one-file-system $(excludes_for_tar "$src") \
                         -cjf "$dst" .; then
@@ -240,6 +266,7 @@ run_backup () {
             ;;
         *.tar)
             for ((i=5; i >= 0; i--)); do
+                ReCheckMounted
                 if TimeRun tar -C "$src" \
                         --one-file-system $(excludes_for_tar "$src") \
                         -cf "$dst" .; then
@@ -255,6 +282,7 @@ run_backup () {
             ;;
         *)
             for ((i=5; i >= 0; i--)); do
+                ReCheckMounted
                 if [ -d "$dst" ]; then
                     if TimeRun rsync -h --archive --hard-links --sparse \
                               --delete --checksum \
@@ -296,8 +324,10 @@ run_backup () {
             ;;
     esac
     status_ok "...done."
-    CheckSpace
+    ReCheckMounted
+    ShowSpace
 
+    # If /backup isn't mounted, all of this will be incorrect; we can live
     local free_after="`disk_free_kb`"
     local space_used="`expr "$free_before" - "$free_after"`"
     if [ "$min_disk_free" -gt "$free_after" ]; then
@@ -309,10 +339,12 @@ run_backup () {
  
     for xdst in "$@"; do
         status "Cleaning up previous $xdst..."
+        ReCheckMounted
         Run rm -rf "$xdst.old"
         status_ok "...done."
-        CheckSpace
+        ShowSpace
     done
+    ReCheckMounted
 }
 
 partition_path () {
@@ -327,7 +359,7 @@ partition_name () {
 }
 
 run_all_backups () {
-    CheckSpace
+    ShowSpace
 
     local i
     for i in $full_backup; do
@@ -543,8 +575,7 @@ if [ -n "$show_disk_setup" ]; then
     exit 0
 fi
 
-[ -n "`mount | awk '($3 == "'"$backup"'")'`" ] \
-    || fail "$backup isn't mounted!"
+InitialCheckMounted
 
 if [ -t 1 ]; then
     # Only create a log file if the output is being sent to a terminal,
