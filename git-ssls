@@ -128,6 +128,10 @@ if (keys %status) {
 }
 
 for my $name (sort keys %status) {
-  warn "No file for '@{[join '', map sprintf('[%02x]', ord $_), split //, $name]}' ($name)";
-  print $status{$name} . $name . "\n";
+  # If status says deleted, then it's expected to be missing; otherwise warn.
+  if (remove_ansi($status{$name}[0]) !~ qr/^(?:.D|D ) $/) {
+    my $hexified = join '', map sprintf('[%02x]', ord $_), split //, $name;
+    warn "No file for '$name' ($hexified)";
+  }
+  print join '', $status{$name}[0], $name, $status{$name}[1], "\n";
 }
