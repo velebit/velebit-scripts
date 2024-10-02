@@ -1,0 +1,79 @@
+#!/bin/sh
+
+check_device () {
+    local dev="$1"
+    fstype="`sudo blkid -s TYPE -o value "$dev"`"
+    if [ "$fstype" != "vfat" ]; then
+        if [ -z "$fstype" ]; then
+            echo "Error: Unable to determine file system type for $dev." >&2
+        else
+            echo "Error: Unexpected file system type '$fstype' for $dev." >&2
+        fi
+        return 1
+    fi
+    if [ ! -w "$dev" ]; then
+        echo "Warning: $dev isn't writeable, expect problems." >&2
+        return 0  # just a warning
+    fi
+    return 0
+}
+
+dump_shift_to_offset_67 () {
+    sed -e '/^00*:/!d;s/^00*:/0043:/'
+}
+dump_swap_bytes () {
+    xxd -r | xxd -c 1 | tac \
+        | sed -e '1s/^0[0-9a-f]*:/0000:/;2s/^0[0-9a-f]*:/0001:/' \
+              -e '3s/^0[0-9a-f]*:/0002:/;4s/^0[0-9a-f]*:/0003:/' \
+        | xxd -r -c 1 | xxd
+}
+
+make_random_uuid () {
+    #dd if=/dev/urandom bs=4 count=1 | xxd | xxd -r --seek 67 | xxd -s 67
+    dd if=/dev/urandom bs=4 count=1 2>/dev/null | xxd | dump_shift_to_offset_67
+}
+
+format_uuid_helper () {
+    local uuid="$1"
+    local uuid_lc="`echo "$uuid" | sed -e 'y/ABCDEF/abcdef/'`"
+    case "$uuid_lc" in
+        [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f])
+            echo "0000: $uuid_lc" ;;
+        [0-9a-f][0-9a-f][0-9a-f][0-9a-f]-[0-9a-f][0-9a-f][0-9a-f][0-9a-f])
+            echo "0000: $uuid_lc" ;;  # xxd will handle this correctly
+        [0-9a-f][0-9a-f][0-9a-f][0-9a-f]\ [0-9a-f][0-9a-f][0-9a-f][0-9a-f])
+            echo "0000: $uuid_lc" ;;  # xxd will handle this correctly
+        *)
+            echo "Error: unrecognized UUID '$uuid'" >&2
+            return 1 ;;
+    esac
+    return 0
+}
+check_uuid () {
+    local uuid="$1"
+    format_uuid_helper "$uuid" >/dev/null
+}
+format_uuid () {
+    local uuid="$1"
+    format_uuid_helper "$uuid" | dump_swap_bytes | dump_shift_to_offset_67
+}
+
+write_to_device () {
+    local dev="$1"
+    xxd -r - "$dev"
+}
+
+if [ "$#" -eq 1 ]; then
+    check_device "$1" || exit 1
+    make_random_uuid | write_to_device "$1" || exit 5
+elif [ "$#" -eq 2 ]; then
+    check_device "$1" || exit 1
+    check_uuid "$2" || exit 2
+    format_uuid "$2" | write_to_device "$1" || exit 5
+else
+    echo "Usage: `basename "$0"` DEVICE [VFAT_UUID]" >&2
+    echo "  Omitting the UUID generates a random UUID instead." >&2
+    exit 1
+fi
+
+echo "That seems to have worked."

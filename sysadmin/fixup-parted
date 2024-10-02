@@ -1,0 +1,410 @@
+#!/usr/bin/perl
+use warnings;
+use strict;
+use Carp qw( croak );
+use Getopt::Long;
+
+sub strip ( $ ) {
+  my ($text) = @_;
+  defined $text or croak "Undefined";
+  $text =~ s/^\s+//;
+  $text =~ s/\s+$//;
+  $text =~ s/\s+/ /g;
+  $text;
+}
+sub strip_right ( $ ) {
+  my ($text) = @_;
+  defined $text or croak "Undefined";
+  $text =~ s/\s+$//;
+  $text;
+}
+sub column_name ( $ ) {
+  my ($text) = @_;
+  defined $text or croak "Undefined";
+  $text =~ s/\s+$//;
+  $text =~ s/\s+/_/g;
+  lc $text;
+}
+sub pad_right ( @ ) {
+  my (@entries) = @_;
+  grep !defined $_, @entries and croak "Undefined";
+  my $width = 0;
+  $width < length($_) and $width = length($_) for @entries;
+  map(($_ . (' ' x ($width - length($_)))), @entries);
+}
+
+sub round ( $ ) { return int($_[0] + 0.499999999999999); }
+sub round_to ( $$ ) {
+  my $chunks = round($_[0] / $_[1]);
+  $chunks < 1 and $chunks = 1;
+  #warn "$_[0] / $_[1] -> $chunks -> @{[$chunks * $_[1]]}\n";
+  $chunks * $_[1];
+}
+
+use constant SECTOR_BYTES => 512;
+our @to_sectors = ( 'B'   => 1/SECTOR_BYTES,
+                    'kiB' => 1024/SECTOR_BYTES,
+                    'MiB' => 1024*1024/SECTOR_BYTES,
+                    'GiB' => 1024*1024*1024/SECTOR_BYTES,
+                    'TiB' => 1024*1024*1024*1024/SECTOR_BYTES,
+                    'kB'  => 1000/SECTOR_BYTES,
+                    'MB'  => 1000*1000/SECTOR_BYTES,
+                    'GB'  => 1000*1000*1000/SECTOR_BYTES,
+                    'TB'  => 1000*1000*1000*1000/SECTOR_BYTES,
+                  );
+our @units = map $to_sectors[2*$_], 0..($#to_sectors/2);
+our $units = '(?:' . join('|', @units) . ')';
+our %to_sectors = @to_sectors;
+
+sub remove_s ( $ ) {
+  my ($text) = @_;
+  defined $text or croak "Undefined";
+  $text =~ s/s$//;
+  $text;
+}
+sub add_s ( $ ) {
+  my ($text) = @_;
+  defined $text or croak "Undefined";
+  $text . "s";
+}
+sub default ( $;$ ) {
+  my ($text, $default) = @_;
+  defined $text ? $text : (defined $default ? $default : '?s');
+}
+
+sub parse_size_to_sectors ( $ ) {
+  my ($text) = @_;
+  $text =~ /^\d+s$/ and return $text;
+  $text =~ /^(?:\?+|\*+)s?$/ and return undef;
+  my ($value, $unit) = ($text =~ /^(\d+(?:\.\d+)?)($units)$/)
+    or die("Unexpected value '$text'" .
+           " (should be using sectors or one of @{[join ', ', @units]})");
+  my $exact_sectors = $value * $to_sectors{$unit};
+  my $sectors = round_to($exact_sectors, 1);
+  if (abs($sectors - $exact_sectors) >= (0.001 * $to_sectors{$unit})) {
+    my $got = sprintf "%.3f%s", $sectors / $to_sectors{$unit}, $unit;
+    warn "Warning: requested $text, result rounded to ${sectors}s = $got.\n";
+  } else {
+    warn "Requested $text, result converted to ${sectors}s.\n";
+  }
+  add_s $sectors;
+}
+
+sub format_sectors_to_unit ( $$;$ ) {
+  my ($sectors, $unit, $frac_digits) = @_;
+  $frac_digits = 1 if !defined $frac_digits;
+  $frac_digits =~ /^\d+$/ or die;
+  defined $sectors or return;
+  $sectors = remove_s $sectors;
+  $unit eq 's' and return add_s $sectors;
+  exists $to_sectors{$unit}
+    or die("Unexpected unit '$unit'" .
+           " (should be using sectors or one of @{[join ', ', @units]})");
+  my $value = $sectors / $to_sectors{$unit};
+  sprintf "%.${frac_digits}f%s", $value, $unit;
+}
+
+our ($WIPE, $ALIGN, $CALCULATE, $PRINT_MKPART, $UNIT);
+GetOptions("wipe|w!" => \$WIPE,
+           "calculate|c!" => \$CALCULATE,
+           "align|a:2048" => \$ALIGN,
+           "mkpart|m!" => \$PRINT_MKPART,
+           "units|unit|u=s" => \$UNIT,
+          ) or die;
+$WIPE or defined $CALCULATE or $CALCULATE = 1;
+
+sub process_data ( $ );
+
+my @all_columns;
+
+sub read_and_process_data () {
+  my (@data, @columns);
+  while (<>) {
+    chomp;
+    if (/^(?:Model|Disk)/) {
+      process_data \@data;
+      undef @columns;
+      next;
+    }
+    if (/^Number/) {
+      @data and process_data \@data;
+      undef @columns;
+      @columns = map +{ text => strip_right($_), width => length($_),
+                        name => column_name $_ },
+                          split /(?<=\s)(?=[A-Z])/;
+      $columns[1]{name} eq 'start' or die "Bad column 2";
+      $columns[2]{name} eq 'end' or die "Bad column 3";
+      $columns[3]{name} eq 'size' or die "Bad column 4";
+
+      for my $i (0..$#columns) {
+        my $local = $columns[$i];
+        my ($global) = grep($_->{name} eq $local->{name}, @all_columns);
+        $global
+          or $global = +{ %$local }, push(@all_columns, $global);
+        (!defined $global->{width} or $global->{width} < $local->{width})
+          and $global->{width} = $local->{width};
+      }
+      delete $columns[-1]{width};
+      #print "[$_->{name}] $_->{width}\n" for @columns;
+      next;
+    }
+    if (/^ (?:\d+|\#) /) {
+      /[\t\r]/ and die "Bad input format";
+      #print "[$_]\n";
+      @columns or die "Data encountered before column headings";
+      push @data, +{ data => [ map(+{ col => $_ }, @columns) ]};
+      for my $cd (@{$data[-1]{data}}) {
+        defined $_ or die "A column comes after last?!";
+        (exists $cd->{col}{width} and defined $cd->{col}{width})
+          or $cd->{value} = strip_right($_), $_ = undef, next;
+        #length($_) >= $cd->{col}{width}
+        #  or die "Input too narrow (@{[length($_), '<', $cd->{col}{width}]})";
+        $cd->{value} = strip_right(substr($_, 0, $cd->{col}{width}, ''));
+      }
+      $data[-1]{by_name}{$data[-1]{data}[$_]{col}{name}} = $data[-1]{data}[$_]
+        for 0..$#{$data[-1]{data}};
+      $_->{value} = parse_size_to_sectors $_->{value}
+        for @{$data[-1]{by_name}}{'start', 'end', 'size'};
+      defined $_ and die "The last column never encountered?!";
+      #use Data::Dumper; print Dumper \@data;
+    }
+  }
+  process_data \@data;
+}
+
+sub update_data ( $ ) {
+  my ($data) = @_;
+
+  if (defined $ALIGN and $ALIGN != 1) {
+    for my $i (0..$#$data) {
+      my $start = round_to(remove_s($data->[$i]{by_name}{start}{value}), $ALIGN)
+        if defined $data->[$i]{by_name}{start}{value};
+      my $end = round_to(remove_s($data->[$i]{by_name}{end}{value}) + 1,
+                         $ALIGN) - 1
+        if defined $data->[$i]{by_name}{end}{value};
+      my $size = round_to(remove_s($data->[$i]{by_name}{size}{value}), $ALIGN)
+        if defined $data->[$i]{by_name}{size}{value};
+      $end = $start + $ALIGN - 1
+        if defined $start and defined $end and $end <= $start;
+      $size = $end + 1 - $start
+        if defined $start and defined $end and defined $size;
+      $data->[$i]{by_name}{start}{value} = add_s($start) if defined $start;
+      $data->[$i]{by_name}{end}{value} = add_s($end) if defined $end;
+      $data->[$i]{by_name}{size}{value} = add_s($size) if defined $size;
+    }
+  }
+
+  if ($CALCULATE) {
+    for my $i (0..$#$data) {
+      my $expect_start_size =
+        add_s(remove_s($data->[$i]{by_name}{end}{value}) + 1
+              - remove_s($data->[$i]{by_name}{size}{value}))
+          if defined $data->[$i]{by_name}{end}{value}
+            and defined $data->[$i]{by_name}{size}{value};
+      my $expect_start_adjacent =
+        add_s(remove_s($data->[$i-1]{by_name}{end}{value}) + 1)
+          if $i > 0;
+      my $expect_start = ($expect_start_size or $expect_start_adjacent);
+      if (defined $data->[$i]{by_name}{start}{value}) {
+        # Size consistency check is performed when we look at end and size.
+        ! defined $expect_start_adjacent
+          or $data->[$i]{by_name}{start}{value} eq $expect_start_adjacent
+            or warn("Warning: Partition starts at"
+                    . " $data->[$i]{by_name}{start}{value},"
+                    . " adjacent would be $expect_start_adjacent.\n");
+      } else {
+        defined $expect_start
+          or die "Unknown start of partition and guessing failed";
+        $data->[$i]{by_name}{start}{value} = $expect_start;
+        ! defined $expect_start_adjacent
+          or $data->[$i]{by_name}{start}{value} eq $expect_start_adjacent
+            or warn("Warning: Partition starts at"
+                    . " $data->[$i]{by_name}{start}{value} (from size/end),"
+                    . " adjacent would be $expect_start_adjacent.\n");
+      }
+
+      if (! defined $data->[$i]{by_name}{end}{value}
+          and ! defined $data->[$i]{by_name}{size}{value}) {
+        $i < $#$data or die "Unknown end and size of last partition";
+        defined $data->[$i+1]{by_name}{start}{value}
+          or die "Unknown end and size of partition and guessing failed";
+        $data->[$i]{by_name}{end}{value} =
+          add_s(remove_s($data->[$i+1]{by_name}{start}{value}) - 1);
+      }
+
+      my $expect_end = add_s(remove_s($data->[$i]{by_name}{start}{value})
+                             + remove_s($data->[$i]{by_name}{size}{value}) - 1)
+        if defined $data->[$i]{by_name}{size}{value};
+      my $expect_size = add_s(remove_s($data->[$i]{by_name}{end}{value}) + 1
+                              - remove_s($data->[$i]{by_name}{start}{value}))
+        if defined $data->[$i]{by_name}{end}{value};
+      defined $expect_end or defined $expect_size
+        or die "Expected end/size not computed";
+
+      if (defined $data->[$i]{by_name}{end}{value}) {
+        ! defined $expect_end
+          or $data->[$i]{by_name}{end}{value} eq $expect_end
+            or die("Error: Partition ends at"
+                   . " $data->[$i]{by_name}{end}{value},"
+                   . " size would imply $expect_end.\n");
+      } else {
+        defined $expect_end or die "Unknown and unguessed end of partition";
+        $data->[$i]{by_name}{end}{value} = $expect_end;
+      }
+
+      if (defined $data->[$i]{by_name}{size}{value}) {
+        ! defined $expect_size
+          or $data->[$i]{by_name}{size}{value} eq $expect_size
+            or die("Error: Partition size is"
+                   . " $data->[$i]{by_name}{size}{value},"
+                   . " start/end would imply $expect_size.\n");
+      } else {
+        defined $expect_size or die "Unknown and unguessed size of partition";
+        $data->[$i]{by_name}{size}{value} = $expect_size;
+      }
+    }
+  }
+
+  if ($WIPE) {
+    for my $i (0..$#$data) {
+      $data->[$i]{by_name}{start}{value} = undef
+        if $i > 0;
+      $data->[$i]{by_name}{end}{value} = undef
+        if $i < $#$data and defined $data->[$i]{by_name}{size}{value};
+      #$data->[$i]{by_name}{size}{value} = undef
+      #  if $i == $#$data and defined $data->[$i]{by_name}{end}{value};
+      $data->[$i]{by_name}{number}{value} = ' #'
+        if exists $data->[$i]{by_name}{number}{value};
+    }
+  }
+}
+
+sub print_data ( $ ) {
+  my ($data) = @_;
+  @$data or return;
+  delete $all_columns[-1]{width};  # doesn't matter how wide the last col was
+  if (defined $UNIT) {
+    for my $c (grep $_->{name} =~ /^(?:start|end|size)$/, @all_columns) {
+      defined $c->{width}
+        and $c->{width} = length($c->{text})+1;  # allow width to shrink
+    }
+  }
+  {
+    for my $d (@$data) {
+      for my $c (@all_columns) {
+        if (defined $UNIT and $c->{name} =~ /^(?:start|end|size)$/) {
+          $d->{by_name}{$c->{name}}{pretty} =
+            format_sectors_to_unit($d->{by_name}{$c->{name}}{value}, $UNIT);
+        } else {
+          $d->{by_name}{$c->{name}}{pretty} =
+            $d->{by_name}{$c->{name}}{value};
+        }
+      }
+    }
+  }
+  {
+    for my $d (@$data) {
+      for my $c (@all_columns) {
+        exists $c->{width} or next;
+        exists $d->{by_name}{$c->{name}} or next;
+        exists $d->{by_name}{$c->{name}}{pretty} or next;
+        defined $d->{by_name}{$c->{name}}{pretty} or next;
+        $c->{width} <= length($d->{by_name}{$c->{name}}{pretty})
+          and $c->{width} = length($d->{by_name}{$c->{name}}{pretty})+1;
+      }
+    }
+  }
+  {
+    my @column_names = map $_->{name}, @all_columns;
+    my $format = join(" ", map("%@{[exists $_->{width} ? 1-$_->{width} : '']}s",
+                               @all_columns))
+      . "\n";
+    printf $format, map($_->{text}, @all_columns);
+    for my $d (@$data) {
+      printf $format, map(default($_->{pretty}, '?'),
+                          @{$d->{by_name}}{@column_names});
+    }
+  }
+  if ($PRINT_MKPART) {
+    print "\n";
+    for my $d (@$data) {
+      printf(qq(mkpart "%s" "%s" %s %s\n),
+             quotemeta(default($d->{by_name}{name}{value}, '?')),
+             quotemeta(default($d->{by_name}{file_system}{value}, 'ext3')),
+             default($d->{by_name}{start}{value}, '?s'),
+             default($d->{by_name}{end}{value}, '?s'));
+    }
+  }
+  print "\n";
+}
+
+my $table_index = 0;
+my %table_locations;
+
+sub record_order ( $ ) {
+  my ($data) = @_;
+  @$data or return;
+
+  ++$table_index;
+  for my $i (0..$#$data) {
+    my $pname;
+    $pname = $data->[$i]{by_name}{name}{value}
+      if !defined $pname or $pname eq '';
+    $pname = strip($data->[$i]{by_name}{number}{value})
+      if !defined $pname or $pname eq '';
+    $pname = '#' . ($i+1)
+      if !defined $pname or $pname eq '' or $pname eq '#';
+    #my $name = "$table_index.$pname";
+    my $name = $pname;
+    my $start = $data->[$i]{by_name}{start}{value};
+    my $next = add_s(remove_s($data->[$i]{by_name}{end}{value}) + 1)
+      if defined $data->[$i]{by_name}{end}{value};
+    $table_locations{$start}{$table_index} =
+      +{ text => $name, name => $name,
+         start => $start, next => $next, table => $table_index }
+        if defined $start;
+    $table_locations{$next}{$table_index} =
+      +{ text => '', name => $name,
+         start => $start, next => $next, table => $table_index }
+        if defined $next;
+  }
+}
+
+sub print_reordering () {
+  #use Data::Dumper; die Dumper \%table_locations;
+  my @places = map add_s($_), sort { $a <=> $b } map remove_s($_),
+    keys %table_locations;
+  my @locations = map [ @$_{1..$table_index} ], @table_locations{@places};
+  #use Data::Dumper; die Dumper \@locations;
+  my @lines = ('') x $table_index;
+  for my $loc (@locations) {
+    my @entries = pad_right(map $_ ? "| $_->{text} " : '', @$loc);
+    $#entries == $#lines or die "$#entries+1 entries, $#lines+1 lines";
+    $lines[$_] .= $entries[$_] for 0..$#lines;
+  }
+  $lines[$_] .= "\n" for 0..$#lines;
+  print @lines;
+}
+
+my @all_data;
+sub record_data ( $ ) {
+  my ($data) = @_;
+  push @all_data, [ @$data ];
+}
+
+sub process_data ( $ ) {
+  my ($data) = @_;
+
+  update_data $data;
+  record_data $data;
+
+  undef @$data;
+}
+sub postprocess_data () {
+  print_data $_ for @all_data;
+  record_order $_ for @all_data;
+  print_reordering unless $WIPE;
+}
+
+read_and_process_data;
+postprocess_data;
