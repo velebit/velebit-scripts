@@ -76,6 +76,7 @@ add_if "$is_primary_os"     f3    # flash memory capacity
 add_if "$is_primary_os"     fio iozone3  # flash memory (etc) performance
 add_if "$is_primary_os"     cryptsetup-bin cryptsetup-run keyutils
 add_if "$is_primary_os"     kpartx
+add_if "$is_server"         partclone
 add_if "$is_primary_os"     archivemount
 add_if "$is_primary_os"     squashfs-tools
 add_if always               perl perl-doc
