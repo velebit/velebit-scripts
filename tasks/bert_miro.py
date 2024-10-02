@@ -130,6 +130,8 @@ class Client(object):
         return response.status_code == requests.codes.ok
 
     def create_access_token_via_settings(self):
+        if self.__auth.client_id is not None:
+            print(f"Your app's Client ID:     {self.__auth.client_id}\n")
         while self.__auth.client_id is None:
             print("Enter your app's Client ID.\n"
                   "  You can find this in the App Credentials section of the\n"
@@ -138,6 +140,8 @@ class Client(object):
             value = input("> ").strip()
             if value != "":
                 self.__auth.client_id = value
+        if self.__auth.client_id is not None:
+            print(f"Your app's Client secret: {self.__auth.client_secret}\n")
         while self.__auth.client_secret is None:
             print("Enter your app's Client secret.\n"
                   "  You can find this in the App Credentials section of the\n"
@@ -511,10 +515,10 @@ def _update_auth(old_auth, client_auth, save=True):
 def create_client(auth=None, allow_user_input=True, reauth_and_save=True):
     if auth is None:
         auth = read_auth_data()
-    client = Client(client_id=auth['client_id'],
-                    client_secret=auth['client_secret'],
-                    refresh_token=auth['refresh_token'],
-                    access_token=auth['access_token'])
+    client = Client(client_id=auth.get('client_id', None),
+                    client_secret=auth.get('client_secret', None),
+                    refresh_token=auth.get('refresh_token', None),
+                    access_token=auth.get('access_token', None))
     if reauth_and_save:
         updated = client.authenticate(allow_user_input=allow_user_input)
         if updated is not None:
