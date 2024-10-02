@@ -1,0 +1,137 @@
+#!/usr/bin/perl
+use warnings;
+use strict;
+
+#{
+#  package WorkingDirectory;
+#  use Carp;
+#  use Cwd ();
+#
+#  sub new ( $$ ) {
+#    my ($class, $new_dir) = @_;
+#    $class = ref $class if ref $class;
+#    return bless {}, $class if ! defined $new_dir;
+#
+#    my $old_dir = Cwd::getcwd
+#      or croak "Could not determine old working directory";
+#    chdir $new_dir
+#      or croak "chdir($new_dir): $!";
+#
+#    return bless { old => $old_dir, new => $new_dir }, $class;
+#  }
+#
+#  sub DESTROY ( $ ) {
+#    my ($obj) = @_;
+#    !exists $obj->{old}
+#      or chdir $obj->{old}
+#      or croak "chdir($obj->old): $!";
+#  }
+#  1;
+#}
+
+sub remove_ansi ( $ ) {
+  local ($_) = @_;
+  s/\e\[\d{1,2}(?:;\d{1,2})?m//g;  # remove ANSI color sequences
+  s/\e\[K//g;  # remove ANSI "Erase in Line" sequences
+  $_;
+}
+
+sub colorize_status ( $ ) {
+  my ($status) = @_;
+  # note: this uses yellow for ??, git status -s uses red
+  $status eq '?? ' and return "\e[33m??\e[0m ";
+  # order matters:
+  $status =~ s/^(.)([^ ])/$1\e[31m$2\e[0m/;
+  $status =~ s/^([^ ])/\e[32m$1\e[0m/;
+  return $status;
+}
+
+#use constant EXPAND_SUBMODULES => 1;
+
+my %status;
+
+sub process_status ( ;$$ );
+sub process_status ( ;$$ ) {
+  my ($top, $dir) = @_;
+
+  if (!defined $top) {
+    open(my $TOP, '-|', qw( git rev-parse --show-toplevel ))
+      or die "open(git rev-parse --show-toplevel|): $!";
+    defined($top = <$TOP>)
+      or die "read(git rev-parse --show-toplevel|): $!";
+    $top =~ s/\r?\n$//;
+  }
+
+  if (!defined $dir) {
+    open(my $DIR, '-|', qw( git rev-parse --show-prefix ))
+      or die "open(git rev-parse --show-prefix|): $!";
+    defined($dir = <$DIR>)
+      or die "read(git rev-parse --show-prefix|): $!";
+    $dir =~ s/\r?\n$//; $dir =~ s,/$,,;
+  }
+
+  open(my $STATUS, '-|', qw( git status --porcelain=v1 -z . ))
+    or die "open(git status|): $!";
+  local ($/) = "\0";
+  while (<$STATUS>) {
+    $_ =~ s/\0$//;
+    my ($stat, $path, $old_path, $cstat);
+    ($stat, $path) = /(^.{2} )(.*)$/
+      or print "$_\n", next;
+    my $is_rename_or_copy = ($stat =~ /^(?:[RC].|.[RC]) $/);
+    if ($is_rename_or_copy) {
+      defined($old_path = <$STATUS>) or last;
+      $old_path =~ s/\0$//;
+    }
+
+    # strip subdirectory path
+    length $dir and not $path =~ s,^\Q$dir\E(?:$|/),, and die "$path";
+    $path = '.' if !length $path;
+
+    if (defined $old_path) {
+      $status{$path} = [colorize_status($stat), " <- $old_path"];
+    } else {
+      $status{$path} = [colorize_status($stat), ""];
+    }
+  }
+}
+
+process_status;
+
+my $NUM_INITIAL_FIELDS;
+{
+  open(my $LS_DOT, '-|', 'ls', '-ldrt', '.')
+    or die "open(ls .|): $!";
+  $NUM_INITIAL_FIELDS = scalar(split /\s+/, scalar <$LS_DOT>) - 1;
+}
+
+sub get_filename ( $ ) {
+  local ($_) = @_;
+  s/\r?\n$//;
+  s/^(?:\S+\s+){$NUM_INITIAL_FIELDS}//;
+  s/ -> .*//;  # handle symlinks
+  remove_ansi $_;
+}
+
+if (keys %status) {
+  open(my $LS, '-|', ('ls', '-ldrt', '--quoting-style=literal',
+                      '--color=always',
+                      keys %status))
+    or die "open(ls -ldrt|): $!";
+  while (<$LS>) {
+    my $name = get_filename $_;
+    warn "No status for '@{[join '', map sprintf('[%02x]', ord $_), split //, $name]}'" unless exists $status{$name};
+    s/^/$status{$name}[0]/, s/$/$status{$name}[1]/, delete $status{$name}
+      if exists $status{$name};
+    print;
+  }
+}
+
+for my $name (sort keys %status) {
+  # If status says deleted, then it's expected to be missing; otherwise warn.
+  if (remove_ansi($status{$name}[0]) !~ qr/^(?:.D|D ) $/) {
+    my $hexified = join '', map sprintf('[%02x]', ord $_), split //, $name;
+    warn "No file for '$name' ($hexified)";
+  }
+  print join '', $status{$name}[0], $name, $status{$name}[1], "\n";
+}
