@@ -540,14 +540,22 @@ sub absolute_uri ( $;$ ) {
 
 # first, look at <a ...> tags inside <table ...> tags
 printf STDERR "    %-67s ", "Traversing <a> and <table> tags..." if $VERBOSITY;
-my (@links, %links, @tables, %tables, @prev);
+if ($VERBOSITY >= 2) {
+  print STDERR "\n";
+  print STDERR "        Total <a> tags: ";
+  print STDERR scalar @{[$tree->look_down(_tag => 'a')]}, "\n";
+  print STDERR "        Total <table> tags: ";
+  print STDERR scalar @{[$tree->look_down(_tag => 'table')]}, "\n";
+}
+my (@links, %links, @tables, %tables, @prev, %stats);
 LINK:
 for my $tag ($tree->look_down(_tag => 'a')) {
-    defined $tag->{href} or next;
-    my $table_tag = $tag->look_up(_tag => 'table') or (@prev=(), next);
+    defined $tag->{href} or ($stats{"00:without href"}++, next);
+    my $table_tag = $tag->look_up(_tag => 'table')
+      or ($stats{"10:outside <table>"}++, @prev=(), next);
     # limit by $TABLE_LEVEL here if set
     defined $TABLE_LEVEL and get_table_level($tag) != $TABLE_LEVEL
-      and (@prev=(), next);
+      and ($stats{"15:at different <table> level"}++, @prev=(), next);
 
     if (! exists $tables{$table_tag}) {
       push @tables, +{ tag => $table_tag, links => [] };
@@ -558,12 +566,20 @@ for my $tag ($tree->look_down(_tag => 'a')) {
     if ($MERGE_LINKS and @prev and $prev[0]->{href} eq $link->{href}) {
       # adjacent links to same URI, not sure if can merge
       try_merging_nodes($prev[0]->{tag}, $link->{tag})
-        and next LINK;
+        and ($stats{"30:merged with neighbors"}++, next LINK);
     }
     push @links, $link;
     $links{$tag} = $link;
     push @{ $table->{links} }, $link;
     @prev = ($link);
+    $stats{"90:collected"}++;
+}
+if ($VERBOSITY >= 2) {
+  print STDERR "        Number of <a> tags @{[substr($_, 3)]}: $stats{$_}\n"
+    for sort keys %stats;
+  print STDERR "        Number of <table>s collected: @{[scalar @tables]}\n";
+  %stats = ();
+  print STDERR "    ";
 }
 print STDERR "done.\n" if $VERBOSITY;
 
