@@ -100,7 +100,8 @@ class Method(enum.StrEnum):
 class TogglTrack(object):
     """Client for access to Toggl Track."""
 
-    AUTH_COOKIE_NAME = '__Host-timer-session'
+    # AUTH_COOKIE_NAME = '__Host-timer-session'
+    AUTH_COOKIE_NAME = '__Secure-accounts-session'
 
     def __init__(self, *, auth=Auth(), email=None, password=None,
                  api_token=None):
@@ -116,8 +117,7 @@ class TogglTrack(object):
         self.__workspaces = ObjectCache()
 
     def __del__(self):
-        # This generates noise from the `copy` module at Python shutdown:
-        # self.deauthenticate()
+        # logging out is no longer supported in the API
         pass
 
     def __repr__(self) -> str:
@@ -190,7 +190,7 @@ class TogglTrack(object):
         return response.status_code == requests.codes.ok
 
     def _create_cookie(self) -> Optional[Auth]:
-        url = "https://api.track.toggl.com/api/v9/me/sessions"
+        url = "https://api.track.toggl.com/api/v9/me"
         if self.__auth.api_token is not None:
             try:
                 response = self._make_auth_request(
@@ -216,15 +216,6 @@ class TogglTrack(object):
         if self.is_cookie_valid():  # is the check even needed?
             return auth
         raise RuntimeError("Could not get or create valid auth data.")
-
-    def deauthenticate(self):
-        if self.has_cookie():
-            url = "https://api.track.toggl.com/api/v9/me/sessions"
-            try:
-                self._make_cookie_request(
-                    method=Method.DELETE, url=url)
-            finally:
-                self.__session.cookies.pop(self.AUTH_COOKIE_NAME)
 
     # accessing objects
 
