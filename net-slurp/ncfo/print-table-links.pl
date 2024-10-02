@@ -588,8 +588,10 @@ if (@tables) {
   for my $t (0..$#tables) {
     my $table = $tables[$t];
     my @rows = $table->{tag}->content_list;
-    @rows == 1 and $rows[0]->tag eq 'tbody' and @rows = $rows[0]->content_list;
-    @rows = grep $_->tag eq 'tr', @rows;
+    (@rows == 1 or (@rows == 2 and $rows[0]->tag eq 'thead'))
+      and $rows[-1]->tag eq 'tbody'
+      and @rows = map $_->content_list, @rows;
+    @rows = grep +($_->tag eq 'th' or $_->tag eq 'tr'), @rows;
 
     my @cells;
     my @in_rowspan = map [], 1..@rows;
@@ -614,7 +616,7 @@ if (@tables) {
     }
     $table->{cells} = \@cells;
     $table->{rows} = scalar @cells;
-    $table->{columns} = scalar @{$cells[0]};
+    $table->{columns} = $cells[0] ? scalar @{$cells[0]} : 0;
 
     for my $r (0..($table->{rows}-1)) {
       my $n0 = $table->{columns};
