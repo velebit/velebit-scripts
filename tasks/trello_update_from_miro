@@ -35,6 +35,7 @@ class Src(enum.Enum):
 class Who(enum.Enum):
     ME = enum.auto()
     JOINT = enum.auto()
+    TALK = enum.auto()
     OTHER = enum.auto()
     INACTIVE = enum.auto()
 
@@ -52,8 +53,8 @@ who_sticky_colors = {
     Who.ME: frozenset([*sticky_colors_me_regular,
                        *sticky_colors_me_repeating]),
     Who.JOINT: frozenset([*sticky_colors_joint_regular,
-                          *sticky_colors_joint_discussion,
                           *sticky_colors_joint_repeating]),
+    Who.TALK: frozenset([*sticky_colors_joint_discussion]),
     Who.OTHER: frozenset([*sticky_colors_other_regular,
                           *sticky_colors_other_repeating]),
     Who.INACTIVE: frozenset([*sticky_colors_inactive_repeating]),
@@ -140,20 +141,28 @@ def update_trello(settings, tasks):
         Src.DONE: [{bt.ADD_LABELS: ["Miro: done"]}],
     }
     who_label_rules = {
-        Who.ME: [{bt.ADD_LABELS: ["Miro: me"],
-                  bt.REMOVE_LABELS: ["Miro: joint", "Miro: other"],
-                  bt.RETIRE_LABELS: ["ex-Miro"]}],
-        Who.JOINT: [{bt.ADD_LABELS: ["Miro: joint"],
-                     bt.REMOVE_LABELS: ["Miro: me", "Miro: other"],
-                     bt.RETIRE_LABELS: ["ex-Miro"]}],
-        Who.OTHER: [{bt.ADD_LABELS: ["Miro: other"],
-                     bt.REMOVE_LABELS: ["Miro: me", "Miro: joint"],
-                     bt.RETIRE_LABELS: ["ex-Miro"]}],
-        Who.INACTIVE: [{bt.IF_MISSING_ALL_LABELS: ["Miro: me", "Miro: joint",
-                                                   "Miro: other"],
-                        bt.ADD_LABELS: ["Miro: joint"],
-                        bt.REMOVE_LABELS: ["Miro: me", "Miro: other"],
-                        bt.RETIRE_LABELS: ["ex-Miro"]}],
+        Who.ME: [
+            {bt.ADD_LABELS: ["Miro: me"],
+             bt.REMOVE_LABELS: ["Miro: joint", "Miro: talk", "Miro: other"],
+             bt.RETIRE_LABELS: ["ex-Miro"]}],
+        Who.JOINT: [
+            {bt.ADD_LABELS: ["Miro: joint"],
+             bt.REMOVE_LABELS: ["Miro: me", "Miro: talk", "Miro: other"],
+             bt.RETIRE_LABELS: ["ex-Miro"]}],
+        Who.TALK: [
+            {bt.ADD_LABELS: ["Miro: talk"],
+             bt.REMOVE_LABELS: ["Miro: me", "Miro: joint", "Miro: other"],
+             bt.RETIRE_LABELS: ["ex-Miro"]}],
+        Who.OTHER: [
+            {bt.ADD_LABELS: ["Miro: other"],
+             bt.REMOVE_LABELS: ["Miro: me", "Miro: joint", "Miro: talk"],
+             bt.RETIRE_LABELS: ["ex-Miro"]}],
+        Who.INACTIVE: [
+            {bt.IF_MISSING_ALL_LABELS: ["Miro: me", "Miro: joint",
+                                        "Miro: other"],
+             bt.ADD_LABELS: ["Miro: joint"],
+             bt.REMOVE_LABELS: ["Miro: me", "Miro: talk", "Miro: other"],
+             bt.RETIRE_LABELS: ["ex-Miro"]}],
     }
 
     try:
