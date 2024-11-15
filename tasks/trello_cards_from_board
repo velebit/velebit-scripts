@@ -1,5 +1,6 @@
 #!/home/bert/.local/lib/python/venv/tasks/bin/python3
-# List all lists (name and ID) for the specified board.
+# List all cards (showing the list name, card name, and optionally
+# description and IDs) for the specified board.
 import argparse
 import itertools
 import trello.exceptions
@@ -44,6 +45,8 @@ def process_cards(board_key, settings):
             if settings.verbose > 0:
                 fields.append(card.id)
             fields.append(card.name)
+            if settings.description:
+                fields.append(card.description)
             print("{:3s} {}".format(status,
                                     ", ".join([repr(f) for f in fields])))
 
@@ -51,6 +54,7 @@ def process_cards(board_key, settings):
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('-v', '--verbose', action='count', default=0)
+    parser.add_argument('-d', '--description', action='store_true')
     parser.add_argument('-a', '--print-archived', action='store_true')
     parser.add_argument('-l', '--filter-list', metavar='LIST_NAME_OR_ID')
     parser.add_argument('--list', action=argparse.BooleanOptionalAction,
