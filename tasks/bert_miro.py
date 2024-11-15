@@ -430,6 +430,27 @@ class Item(object):
     def fill_color(self):
         return self._get_property('style', 'fillColor')
 
+    @property
+    def size(self):
+        geometry = self._get_property('geometry')
+        if geometry is None:
+            return None
+        return (geometry['width'], geometry['height'])
+
+    @property
+    def relative_position(self):
+        # TODO: Add absolute_position too?
+        position = self._get_property('position')
+        if position is None:
+            return None
+        if (position['relativeTo'] == 'parent_top_left'
+                and position['origin'] == 'center'):
+            return (self.parent_id, position['x'], position['y'])
+        if (position['relativeTo'] == 'canvas_center'
+                and position['origin'] == 'center'):
+            return (None, position['x'], position['y'])  # allow global as rel.
+        return None
+
 
 class Frame(Item):
     """A frame item from a Miro board."""

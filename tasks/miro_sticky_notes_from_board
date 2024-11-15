@@ -5,9 +5,11 @@ import sys
 from bert_miro import get_board
 
 
-def print_sticky_notes(board_key, verbosity=0, print_note_id=False,
+def print_sticky_notes(board_key, verbosity=0,
+                       print_note_id=False, print_note_url=False,
                        print_color=True,
-                       print_frame=True, print_frame_id=False):
+                       print_frame=True, print_frame_id=False,
+                       print_geometry=False):
     board = get_board(board_key, board_key, verbosity=verbosity)
     note_list = []
 
@@ -24,11 +26,18 @@ def print_sticky_notes(board_key, verbosity=0, print_note_id=False,
                           " multiple frames, ignoring {frame_name!r}",
                           file=sys.stderr)
             else:
-                note_list.append({'id':  note_id,
+                note_list.append({'id': note_id,
                                   'name': note_name,
+                                  # Note: note.link is API-oriented, can't
+                                  # be used from e.g. a browser!
+                                  'link': ('https://miro.com/app/board/' +
+                                           board_key + '/?moveToWidget=' +
+                                           note_id),
                                   'fill_color': note.fill_color,
                                   'frame_id':  frame_id,
-                                  'frame_name': frame_name})
+                                  'frame_name': frame_name,
+                                  'size': note.size,
+                                  'relative_position': note.relative_position})
 
     for note in board.sticky_notes():
         note_name = note.text
@@ -36,14 +45,23 @@ def print_sticky_notes(board_key, verbosity=0, print_note_id=False,
         if len([n for n in note_list if n['id'] == note_id]) == 0:
             note_list.append({'id':  note_id,
                               'name': note_name,
+                              # Note: note.link is API-oriented, can't
+                              # be used from e.g. a browser!
+                              'link': ('https://miro.com/app/board/' +
+                                       board_key + '/?moveToWidget=' +
+                                       note_id),
                               'fill_color': note.fill_color,
                               'frame_id':  None,
-                              'frame_name': None})
+                              'frame_name': None,
+                              'size': note.size,
+                              'relative_position': note.relative_position})
 
     for note_info in note_list:
         to_print = []
         if print_note_id:
             to_print.append(note_info['id'])
+        if print_note_url:
+            to_print.append(note_info['link'])
         to_print.append(note_info['name'])
         if print_color:
             to_print.append(note_info['fill_color'])
@@ -51,6 +69,9 @@ def print_sticky_notes(board_key, verbosity=0, print_note_id=False,
             to_print.append(note_info['frame_id'])
         if print_frame:
             to_print.append(note_info['frame_name'])
+        if print_geometry:
+            to_print.append(note_info['relative_position'])
+            to_print.append(note_info['size'])
         print("    " + ", ".join([repr(p) for p in to_print]))
 
 
@@ -58,6 +79,7 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('-v', '--verbose', action='count', default=0)
     parser.add_argument('-i', '--id', action='store_true')
+    parser.add_argument('-u', '--url', action='store_true')
     parser.add_argument('board')
     settings = parser.parse_args()
     return settings
@@ -67,7 +89,10 @@ def main():
     settings = parse_args()
     print_sticky_notes(settings.board, verbosity=settings.verbose,
                        print_color=(settings.verbose >= 2),
-                       print_note_id=settings.id, print_frame_id=settings.id)
+                       print_note_id=settings.id,
+                       print_note_url=settings.url,
+                       print_frame_id=settings.id,
+                       print_geometry=(settings.verbose >= 3))
 
 
 if __name__ == "__main__":

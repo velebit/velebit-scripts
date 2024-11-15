@@ -4,10 +4,29 @@ import argparse
 from bert_miro import get_board
 
 
-def print_frames(board_key, verbosity=0):
+def print_frames(board_key, verbosity=0,
+                 print_frame_id=True, print_frame_url=False,
+                 print_color=False,
+                 print_geometry=False):
     board = get_board(board_key, board_key, verbosity=verbosity)
     for frame in board.frames():
-        print("    {}, {}".format(repr(frame.id), repr(frame.text)))
+        to_print = []
+        frame_name = frame.text
+        frame_id = frame.id
+        if print_frame_id:
+            to_print.append(frame_id)
+        if print_frame_url:
+            # Note: frame.link is API-oriented, can't be used from e.g.
+            # a browser!
+            to_print.append('https://miro.com/app/board/' +
+                            board_key + '/?moveToWidget=' + frame_id)
+        to_print.append(frame_name)
+        if print_color:
+            to_print.append(frame.fill_color)
+        if print_geometry:
+            to_print.append(frame.relative_position)
+            to_print.append(frame.size)
+        print("    " + ", ".join([repr(p) for p in to_print]))
 
 
 def parse_args():
@@ -20,7 +39,11 @@ def parse_args():
 
 def main():
     settings = parse_args()
-    print_frames(settings.board, verbosity=settings.verbose)
+    print_frames(settings.board, verbosity=settings.verbose,
+                 print_frame_id=True,
+                 print_frame_url=(settings.verbose >= 2),
+                 print_color=(settings.verbose >= 1),
+                 print_geometry=(settings.verbose >= 3))
 
 
 if __name__ == "__main__":
