@@ -153,6 +153,7 @@ add_if "$drv_bluetooth"     blueman
 
 ## development and the like
 add_if "!$is_vm"            gcc g++
+add_if "!$is_vm"            gdb
 add_if always               strace
 add_if always               libhtml-element-extended-perl \
                             libhtml-tableextract-perl

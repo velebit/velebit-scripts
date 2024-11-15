@@ -79,7 +79,7 @@ add_if "!$is_headless"      org.kde.digikam
 ### PDF tools (and related)
 add_if "!$is_headless"      net.scribus.Scribus
 add_if "$is_bert_desktop"   xyz.rescribe.rescribe
-add_if "$is_bert_desktop"   org.gnome.OCRFeeder
+#add_if "$is_bert_desktop"   org.gnome.OCRFeeder
 
 #### video editing
 add_if "$is_media"          io.github.jliljebl.Flowblade
