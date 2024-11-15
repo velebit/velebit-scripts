@@ -133,7 +133,7 @@ def update_trello(settings, tasks):
     common_label_rules = [{bt.REMOVE_LABELS: ["Miro: triage", "Miro: done"]},
                           {bt.REMOVE_LABELS: ["ex-Miro"]}]
     orphan_label_rules = [{bt.REMOVE_LABELS: ["Miro: me", "Miro: joint",
-                                              "Miro: other"],
+                                              "Miro: talk", "Miro: other"],
                            bt.RETIRE_LABELS: ["ex-Miro"]}]
     src_label_rules = {
         Src.ACTIVE: [],
