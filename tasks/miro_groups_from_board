@@ -1,0 +1,75 @@
+#!/home/bert/.local/lib/python/venv/tasks/bin/python3
+# Summarize all groups in the specified board as a tree
+import argparse
+from bert_miro import get_board
+
+
+def print_item(item, print_item_id=False, print_field_names=False,
+               print_item_url=False):
+    desc = f"   {item.type}"
+    if print_item_id:
+        desc += " {item.id!r}"
+    extras = []
+    try:
+        shape = item.shape
+        if shape is not None and shape != '':
+            if print_field_names:
+                extras.append(f"shape={shape!r}")
+            else:
+                extras.append(f"{shape}")
+    except AttributeError:
+        pass
+    try:
+        text = item.text
+        if text is not None and text != '':
+            if print_field_names:
+                extras.append(f"text={text!r}")
+            else:
+                extras.append(f"{text!r}")
+    except AttributeError:
+        pass
+    if len(extras) > 0:
+        desc += ": " + ", ".join(extras)
+    print(desc)
+    if print_item_url:
+        print(f"      https://miro.com/app/board/{item.board.id}/"
+              f"?moveToWidget={item.id}")
+
+
+def print_groups(board_key, verbosity=0,
+                 print_group_id=False, print_item_id=False,
+                 print_item_url=False):
+    board = get_board(board_key, board_key, verbosity=verbosity)
+
+    for group in board.groups():
+        if print_group_id:
+            print(f"{group.type} {group.id!r}")
+        else:
+            print(f"{group.type}")
+        for item in group.items:
+            print_item(item,
+                       print_item_id=print_item_id,
+                       print_field_names=(verbosity > 0),
+                       print_item_url=print_item_url)
+
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-v', '--verbose', action='count', default=0)
+    parser.add_argument('-i', '--id', action='store_true')
+    parser.add_argument('-u', '--url', action='store_true')
+    parser.add_argument('board')
+    settings = parser.parse_args()
+    return settings
+
+
+def main():
+    settings = parse_args()
+    print_groups(settings.board, verbosity=settings.verbose,
+                 print_group_id=settings.id,
+                 print_item_id=settings.id,
+                 print_item_url=settings.url)
+
+
+if __name__ == "__main__":
+    main()

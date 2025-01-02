@@ -341,6 +341,41 @@ class Board(object):
                                                   url=url)
         return Item._from_json(response.json(), board=self)
 
+    def groups(self):
+        url = ("https://api.miro.com/v2/boards/" + urllib.parse.quote(self.id)
+               + "/groups")
+        params = {
+            "limit": 20
+        }
+        items = []
+        item_ids = set()
+        # As of 2024-11-15, the 'data' element in JSON is suspect; we force
+        # getting the entire group by ID, instead.
+        force_group_fetch = True
+        while True:
+            response = self.client._make_auth_request(request=requests.get,
+                                                      url=url,
+                                                      params=params)
+            json = response.json()
+            for group_data in json['data']:
+                if group_data['id'] not in item_ids:
+                    if force_group_fetch:
+                        items.append(self.group_by_id(group_data['id']))
+                    else:
+                        items.append(Item._from_json(group_data, board=self))
+                    item_ids.add(items[-1].id)
+            if 'cursor' not in json:
+                break
+            params['cursor'] = json['cursor']
+        return items
+
+    def group_by_id(self, group_id):
+        url = ("https://api.miro.com/v2/boards/" + urllib.parse.quote(self.id)
+               + "/groups/" + urllib.parse.quote(group_id))
+        response = self.client._make_auth_request(request=requests.get,
+                                                  url=url)
+        return Item._from_json(response.json(), board=self)
+
 
 # ===== Items on a Miro board =====
 
@@ -504,6 +539,21 @@ class Text(Item):
 
 
 Text._register_subclass('text')
+
+
+class Group(Item):
+    """A group from a Miro board."""
+
+    @property
+    def item_ids(self):
+        return self._get_property('data', 'items')
+
+    @property
+    def items(self):
+        return [self.board.item_by_id(str(i)) for i in self.item_ids]
+
+
+Group._register_subclass('group')
 
 
 # ===== managing saved authentication and the client object =====
