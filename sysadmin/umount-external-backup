@@ -1,0 +1,5 @@
+#!/bin/bash
+
+source "$(dirname "$(realpath -e "$0")")"/mount-umount.sh || exit 9
+
+do_umount backup yes_eject
