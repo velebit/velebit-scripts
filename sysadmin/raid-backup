@@ -42,8 +42,10 @@ fail () {
     exit 1
 }
 
-backup_ext=/media/bert/backup
-backup_int=/media/bert/int_backup
+backup_tlds=(/media/bert /media/root)
+backup_name_ext=backup
+backup_name_int=int_backup
+backup_name=
 backup=
 
 full_backup="common/users common/shared common/scratch home"
@@ -68,13 +70,13 @@ while [ "$#" -gt 0 ]; do
        -c)  partition_check=yes ;;
        -d)  show_disk_setup=yes ;;
        -e|--external)
-            [ -n "$backup" -a "$backup" != "$backup_ext" ] \
+            [ -n "$backup_name" -a "$backup_name" != "$backup_name_ext" ] \
                 && arg_fail "You may only specify one of -e and -i."
-            backup="$backup_ext" ;;
+            backup_name="$backup_name_ext" ;;
        -i|--internal)
-            [ -n "$backup" -a "$backup" != "$backup_int" ] \
+            [ -n "$backup_name" -a "$backup_name" != "$backup_name_int" ] \
                 && arg_fail "You may only specify one of -e and -i."
-            backup="$backup_int" ;;
+            backup_name="$backup_name_int" ;;
        -?|-h)
             cat <<EOF
 Usage: $(basename "$0") [-n] [-c] [-d] [-e|-i]
@@ -92,7 +94,20 @@ EOF
     esac
     shift
 done
-[ -z "$backup" ] && backup="$backup_ext"
+[ -z "$backup_name" ] && backup_name="$backup_name_ext"
+
+while read mountpoint; do
+    for b in "${backup_tlds[@]/%/\/${backup_name}}"; do
+        if [ "($mountpoint)" = "($b)" ]; then
+            if [ -z "$backup" ]; then
+                backup="$b"
+            else
+                arg_fail "Multiple $backup_name directories are mounted."
+            fi
+        fi
+    done
+done < <(mount | awk '{print $3}')
+[ -z "$backup" ] && arg_fail "No $backup_name directory is mounted."
 
 Run () {
     if [ -n "$dryrun" ]; then
