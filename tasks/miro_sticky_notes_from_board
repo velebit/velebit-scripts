@@ -1,8 +1,32 @@
 #!/home/bert/.local/lib/python/venv/tasks/bin/python3
-# List all frames (text label and ID) for the specified board.
+# List all sticky notes, by frame, for the specified board.
 import argparse
-import sys
 from bert_miro import get_board
+
+
+def get_parent_with_id(item, parents_by_id=None):
+    parent_id = item.parent_id
+    if parent_id is None:
+        return (None, None)
+    try:
+        parent = parents_by_id[parent_id]
+    except (KeyError, TypeError):
+        parent = item.parent
+        try:
+            parents_by_id[parent_id] = parent
+        except Exception:
+            pass
+    return (parent, parent_id)
+
+
+def get_enclosing_frame_name_and_id(item, parents_by_id=None):
+    while True:
+        item, item_id = get_parent_with_id(item, parents_by_id)
+        if item is None:
+            return (None, item_id)
+        if item.type == 'frame':
+            return (item.text, item_id)
+        # keep looking at ancestors
 
 
 def print_sticky_notes(board_key, verbosity=0,
@@ -11,68 +35,49 @@ def print_sticky_notes(board_key, verbosity=0,
                        print_frame=True, print_frame_id=False,
                        print_geometry=False):
     board = get_board(board_key, board_key, verbosity=verbosity)
-    note_list = []
-
-    for frame in board.frames():
-        frame_name = frame.text
-        frame_id = frame.id
-
-        for note in frame.sticky_notes():
-            note_name = note.text
-            note_id = note.id
-            if len([n for n in note_list if n['id'] == note_id]) > 0:
-                if verbosity >= 1:
-                    print(f"Note {note_name!r} ({note_id!r}) appears in"
-                          " multiple frames, ignoring {frame_name!r}",
-                          file=sys.stderr)
-            else:
-                note_list.append({'id': note_id,
-                                  'name': note_name,
-                                  # Note: note.link is API-oriented, can't
-                                  # be used from e.g. a browser!
-                                  'link': ('https://miro.com/app/board/' +
-                                           board_key + '/?moveToWidget=' +
-                                           note_id),
-                                  'fill_color': note.fill_color,
-                                  'frame_id':  frame_id,
-                                  'frame_name': frame_name,
-                                  'size': note.size,
-                                  'relative_position': note.relative_position})
+    parents_by_id = {}
+    notes_by_frame_id = {}
 
     for note in board.sticky_notes():
         note_name = note.text
         note_id = note.id
-        if len([n for n in note_list if n['id'] == note_id]) == 0:
-            note_list.append({'id':  note_id,
-                              'name': note_name,
-                              # Note: note.link is API-oriented, can't
-                              # be used from e.g. a browser!
-                              'link': ('https://miro.com/app/board/' +
-                                       board_key + '/?moveToWidget=' +
-                                       note_id),
-                              'fill_color': note.fill_color,
-                              'frame_id':  None,
-                              'frame_name': None,
-                              'size': note.size,
-                              'relative_position': note.relative_position})
+        frame_name, frame_id = get_enclosing_frame_name_and_id(
+            note, parents_by_id)
 
-    for note_info in note_list:
-        to_print = []
-        if print_note_id:
-            to_print.append(note_info['id'])
-        if print_note_url:
-            to_print.append(note_info['link'])
-        to_print.append(note_info['name'])
-        if print_color:
-            to_print.append(note_info['fill_color'])
-        if print_frame_id:
-            to_print.append(note_info['frame_id'])
-        if print_frame:
-            to_print.append(note_info['frame_name'])
-        if print_geometry:
-            to_print.append(note_info['relative_position'])
-            to_print.append(note_info['size'])
-        print("    " + ", ".join([repr(p) for p in to_print]))
+        if frame_id not in notes_by_frame_id:
+            notes_by_frame_id[frame_id] = []
+        notes_by_frame_id[frame_id].append({
+            'id': note_id,
+            'name': note_name,
+            # Note: note.link is API-oriented, can't be used from e.g.
+            #   a browser! But we can construct a browser-compatible URI.
+            'link': ('https://miro.com/app/board/' +
+                     board_key + '/?moveToWidget=' +
+                     note_id),
+            'fill_color': note.fill_color,
+            'frame_id':  frame_id,
+            'frame_name': frame_name,
+            'size': note.size,
+            'relative_position': note.relative_position})
+
+    for note_list in notes_by_frame_id.values():
+        for note_info in note_list:
+            to_print = []
+            if print_note_id:
+                to_print.append(note_info['id'])
+            if print_note_url:
+                to_print.append(note_info['link'])
+            to_print.append(note_info['name'])
+            if print_color:
+                to_print.append(note_info['fill_color'])
+            if print_frame_id:
+                to_print.append(note_info['frame_id'])
+            if print_frame:
+                to_print.append(note_info['frame_name'])
+            if print_geometry:
+                to_print.append(note_info['relative_position'])
+                to_print.append(note_info['size'])
+            print("    " + ", ".join([repr(p) for p in to_print]))
 
 
 def parse_args():
