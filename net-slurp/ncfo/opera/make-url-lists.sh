@@ -68,7 +68,9 @@ fi
 plist () {
     local index="$1"; shift
     local plist="${index##*/}"; plist="$DIR/${plist%%.html}.p.tmplist"
-    if [ ! -e "$plist" ]; then
+    if [ "$plist" = "$DIR/.p.tmplist" ]; then
+        echo "... $plist (plist) has no name for index $index" >&2
+    elif [ ! -e "$plist" ]; then
         echo "... $plist (plist)" >&2
         ./plinks.pl -hb -li -plt -lt -lb -t -la -ml \
                     --base "$base_uri" "$index" > "$plist"
@@ -79,7 +81,9 @@ plist () {
 tlist () {
     local index="$1"; shift
     local tlist="${index##*/}"; tlist="$DIR/${tlist%%.html}.t.tmplist"
-    if [ ! -e "$tlist" ]; then
+    if [ "$tlist" = "$DIR/.t.tmplist" ]; then
+        echo "... $tlist (tlist) has no name for index $index" >&2
+    elif [ ! -e "$tlist" ]; then
         echo "... $tlist (tlist)" >&2
         # Notes:
         #   --ignore-breaks may or may not be needed (or not matter) based
@@ -87,11 +91,16 @@ tlist () {
         #   --repeat-span may be helpful or nor based on formatting, too.
         # Other possibly useful flags:
         #   --show-same-row-text-before-cell
-        #   --show-same-entry-text-before-link
-        #   --show-same-entry-text-after-link
+        #   --show-same-entry-text-before-links
+        #   --show-same-entry-text-before-here
+        #   --show-same-entry-text-after-here
+        #   --show-same-entry-text-after-links
         #   --show-same-row-text-after-cell
+        #   --show-cell-line-number
         ./print-table-links.pl --show-bold-or-heading --show-column-number \
-                               --show-text-at-col 0 --show-text-at-col 1 --show-text-at-row 0 \
+                               --show-text-at-col 0 \
+                               --show-same-entry-text-before-here \
+                               --show-text-at-row 0 \
                                --show-text \
                                --separator '~' --output-by-line --merge-links \
                                --ignore-breaks \
@@ -177,11 +186,18 @@ process_table_section_columns () {
         -e '/^'"$column_num"'	/!d' `# filter column numbers` \
         -e 's/^[^	]*	//' `# remove column number` \
         -e '/^[^	]*	'"$column_heading"'	/!d' `# filter column labels` \
+        `# move *specific* bits of pre-link text to track name:` \
+        -e 's/^\([^	]*\)	\(heavenly choir\|intro\|coda\|second verse\|third verse\)/\1 \2	/' \
+        -e 's/^\([^	]*\)	[^	]*/\1/' `# remove pre-link text` \
+        `# move *specific* bits of link text to track name:` \
+        -e 's/^\([^	]*\)\(	[^	]*	\)\(heavenly choir\|intro\|coda\|second verse\|third verse\)/\1 \3\2/' \
         -e 's/	/, /' `# merge columns (row/track name + table column name)` \
+        -e 's/, 	/	/' `# strip trailing comma+space` \
         -e 's/	/, /' `# merge columns (track,chorus + link text)` \
+        -e 's/, 	/	/' `# strip trailing comma+space` \
+        -e 's/third verse third verse/third verse/' \
         `# use the scene "#.#" number from filename if available:` \
         -e 's/^\([^	]*	\)\(.*\(Sc\|Practice_\)\([1-9][0-9]*\)[-.]\([0-9][0-9]*\)\)/\4.\5 \1\2/' \
-        -e 's/4\.2 Dustbowl 2/4.3 Dustbowl 2/' `# fix up track` \
         -e 's/^\([^	]*\)[:\*\?"<>|~]/\1/' \
         -e 's/^\([^	]*\)[:\*\?"<>|~]/\1/' \
         -e 's/^\([^	]*\)[:\*\?"<>|~]/\1/' \
@@ -196,6 +212,13 @@ process_table_section_columns () {
         -e 's/, *,/,/;s/, *,/,/' -e 's/  *,/,/g;s/, *	/	/' \
         -e 's/^\([^	]*\)	\(.*\)$/\2	'"$out_tag:$files_prefix"'\1'"$files_suffix"'/' \
         -e 's,\xe2\x80\x99,'\'',g' \
+        `# final fixups` \
+        -e '/Pulverizer/I{;/PulverizerIntro/s/Intro Coda/intro/Ig;}' \
+        -e '/Pulverizer/I{;/PulverizerIntro/!s/Intro Coda/coda/Ig;}' \
+        -e '/Pinkie Bender/I{;/PinkieWithCuts/!s/ (with cuts)/ (std)/;}' \
+        -e '/Drowned at Birth/I{;/HChoir/!s/heavenly choir/coda/;}' \
+        -e '/Everyone Has a Story/I{;s/second verse \(third verse\)/\1/;}' \
+        -e '/Everyone Has a Story/I{;/StoryEnd/s/second verse/third verse/;}' \
         -e ''
 }
 
@@ -215,6 +238,9 @@ extract_demorch () {
               -e 's/^[^	]*	//' `# remove less indented (-li)` \
               -e 's/^[^	]*	//' `# remove previous line (-plt)` \
               -e '/^[^	]*, complete/d' `# filter same line text (-lt)` \
+              `# remove some common labeling we don't care about:` \
+              -e 's/^\([^	]*\) *(updated [^()	]*)\?/\1/I' \
+              -e 's/^\([^	]*\) *\[new!\? [^][	]*\]\?/\1/I' \
               -e 's/^\([^	]*	\)[^	]*	/\1/' `# remove same line before link (-lb)` \
               -e 's/^\([^	]*	\)[^	]*	/\1/' `# remove link text (-t)` \
               -e 's/^\([^	]*	\)[^	]*	/\1/' `# remove same line after link (-la)` \
@@ -298,16 +324,16 @@ extract_satb_sections () {
             | sed -e '/^Scene/d;/^Song$/d'
     fi
 
-    # no 'Alto C' for Rain Dance, but we have 'Melody'
-    for voice in 'Soprano' 'Alto' 'Melody' 'Tenor' 'Bass'; do
-        local short="`echo "$voice" | sed -e 's/^\(.\)[^ ]* \?/\1/'`"
+    # no 'Alto C' or 'Melody' downloads for Kids' Court
+    for voice in 'Soprano' 'Alto' 'Tenor and Bass'; do
+        #local short="`echo "$voice" | sed -e 's/^\(.\)[^ ]* \?/\1/'`"
+        local short="`echo "$voice" | sed -e 's/[^A-Z]//g'`"
         short="${short,,}"
         local full_voice="$voice"
         # doesn't filter by column heading, but includes it in file name
         local file="$list_prefix$short$list_suffix"
         echo "::: $DIR/$file.mp3.tmplist (SATB sections/table columns/extras)" >&2
         cat "$tlist" \
-            | remove_field 3 \
             | process_table_section_columns \
                   "$sec_prefix$full_voice$sec_suffix" \
                   '[1-9][0-9]*' \
@@ -315,23 +341,20 @@ extract_satb_sections () {
                   "$files_prefix${short^^} " \
                   "$files_suffix" \
                   > "$DIR"/frag-"$file"-table.mp3.tmplist
-        cat "$plist" \
-            | process_section_non_table_extras \
-                  "$sec_prefix$full_voice$sec_suffix" \
-                  "[^	]*Summon the clouds" \
-                  "$files_prefix${short^^} " \
-                  " Rain Dance 2, Summon the clouds, " \
-                  "$files_suffix" \
-                  > "$DIR"/frag-"$file"-extras.mp3.tmplist
+#        cat "$plist" \
+#            | process_section_non_table_extras \
+#                  "$sec_prefix$full_voice$sec_suffix" \
+#                  "[^	]*Summon the clouds" \
+#                  "$files_prefix${short^^} " \
+#                  " Rain Dance 2, Summon the clouds, " \
+#                  "$files_suffix" \
+#                  > "$DIR"/frag-"$file"-extras.mp3.tmplist
         cat "$DIR"/frag-"$file"-table.mp3.tmplist | sed \
-            -e "1,/Rain Dance 2/!d" \
+            -e '/NOOP/d' \
             > "$DIR"/"$file".mp3.tmplist
-        cat "$DIR"/frag-"$file"-extras.mp3.tmplist | sed \
-            -e "/Rain Dance 2/!d" \
-            >> "$DIR"/"$file".mp3.tmplist
-        cat "$DIR"/frag-"$file"-table.mp3.tmplist | sed \
-            -e "1,/Rain Dance 2/d" \
-            >> "$DIR"/"$file".mp3.tmplist
+#        cat "$DIR"/frag-"$file"-extras.mp3.tmplist | sed \
+#            -e "/Rain Dance 2/!d" \
+#            >> "$DIR"/"$file".mp3.tmplist
     done
     echo "^^^ (end SATB sections)" >&2
 }
@@ -365,22 +388,22 @@ extract_solos () {
             | sed -e '/^Scene/d;/^Song$/d'
     fi
 
-    extract_single_solo "$tlist" "Roli" "Roli " "" "roli-solo"
-    extract_single_solo "$tlist" "Mandisa" "Mandisa " "" "mandisa-solo"
-    extract_single_solo "$tlist" "Leverets" "Leverets " "" "leverets-solo"
-    extract_single_solo "$tlist" "Koni" "Koni " "" "koni-solo"
-
-    extract_single_solo "$tlist" "Tau" "Tau " "" "tau-solo"
-    extract_single_solo "$tlist" "Balosi" "Balosi " "" "balosi-solo"
-    extract_single_solo "$tlist" "Ndanga" "Ndanga " "" "ndanga-solo"
-    extract_single_solo "$tlist" "Johnny panned right Jackie panned left" "J+J " "" "j+j-solo"
-    extract_single_solo "$tlist" "Antoine" "Antoine " "" "antoine-solo"
-
-    extract_single_solo "$tlist" "Bello" "Bello " "" "bello-solo"
-    extract_single_solo "$tlist" "Hobo" "Hobo " "" "hobo-solo"
-    extract_single_solo "$tlist" "Thendo" "Thendo " "" "thendo-solo"
-    extract_single_solo "$tlist" "Kipling" "Kipling " "" "kipling-solo"
-    extract_single_solo "$tlist" "Dikeledi" "Dikeledi " "" "dikeledi-solo"
+#    extract_single_solo "$tlist" "Roli" "Roli " "" "roli-solo"
+#    extract_single_solo "$tlist" "Mandisa" "Mandisa " "" "mandisa-solo"
+#    extract_single_solo "$tlist" "Leverets" "Leverets " "" "leverets-solo"
+#    extract_single_solo "$tlist" "Koni" "Koni " "" "koni-solo"
+#
+#    extract_single_solo "$tlist" "Tau" "Tau " "" "tau-solo"
+#    extract_single_solo "$tlist" "Balosi" "Balosi " "" "balosi-solo"
+#    extract_single_solo "$tlist" "Ndanga" "Ndanga " "" "ndanga-solo"
+#    extract_single_solo "$tlist" "Johnny panned right Jackie panned left" "J+J " "" "j+j-solo"
+#    extract_single_solo "$tlist" "Antoine" "Antoine " "" "antoine-solo"
+#
+#    extract_single_solo "$tlist" "Bello" "Bello " "" "bello-solo"
+#    extract_single_solo "$tlist" "Hobo" "Hobo " "" "hobo-solo"
+#    extract_single_solo "$tlist" "Thendo" "Thendo " "" "thendo-solo"
+#    extract_single_solo "$tlist" "Kipling" "Kipling " "" "kipling-solo"
+#    extract_single_solo "$tlist" "Dikeledi" "Dikeledi " "" "dikeledi-solo"
 
     echo "^^^ (end solos)" >&2
 }
@@ -448,11 +471,11 @@ if [ -n "$INDEX_SOLO" ]; then
 fi
 
 if [ -n "$INDEX_DEMO" ]; then
-    extract_demorch "$(plist "$INDEX_DEMO")" 'Demo' 'demo'
+    extract_demorch "$(plist "$INDEX_DEMO")" 'DEMO' 'demo'
 fi
 if [ -n "$INDEX_ORCH" ]; then
     extract_demorch "$(plist "$INDEX_ORCH")" \
-                    'Orchestra.*' 'orchestra'
+                    'ORCHESTRA.*' 'orchestra'
 fi
 #if [ -n "$INDEX_SCENE" ]; then
 #    extract_demorch "$(plist "$INDEX_SCENE")" \
@@ -461,7 +484,8 @@ fi
 
 
 if [ -n "$do_generate_all_voices" -a -n "$INDEX_CHORUS" ]; then
-    cat "$DIR"/{s,a,t,b,m}-*.mp3.tmplist | sed \
+    # cat "$DIR"/{s,a,t,b,m}-*.mp3.tmplist | sed \
+    cat "$DIR"/{s,a,tb}-*.mp3.tmplist | sed \
         -e '/NOOP/d' \
         > X-all-voices.mp3.urllist
 fi
@@ -490,27 +514,28 @@ if [ -n "$DO_CHECK_LINKS" ]; then
     done
 fi
 
-### Katarina (Roli, Soprano 1)
-# MP3s
-if [ -n "$INDEX_CHORUS" ]; then
-    cat "$DIR"/roli-solo.mp3.tmplist \
-        > Katarina.mp3.urllist
-fi
+### no Katarina ;(
 
-### Luka (Bello, Meerkats/Zebras, Alto)
+### Luka (Alto, Hansel!)
 # MP3s
 if [ -n "$INDEX_CHORUS" ]; then
     snip_allow='.'  # this will always match
-    for snip_deny in 'The Forecast' 'Democracy' 'The Vote' \
-                     '\(Introduction\|The News\)' 'Renegade Hare' \
-                     'I Am Tau' 'Rain Dance 2' 'THIS_WILL_NOT_MATCH'; do
-        cat "$DIR"/bello-solo.mp3.tmplist | sed \
-            -e '/'"$snip_allow"'/,$!d' \
-            -e '/'"$snip_deny"'/,$d' \
-            >> Luka.mp3.urllist
+    for snip_deny in 'THIS_WILL_NOT_MATCH'; do
+#        cat "$DIR"/bello-solo.mp3.tmplist | sed \
+#            -e '/'"$snip_allow"'/,$!d' \
+#            -e '/'"$snip_deny"'/,$d' \
+#            >> Luka.mp3.urllist
         cat "$DIR"/a-chorus.mp3.tmplist | sed \
-            -e '/, \(Meerkats\|All\)/!d' \
-            -e '/ [17]\.[0-9][0-9]* .*, All/d' \
+            -n \
+            -e '/Security, Security/p' \
+            -e '/Case Number One, Audience/p' \
+            -e '/Barbara [124], Audience/p' \
+            -e '/Pulverizer, Audience, coda/p' \
+            -e '/Itty Bitty Child, Audience/p' \
+            -e '/Johnny.*Britney, Audience/p' \
+            -e '/Agnes Testifies, Audience/p' \
+            -e '/Everyone Has a Story.*, Audience/p' \
+            -e '/Gingerbread House 3, Audience/p' \
         | sed \
             -e '/'"$snip_allow"'/,$!d' \
             -e '/'"$snip_deny"'/,$d' \
@@ -519,54 +544,30 @@ if [ -n "$INDEX_CHORUS" ]; then
     done
 fi
 
-### bert (Humbu, Tenor)
-# MP3s
-if [ -n "$INDEX_CHORUS" -a -n "$INDEX_DEMO" ]; then
-    cat "$DIR"/demo.mp3.tmplist | sed \
-        -e '/Intro/!d' \
-        > bert.mp3.urllist
-    cat "$DIR"/orchestra.mp3.tmplist | sed \
-        -e '/Intro/!d' \
-        -e 's/$/, orchestra/' \
-        >> bert.mp3.urllist
-    cat "$DIR"/t-chorus.mp3.tmplist | sed \
-        -e '/, All/!d' \
-        >> bert.mp3.urllist
-fi
-
-### Abbe (Meerkats/Zebras, Tenor)
+### bert (Tenor, Guards)
 # MP3s
 if [ -n "$INDEX_CHORUS" ]; then
-    cat "$DIR"/t-chorus.mp3.tmplist | sed \
-        -e '/ The Forecast/,$d' \
-        -e '/, All/!d' \
+    cat "$DIR"/tb-chorus.mp3.tmplist | sed \
+        -e 's/out_file:TB /out_file:T /' \
+        -e '/Stage Hands,/d' \
+        -e '/Security, bass/d' \
+        -e '/Security, low split/d' \
+        > bert.mp3.urllist
+fi
+
+### Abbe (Alto, Kids, Agnes!)
+# MP3s
+if [ -n "$INDEX_CHORUS" ]; then
+    cat "$DIR"/a-chorus.mp3.tmplist | sed \
+        -e '/Audience,/!d' \
+        -e '/Agnes Testifies/I,$d;/Agnes Testifies/Id' \
         > Abbe.mp3.urllist
-    cat "$DIR"/a-chorus.mp3.tmplist | sed \
-        -e '/ The Forecast/!d' \
-        -e '/, Meerkats/!d' \
-        >> Abbe.mp3.urllist
-    cat "$DIR"/t-chorus.mp3.tmplist | sed \
-        -e '/ The Forecast/,$!d' \
-        -e '/ The Forecast/d' \
-        -e '/ The Procession/,$d' \
-        -e '/, All/!d' \
+    cat "$DIR"/demo.mp3.tmplist | sed -n \
+        -e '/Agnes.*Testifies/I,/Drowned at Birth/Ip' \
         >> Abbe.mp3.urllist
     cat "$DIR"/a-chorus.mp3.tmplist | sed \
-        -e '/ Introduction/!d' \
-        -e '/, Meerkats/!d' \
-        >> Abbe.mp3.urllist
-    cat "$DIR"/t-chorus.mp3.tmplist | sed \
-        -e '/ The Procession/,/Rain Dance 2/!d' \
-        -e '/, All/!d' \
-        >> Abbe.mp3.urllist
-    cat "$DIR"/a-chorus.mp3.tmplist | sed \
-        -e '/Rain Dance 2.*Summon/!d' \
-        -e '/, Meerkats/!d' \
-        >> Abbe.mp3.urllist
-    cat "$DIR"/t-chorus.mp3.tmplist | sed \
-        -e '/Rain Dance 2/,$!d' \
-        -e '/Rain Dance 2/d' \
-        -e '/, All/!d' \
+        -e '/Audience,/!d' \
+        -e '1,/Drowned at Birth/Id;/Drowned at Birth/Id' \
         >> Abbe.mp3.urllist
 fi
 

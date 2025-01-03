@@ -6,9 +6,25 @@ type=pdf
 file_dir="$pdf_dir"
 log=download-"$type".log
 
-all_uris=("$pdf_uri")
+labeled_uris=(
+    "$pdf_uri" pdf
+)
+plain_uris=()
+mul_args=()
+for (( i=0; i<"${#labeled_uris[@]}"; i+=2 )); do
+    if [ -n "${labeled_uris[i]}" ]; then
+        plain_uris+=( "${labeled_uris[i]}" )
+        mul_args+=( "--${labeled_uris[i+1]}"
+                    "$html_dir/${labeled_uris[i]##*/}.html" )
+    fi
+done
+unique_uris=()
+while read u; do
+    unique_uris+=("$u")
+done < <(for u in "${plain_uris[@]}"; do echo "$u"; done | sort -u)
+if [ "${#unique_uris[@]}" -eq 0 ]; then echo "No URIs!!????" >&2; exit 1; fi
 
-for file in "${all_uris[@]##*/}"; do
+for file in "${unique_uris[@]##*/}"; do
     if [ -f "$html_dir/$file.html" ]; then
         rm -f "$html_dir/$file"
         mv "$html_dir/$file.html" "$html_dir/$file"
@@ -18,22 +34,23 @@ done
 if ! wget --load-cookies cookies.txt \
     -nd -P "$html_dir" -N --restrict-file-names=windows \
     --progress=bar:force \
-    "${all_uris[@]}" \
+    "${unique_uris[@]}" \
   > download-index.log 2>&1; then
     cat download-index.log
-    for file in "${all_uris[@]##*/}"; do
+    for file in "${unique_uris[@]##*/}"; do
         rm -f "$html_dir/$file"
         mv "$html_dir/$file".orig "$html_dir/$file.html"
     done
     exit 1
 fi
 cat download-index.log
-for file in "${all_uris[@]##*/}"; do
+for file in "${unique_uris[@]##*/}"; do
     rm -f "$html_dir/$file".orig
     rm -f "$html_dir/$file.html"; mv "$html_dir/$file" "$html_dir/$file.html"
 done
 
-./make-url-lists.sh --pdf "$html_dir/${pdf_uri##*/}.html"
+./make-url-lists.sh "${mul_args[@]}"
+
 sed -e 's/	.*//' *."$type".urllist | sort | uniq \
     | sed -e '/\.[Pp][Dd][Ff]$/!d' \
     > "$type"-master.urllist

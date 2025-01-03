@@ -5,6 +5,8 @@ U2P_MP3ZIP_ARGS=(-d ../zip/pretty/)
 U2P_MP3PEEP_ARGS=(-d ../zip/people/)
 U2P_VIDEO_ARGS=(-s video/ -d ../video/)
 
+ENUM_ARGS=(--keep-existing)
+
 CF_ARGS=(--no-replace-any-prefix --prefix '')
 
 PF_ARGS=()
@@ -36,14 +38,24 @@ inspect() {
 }
 
 source "$(dirname "$0")/_uri.sh"
-html_dir=html
-./make-url-lists.sh --wipe \
-                    --chorus "$html_dir/${chorus_uri##*/}.html" \
-                    --solo "$html_dir/${solo_uri##*/}.html" \
-                    --demo "$html_dir/${demo_uri##*/}.html" \
-                    --orch "$html_dir/${demo_uri##*/}.html" \
-                    --video "$html_dir/${video_uri##*/}.html" \
-                    --pdf "$html_dir/${pdf_uri##*/}.html"
+labeled_uris=(
+    "$chorus_uri" chorus
+    "$solo_uri" solo
+    "$demo_uri" demo
+    "$demo_uri" orch
+    "$video_uri" video
+    "$pdf_uri" pdf
+)
+mul_args=( --wipe )
+for (( i=0; i<"${#labeled_uris[@]}"; i+=2 )); do
+    if [ -n "${labeled_uris[i]}" ]; then
+        mul_args+=( "--${labeled_uris[i+1]}"
+                    "$html_dir/${labeled_uris[i]##*/}.html" )
+    fi
+done
+if [ "${#mul_args[@]}" -eq 0 ]; then echo "No URIs!!????" >&2; exit 1; fi
+
+./make-url-lists.sh "${mul_args[@]}"
 
 shopt -s nullglob
 set -- [^X]*.mp3.urllist
@@ -51,7 +63,7 @@ if [ -e .copy-x ]; then set -- "$@" X*.mp3.urllist;
 elif [ -e .copy-cd ]; then set -- "$@" X-cd-*.mp3.urllist; fi
 ./urllist2process.pl "${U2P_MP3_ARGS[@]}" "$@" | inspect M1 \
     | ./extras2process.pl mp3-extras/* | inspect M2 \
-    | ./enumerate.pl | inspect M2e \
+    | ./enumerate.pl "${ENUM_ARGS[@]}" | inspect M2e \
     | ./omit-if-missing.pl | inspect M3 \
     | ./canonicalize-filenames.pl "${CF_ARGS[@]}" | inspect M4 \
     | ./globally-uniq.pl --sfdd | inspect M5 \

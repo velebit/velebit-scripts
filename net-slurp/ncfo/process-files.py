@@ -94,7 +94,7 @@ def queue_file(inf, outf, settings):
         commands_for_input[inf] = entry
         entry[3].append((print_stderr, (f"--- {outf}",)))
         entry[3].append((shutil.copyfile, (inf, outf) ))
-        if re.search(inf, r'\.mp3$', re.IGNORECASE):
+        if re.search(r'\.mp3$', inf, re.IGNORECASE):
             if settings.wipe_id3:
                 entry[3].append((run_or_warn,
                                  (('./id3wipe', '-f', outf),
@@ -150,7 +150,9 @@ def main():
         try:
             (inf, outf) = line.split('=')
         except ValueError as ve:
-            raise ValueError("bad input format in '{line}': {ve}")
+            ve.args = ((ve.args[0] + f"; input was line={line!r}",)
+                       + ve.args[1:])
+            raise
         try:
             queue_file(inf, outf, settings)
         except FileNotFoundError as fnfe:

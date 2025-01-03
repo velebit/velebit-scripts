@@ -57,12 +57,21 @@ Output options (extra fields printed before URI, separated by tabs):
   --show-same-entry-text
                         (-ee)  Show the text of the entry (line or cell) where
                                the link occurs.  (See also: -ibr.)
-  --show-same-entry-text-before-link
+  --show-same-entry-text-before-links
                         (-eb)  Show the text of the entry (line or cell) up to
-                               the first link.  (See also: -ibr.)
-  --show-same-entry-text-after-link
+                               the first link.  (See also: -eu, -ibr.)
+  --show-same-entry-text-after-links
                         (-ea)  Show the text of the entry (line or cell)
-                               following the last link.  (See also: -ibr.)
+                               following the last link.  (See also: -ed, -ibr.)
+  --show-same-entry-text-before-here
+                        (-eu)  Show the text of the entry (line or cell) up to
+                               the _active_ link; this includes any other links
+                               before the active one.  (See also: -eb, -ibr.)
+  --show-same-entry-text-after-here
+                        (-ed)  Show the text of the entry (line or cell)
+                               following the the _active_ link; this includes
+                               any other links after the active one.
+                               (See also: -ea, -ibr.)
   --show-text-at ROW,COLUMN
                         (-at)  Show the text of the cell (TODO: entry?)
                                in row ROW and column COLUMN.
@@ -101,8 +110,10 @@ use constant ROW_NUMBER => 'row';
 use constant COLUMN_NUMBER => 'column';
 use constant CELL_LINE_NUMBER => 'cell_line';
 use constant SAME_ENTRY_TEXT => 'same_entry';
-use constant SAME_ENTRY_TEXT_BEFORE_LINK => 'same_entry_before';
-use constant SAME_ENTRY_TEXT_AFTER_LINK => 'same_entry_after';
+use constant SAME_ENTRY_TEXT_BEFORE_LINKS => 'same_entry_before_links';
+use constant SAME_ENTRY_TEXT_AFTER_LINKS => 'same_entry_after_links';
+use constant SAME_ENTRY_TEXT_BEFORE_CURRENT => 'same_entry_before_current';
+use constant SAME_ENTRY_TEXT_AFTER_CURRENT => 'same_entry_after_current';
 use constant ENTRY_TEXT_AT_ROW_COL_prefix => 'at_row_col=';
 use constant SAME_ROW_ENTRY_TEXT_AT_COLUMN_prefix => 'same_row_at_col=';
 use constant SAME_COLUMN_ENTRY_TEXT_AT_ROW_prefix => 'same_col_at_row=';
@@ -189,10 +200,14 @@ GetOptions('verbose|v+' => \$VERBOSITY,
            sub { add_rm_field CELL_LINE_NUMBER, $_[1] },
            'show-same-entry-text|entry-text|ee!' =>
            sub { add_rm_field SAME_ENTRY_TEXT, $_[1] },
-           'show-same-entry-text-before-link|entry-before|eb!' =>
-           sub { add_rm_field SAME_ENTRY_TEXT_BEFORE_LINK, $_[1] },
-           'show-same-entry-text-after-link|entry-after|ea!' =>
-           sub { add_rm_field SAME_ENTRY_TEXT_AFTER_LINK, $_[1] },
+           'show-same-entry-text-before-links|eb!' =>
+           sub { add_rm_field SAME_ENTRY_TEXT_BEFORE_LINKS, $_[1] },
+           'show-same-entry-text-after-links|ea!' =>
+           sub { add_rm_field SAME_ENTRY_TEXT_AFTER_LINKS, $_[1] },
+           'show-same-entry-text-before-here|eu!' =>
+           sub { add_rm_field SAME_ENTRY_TEXT_BEFORE_CURRENT, $_[1] },
+           'show-same-entry-text-after-here|ed!' =>
+           sub { add_rm_field SAME_ENTRY_TEXT_AFTER_CURRENT, $_[1] },
            'show-text-at|at=s' =>
            sub { my ($r, $c) = ($_[1] =~ /^(\d+),(\d+)$/) or die;
                  add_rm_field ENTRY_TEXT_AT_ROW_COL_prefix . "$r,$c", 1 },
@@ -397,7 +412,20 @@ sub get_entries ( $$$;$ ) {
 }
 
 
-sub before_link ( @ ) {
+sub skip_first ( @ ) {
+  my (@nodes) = @_;
+  #shift @nodes;
+  return @nodes;
+}
+
+sub skip_last ( @ ) {
+  my (@nodes) = @_;
+  #pop @nodes;
+  return @nodes;
+}
+
+
+sub before_first_link ( @ ) {
   my (@nodes) = @_;
   my (@result);
   while (@nodes) {
@@ -412,7 +440,7 @@ sub before_link ( @ ) {
   return @result;
 }
 
-sub after_link ( @ ) {
+sub after_last_link ( @ ) {
   my (@nodes) = @_;
   my (@result);
   while (@nodes) {
@@ -806,26 +834,51 @@ if (has_field SAME_ENTRY_TEXT) {
   print STDERR "done.\n" if $VERBOSITY;
 }
 
-if (has_field SAME_ENTRY_TEXT_BEFORE_LINK) {
-  printf STDERR "    %-67s ", "Extracting text in the same entry before link..." if $VERBOSITY;
+if (has_field SAME_ENTRY_TEXT_BEFORE_LINKS) {
+  printf STDERR "    %-67s ", "Extracting text in the same entry before first link..." if $VERBOSITY;
   for my $link (@links) {
     my $line = $link->{+CELL_LINE_NUMBER} if $SPLIT_AT_LINE_BREAKS;
     my ($text, $from, $to) = '';
     ($from, $to) = get_line_edges $link->{cell}, $line
-      and $text = get_text before_link get_in_between_nodes $from, $link->{tag};
-    $link->{+SAME_ENTRY_TEXT_BEFORE_LINK} = $text;
+      and $text = get_text before_first_link get_in_between_nodes $from, $link->{tag};
+    $link->{+SAME_ENTRY_TEXT_BEFORE_LINKS} = $text;
   }
   print STDERR "done.\n" if $VERBOSITY;
 }
 
-if (has_field SAME_ENTRY_TEXT_AFTER_LINK) {
-  printf STDERR "    %-67s ", "Extracting text in the same entry after link..." if $VERBOSITY;
+if (has_field SAME_ENTRY_TEXT_AFTER_LINKS) {
+  printf STDERR "    %-67s ", "Extracting text in the same entry after last link..." if $VERBOSITY;
   for my $link (@links) {
     my $line = $link->{+CELL_LINE_NUMBER} if $SPLIT_AT_LINE_BREAKS;
     my ($text, $from, $to) = '';
     ($from, $to) = get_line_edges $link->{cell}, $line
-      and $text = get_text after_link get_in_between_nodes $link->{tag}, $to;
-    $link->{+SAME_ENTRY_TEXT_AFTER_LINK} = $text;
+      and $text = get_text after_last_link get_in_between_nodes $link->{tag}, $to;
+    $link->{+SAME_ENTRY_TEXT_AFTER_LINKS} = $text;
+  }
+  print STDERR "done.\n" if $VERBOSITY;
+}
+
+
+if (has_field SAME_ENTRY_TEXT_BEFORE_CURRENT) {
+  printf STDERR "    %-67s ", "Extracting text in the same entry before this link..." if $VERBOSITY;
+  for my $link (@links) {
+    my $line = $link->{+CELL_LINE_NUMBER} if $SPLIT_AT_LINE_BREAKS;
+    my ($text, $from, $to) = '';
+    ($from, $to) = get_line_edges $link->{cell}, $line
+      and $text = get_text skip_last get_in_between_nodes $from, $link->{tag};
+    $link->{+SAME_ENTRY_TEXT_BEFORE_CURRENT} = $text;
+  }
+  print STDERR "done.\n" if $VERBOSITY;
+}
+
+if (has_field SAME_ENTRY_TEXT_AFTER_CURRENT) {
+  printf STDERR "    %-67s ", "Extracting text in the same entry after this link..." if $VERBOSITY;
+  for my $link (@links) {
+    my $line = $link->{+CELL_LINE_NUMBER} if $SPLIT_AT_LINE_BREAKS;
+    my ($text, $from, $to) = '';
+    ($from, $to) = get_line_edges $link->{cell}, $line
+      and $text = get_text skip_first get_in_between_nodes $link->{tag}, $to;
+    $link->{+SAME_ENTRY_TEXT_AFTER_CURRENT} = $text;
   }
   print STDERR "done.\n" if $VERBOSITY;
 }

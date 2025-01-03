@@ -7,11 +7,26 @@ file_dir="$mp3_dir"
 #log=download-"$type".log
 log=download.log
 
-raw_uris=("$chorus_uri" "$solo_uri" "$demo_uri")
+labeled_uris=(
+    "$chorus_uri" chorus
+    "$solo_uri" solo
+    "$demo_uri" demo
+    "$demo_uri" orch
+)
+plain_uris=()
+mul_args=()
+for (( i=0; i<"${#labeled_uris[@]}"; i+=2 )); do
+    if [ -n "${labeled_uris[i]}" ]; then
+        plain_uris+=( "${labeled_uris[i]}" )
+        mul_args+=( "--${labeled_uris[i+1]}"
+                    "$html_dir/${labeled_uris[i]##*/}.html" )
+    fi
+done
 unique_uris=()
 while read u; do
     unique_uris+=("$u")
-done < <(for u in "${raw_uris[@]}"; do echo "$u"; done | sort -u)
+done < <(for u in "${plain_uris[@]}"; do echo "$u"; done | sort -u)
+if [ "${#unique_uris[@]}" -eq 0 ]; then echo "No URIs!!????" >&2; exit 1; fi
 
 for file in "${unique_uris[@]##*/}"; do
     if [ -f "$html_dir/$file.html" ]; then
@@ -38,10 +53,8 @@ for file in "${unique_uris[@]##*/}"; do
     rm -f "$html_dir/$file.html"; mv "$html_dir/$file" "$html_dir/$file.html"
 done
 
-./make-url-lists.sh --chorus "$html_dir/${chorus_uri##*/}.html" \
-                    --solo "$html_dir/${solo_uri##*/}.html" \
-                    --demo "$html_dir/${demo_uri##*/}.html" \
-                    --orch "$html_dir/${demo_uri##*/}.html"
+./make-url-lists.sh "${mul_args[@]}"
+
 sed -e 's/	.*//' *."$type"*.urllist | sort | uniq \
     | sed -e '/\.[Mm][Pp]3$/!d' \
     > "$type"-master.urllist
