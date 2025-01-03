@@ -98,6 +98,7 @@ def read_miro_board_frames(verbosity=0):
                 {'name': get_clean_text_from_sticky(sn),
                  'desc': None, 'tags': None,
                  'src': frame_tag, 'who': get_who_from_sticky(sn),
+                 'size': sn.size, 'relative_position': sn.relative_position,
                  })
     return tasks_active
 
