@@ -4,8 +4,14 @@ cd "`dirname "$0"`" || exit 1
 if [ ! -e "`basename "$0"`" ]; then exit 1; fi
 
 DEST="/media/bert/ALL MUSIC"
+dev="/dev/disk/by-label/ALL\\x20MUSIC"
+mounted=
+if [ ! -d "$DEST" -a -e "$dev" ]; then
+    udisksctl mount -b "$dev" || exit 2
+    mounted=yes
+fi
 if [ -d "$DEST/lo-fi" ]; then DEST="$DEST/lo-fi"; fi
-if [ ! -d "$DEST" ]; then exit 2; fi
+if [ ! -d "$DEST" ]; then exit 3; fi
 
 include=(
     "."
@@ -93,3 +99,10 @@ rsync --info=progress2,flist2,stats2,skip,symsafe --human-readable \
 
 remove_unlisted "${include[@]}" "${ignore[@]##/}"
 remove_matching "${exclude_patterns[@]}"
+
+if [ -n "$mounted" ]; then
+    udisksctl unmount -b "$dev" || exit 4
+    udisksctl power-off -b "$dev" || exit 5
+    echo "Ejected."
+fi
+echo "Done!"
