@@ -1,0 +1,6 @@
+#!/bin/bash
+# Show all duplicate cards from a board (by default, 'bert active').
+# Current implementation is super inefficient.
+
+"$(dirname "$0")"/trello_cards_from_board --no-list -t "${1:-bert active}" \
+    | sed -e 's,^..,,' | sort | uniq -dc
