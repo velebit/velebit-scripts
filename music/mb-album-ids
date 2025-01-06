@@ -1,0 +1,32 @@
+#!/bin/bash
+
+cd "$(dirname "$0")" || exit 1
+
+process_tags () {
+    local line curr_dir prev_dir
+    while read line; do
+        case "$line" in
+            '-- '*)
+                if [[ -n "$curr_dir" ]]; then
+                    echo "$curr_dir: none"
+                fi
+                curr_dir="$(dirname "${line##-- }")"
+                ;;
+            *[=:]'MusicBrainz Album Id'=*|MUSICBRAINZ_ALBUMID=*)
+                local id="${line##*=}"; id="${id#*\'}"; id="${id%%\'*}"
+                echo "${curr_dir:-${prev_dir}: (also)}${curr_dir:+:} $id"
+                prev_dir="$curr_dir"
+                curr_dir=
+                ;;
+        esac
+    done
+    if [[ -n "$curr_dir" ]]; then
+        echo "$curr_dir: none"
+    fi
+}
+
+find . -type f \( -name '*.[mM][pP]3' -o -name '*.[mM]4[aA]' -o \
+                  -name '*.[fF][lL][aA][cC]' \) -print0 \
+    | xargs -0 -r mutagen-inspect \
+    | process_tags \
+    | LANG=C sort | uniq -c
