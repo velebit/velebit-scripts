@@ -542,6 +542,8 @@ if [ -n "$INDEX_CHORUS" ]; then
             >> Luka.mp3.urllist
         snip_allow="$snip_deny"
     done
+    # ...but not really
+    echo > Luka.mp3.urllist
 fi
 
 ### bert (Tenor, Guards)
@@ -563,11 +565,11 @@ if [ -n "$INDEX_CHORUS" ]; then
         -e '/Agnes Testifies/I,$d;/Agnes Testifies/Id' \
         > Abbe.mp3.urllist
     cat "$DIR"/demo.mp3.tmplist | sed -n \
-        -e '/Agnes.*Testifies/I,/Drowned at Birth/Ip' \
+        -e '/Agnes.*Testifies/I,/Everyone Has a Story/Ip' \
         >> Abbe.mp3.urllist
     cat "$DIR"/a-chorus.mp3.tmplist | sed \
         -e '/Audience,/!d' \
-        -e '1,/Drowned at Birth/Id;/Drowned at Birth/Id' \
+        -e '1,/Everyone Has a Story/Id;/Everyone Has a Story/Id' \
         >> Abbe.mp3.urllist
 fi
 
