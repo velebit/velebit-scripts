@@ -1,6 +1,6 @@
 #!/sourceable/code/for/bash
 
-find_backup_partition () {
+find_partition () {
     local partlabel="$1"; shift
     local seen=()
     local d
@@ -115,72 +115,72 @@ umount_device () {
 }
 
 do_mount () {
-    local backup_name="$1"; shift
-    local backup_part="$(find_backup_partition "$backup_name")"
-    [ -n "$backup_part" ] || return 1
-    local backup_dev="$(mountable_partition "$backup_part")"
-    if [ "($backup_dev)" = "(locked)" ]; then
-        if ! unlock_partition "$backup_part"; then
+    local part_name="$1"; shift
+    local part="$(find_partition "$part_name")"
+    [ -n "$part" ] || return 1
+    local dev="$(mountable_partition "$part")"
+    if [ "($dev)" = "(locked)" ]; then
+        if ! unlock_partition "$part"; then
             return 2
         fi
-        backup_dev="$(mountable_partition "$backup_part")"
-        if [ "($backup_dev)" = "(locked)" ]; then
+        dev="$(mountable_partition "$part")"
+        if [ "($dev)" = "(locked)" ]; then
             return 3
         fi
     fi
-    case "$backup_dev" in
+    case "$dev" in
         "")
             return 4 ;;
         /dev/*) ;;
         *)
-            echo "Internal error: unexpected device '$backup_dev'!" >&2
+            echo "Internal error: unexpected device '$dev'!" >&2
             return 5 ;;
     esac
-    local path="$(mounted_path "$backup_dev")"
+    local path="$(mounted_path "$dev")"
     case "$path" in
         "")
-            echo "Internal error: non-mountable device '$backup_dev'!" >&2
+            echo "Internal error: non-mountable device '$dev'!" >&2
             return 6 ;;
         none)
-            if ! mount_device "$backup_dev"; then
+            if ! mount_device "$dev"; then
                 return 7;
             fi
             ;;
         *)
-            echo "Device $backup_dev is already mounted at $path." >&2
+            echo "Device $dev is already mounted at $path." >&2
             ;;
     esac
     return 0
 }
 
 do_umount () {
-    local backup_name="$1"; shift
+    local part_name="$1"; shift
     local should_eject="$1"; shift
-    local backup_part="$(find_backup_partition "$backup_name")"
-    [ -n "$backup_part" ] || return 1
-    local backup_dev="$(mountable_partition "$backup_part")"
-    if [ "($backup_dev)" = "(locked)" ]; then
-        echo "Partition $backup_part is already locked." >&2
+    local part="$(find_partition "$part_name")"
+    [ -n "$part" ] || return 1
+    local dev="$(mountable_partition "$part")"
+    if [ "($dev)" = "(locked)" ]; then
+        echo "Partition $part is already locked." >&2
     else
-        local path="$(mounted_path "$backup_dev")"
+        local path="$(mounted_path "$dev")"
         case "$path" in
             none|"")
                 # not mounted, don't bother with a message
                 ;;
             *)
-                if ! umount_device "$backup_dev"; then
+                if ! umount_device "$dev"; then
                     return 2
                 fi
                 ;;
         esac
-        if [ "($backup_dev)" = "($backup_part)" ]; then
-            echo "Partition $backup_part does not need to be locked." >&2
-        elif ! lock_partition "$backup_part"; then
+        if [ "($dev)" = "($part)" ]; then
+            echo "Partition $part does not need to be locked." >&2
+        elif ! lock_partition "$part"; then
             return 3
         fi
     fi
     if [ -n "$should_eject" ]; then
-        if ! eject_partition "$backup_part"; then
+        if ! eject_partition "$part"; then
             return 4
         fi
     fi
