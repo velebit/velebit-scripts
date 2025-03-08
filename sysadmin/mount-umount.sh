@@ -228,7 +228,12 @@ construct_remote_path () {
     host_name="$1"; shift
     share="$1"; shift
     case "$host_name:$share" in
-	aunt-louisa:*)  echo "/common/$share/export" ;;
+	aunt-louisa:shared)   echo "/common/$share/export" ;;
+	aunt-louisa:scratch)  echo "/common/$share/export" ;;
+	aunt-louisa:music)    echo "/common/scratch/export/$share" ;;
+	aunt-louisa:photos)   echo "/common/shared/export/$share" ;;
+	aunt-louisa:gm-uf)    echo "/common/users/bert/export/gaming/gm-uf2021-5e" ;;
+	aunt-louisa:*)        echo "/common/home/$share/export" ;;
     esac
 }
 
@@ -338,4 +343,33 @@ do_umount_sshfs () {
 	return 1  # message already shown
     fi
     return 0
+}
+
+get_smb_shares () {
+    local host_name="$1"; shift
+
+    local user="$(id -un)"
+    #local type=cifs
+    local type=smb3
+    local parent=/media/"$user"/"$type"
+    local dir
+    for dir in "$parent"/"$host_name"/*; do
+	if [[ -d "$dir" ]]; then
+	    basename "$dir"
+	fi
+    done
+}
+
+get_sshfs_shares () {
+    local host_name="$1"; shift
+
+    local user="$(id -un)"
+    local type=ssh
+    local parent=/media/"$user"/"$type"
+    local dir
+    for dir in "$parent"/"$host_name"/*; do
+	if [[ -d "$dir" ]]; then
+	    basename "$dir"
+	fi
+    done
 }

@@ -1,0 +1,17 @@
+#!/bin/bash
+host_name=aunt-louisa
+host_addr=10.10.80.80
+
+source "$(dirname "$(realpath -e "$0")")"/../sysadmin/mount-umount.sh || exit 9
+
+if [[ "$#" -eq 0 ]]; then
+    set -- $(get_sshfs_shares "$host_name")
+    if [[ "$#" -eq 0 ]]; then
+	echo "No shares specified and none found." >&2
+    else
+	echo "Will unmount: $*" >&2
+    fi
+fi
+for share in "$@"; do
+    do_umount_sshfs "$host_name" "$host_addr" "$share"
+done
