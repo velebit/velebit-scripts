@@ -292,7 +292,7 @@ kill_user_minecraft () {
             "${log[@]}" "...$(is_done)." >&2
         fi
     else
-        "${log[@]}" "$(user2name "$user") does not seem to be running $name." >&2
+        "${log[@]}" "$(user2name "$user") does not seem to be running any Minecraft processes." >&2
     fi
 }
 
