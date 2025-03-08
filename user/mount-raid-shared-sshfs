@@ -1,0 +1,8 @@
+#!/bin/bash
+
+host_name=aunt-louisa
+host_addr=10.10.80.80
+share=shared
+
+source "$(dirname "$(realpath -e "$0")")"/../sysadmin/mount-umount.sh || exit 9
+do_mount_sshfs "$host_name" "$host_addr" "$share"
