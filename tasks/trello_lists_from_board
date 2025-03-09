@@ -26,17 +26,18 @@ def print_lists(board_key, settings):
                 if tlist.name != nfc_name:
                     print("      Note: name is different from its NFC form "
                           f"{nfc_name!r}")
-        if settings.delete_archived and tlist.closed:
-            name = tlist.name
-            tlist.delete()  # No longer available?!
-            print(f"(T) List '{name}' deleted.", file=sys.stderr)
 
 
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('-v', '--verbose', action='count', default=0)
     parser.add_argument('-a', '--print-archived', action='store_true')
-    parser.add_argument('-d', '--delete-archived', action='store_true')
+    # The Trello REST API currently no longer supports list deletion, and
+    # py-trello no longer exposes the List function to delete a list.
+    # If that changes, consider bringing back the functionality in a separate
+    # script, like trello_delete_archived_cards_from_board.
+    # In the meantime, though, it's possible to do it from the GUI!
+    #   parser.add_argument('-d', '--delete-archived', action='store_true')
     parser.add_argument('board')
     settings = parser.parse_args()
     return settings
