@@ -24,7 +24,7 @@ remove_number () {
 
 tracks=()
 while read track; do
-    echo "0> '$track'" >&2
+    ## echo "0> '$track'" >&2
     nntrack="$(remove_number "$track")"
     for t in "${tracks[@]}"; do
         if [ "x$(remove_number "$t")" = "x$nntrack" ]; then
@@ -57,8 +57,12 @@ for track in "${tracks[@]}"; do
     # This prevents "Some Track" from including "Some Track (director's cut)"
     antipattern=
     for t in "${tracks[@]}"; do
-        if [ "($t)" = "($track)" ]; then continue; fi
-        antipattern="${antipattern}${antipattern:+\|}$(make_pattern "$t")"
+        if [ "($t)" = "($track)" ]; then continue; fi  # efficiency shortcut
+        this_pattern="$(make_pattern "$t")"
+        if [ -z "$(echo ".../$track" | grep -v -i "$this_pattern")" ]; then
+            continue  # don't include antipatterns that fully match the track!
+        fi
+        antipattern="${antipattern}${antipattern:+\|}${this_pattern}"
     done
     if [ -z "$antipattern" ]; then antipattern="^$"; fi # empty-> match nothing
     ## echo "X> '$antipattern'" >&2

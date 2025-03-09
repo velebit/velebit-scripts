@@ -8,7 +8,10 @@ linked_paths=()
 while read -r path; do
     found+=("$path")
 done < <( find mixed from-midi \
-	       -name '*.aup3' -o -type d -name '*_data' -prune \
+	       -name '*.aup3' -o -name '*.aup3-shm' -o -name '*.aup3-wal' \
+	       -o -name '.nfs.*' \
+	       -o -name 'unused*.mp3' \
+               -o -type d -name '*_data' -prune \
 	       -o -type f -print | sort )
 
 while read -r path; do
@@ -26,7 +29,7 @@ in_list () {
 	    return 0
 	fi
     done
-    false
+    return 1
 }
 
 for i in "${links[@]}"; do
