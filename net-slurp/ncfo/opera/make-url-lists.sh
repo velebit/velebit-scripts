@@ -551,6 +551,7 @@ fi
 if [ -n "$INDEX_CHORUS" ]; then
     cat "$DIR"/tb-chorus.mp3.tmplist | sed \
         -e 's/out_file:TB /out_file:T /' \
+        -e 's/About Last Night, Stage Hands/About Last Night/' \
         -e '/Stage Hands,/d' \
         -e '/Security, bass/d' \
         -e '/Security, low split/d' \
