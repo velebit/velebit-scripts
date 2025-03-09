@@ -23,7 +23,7 @@ color_key = frozendict(zip(all_color_gui_order, itertools.count(1)))
 
 def get_label_uses(board):
     label_uses = defaultdict(int)
-    filters = {'filter': 'open', 'fields': 'idLabels'}
+    filters = {'filter': 'visible', 'fields': 'idLabels'}
     board_info = board.client.fetch_json('/boards/' + board.id + '/cards/',
                                          query_params=filters)
     for card_info in board_info:
@@ -33,17 +33,28 @@ def get_label_uses(board):
 
 
 def print_labels(board_key, settings):
+    label_uses = None
+
+    def sort_by_color(label):
+        return color_key.get(label.color, 9999)
+
+    def sort_by_uses(label):
+        return label_uses.get(label.id, 0)
+
     try:
         board = get_board(board_key, board_key, verbosity=settings.verbose)
     except trello.exceptions.Unauthorized:
         board = get_board(board_key, board_key, verbosity=settings.verbose,
                           auth=create_auth_token(read_auth_data()))
-    label_uses = None
+    # The GUI orders labels by color, then alphabetically within each color.
+    # We match that unless --count was specified, then it's numeric.
+    label_sort_func = sort_by_color
     if settings.count or settings.verbose >= 2:
         label_uses = get_label_uses(board)
-    # The GUI orders labels by color, then alphabetically within each color
+        if settings.count:
+            label_sort_func = sort_by_uses
     for label in sorted(sorted(board.get_labels(), key=lambda i: i.name),
-                        key=lambda i: color_key.get(i.color, 9999)):
+                        key=label_sort_func):
         fields = []
         if settings.verbose > 0:
             fields.append(label.id)
