@@ -1,0 +1,13 @@
+#!/bin/bash
+host_name=openwrt
+host_addr=10.10.80.210
+
+source "$(dirname "$(realpath -e "$0")")"/../sysadmin/mount-umount.sh || exit 9
+
+if [[ "$#" -eq 0 ]]; then
+    echo "No shares specified!" >&2
+    exit 2
+fi
+for share in "$@"; do
+    do_mount_sshfs "$host_name" "$host_addr" "$share" || exit 1
+done
