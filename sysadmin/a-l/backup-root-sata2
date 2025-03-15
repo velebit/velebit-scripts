@@ -1,14 +1,10 @@
 #!/bin/bash
 # Back up a root partition to another partition on another SATA SSD.
 
-script="$(dirname $(realpath "$0"))/backup-partition"
-if [ ! -e "$script" ]; then
-    script="$(dirname $(realpath "$0"))/../linux/backup-partition"
-fi
+script="$(dirname $(realpath "$0"))/../backup-partition"
 if [ ! -e "$script" ]; then
     echo "Could not find backup-partition script" >&2; exit 1
 fi
-HOSTNAME="${HOSTNAME-$(hostname)}"
 
 verbose=
 while [ "$#" -gt 0 ]; do
