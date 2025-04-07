@@ -543,7 +543,10 @@ if [ -n "$INDEX_CHORUS" ]; then
         snip_allow="$snip_deny"
     done
     # ...but not really
-    echo > Luka.mp3.urllist
+    cat "$DIR"/a-chorus.mp3.tmplist | sed \
+        -n \
+        -e '/Gingerbread House 3, Audience/p' \
+        > Luka.mp3.urllist
 fi
 
 ### bert (Tenor, Guards)
@@ -823,7 +826,13 @@ fi
 if [ -n "$do_generate_demo" -a -e tmplists/demo.mp3.tmplist ]; then
     echo "@@@ demo" >&2
     cat tmplists/demo.mp3.tmplist \
-        > demo.mp3.urllist
+        | sed -e '/Rehearsal/Id' \
+              -e '/Pink\(ie\|y\).*Demo.*\.mp3.*with cuts/I{;/Pink\(ie\|y\).*WithCuts.*\.mp3/I!{;s/ *(with cuts)//;};}' \
+              > demo.mp3.urllist
+    echo "@@@ rehearsal" >&2
+    cat tmplists/demo.mp3.tmplist \
+        | sed -e '/Rehearsal/I!d' \
+              > rehearsal.mp3.urllist
 fi
 
 ### orchestra-only MP3s
