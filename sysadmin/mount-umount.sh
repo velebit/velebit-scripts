@@ -256,7 +256,7 @@ do_mount_smb () {
 	return 1  # message already shown
     fi
 
-    sudo mount -t "$type" -o username="$user",rw \
+    sudo mount -t "$type" -o username="$user",uid="$user",rw \
 	 //"$host_addr"/"$share" "$dir"
 }
 
