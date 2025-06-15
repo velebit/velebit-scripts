@@ -329,7 +329,8 @@ class Board(object):
                 if item_data['id'] not in item_ids:
                     if force_item_fetch:
                         item = self.item_by_type_and_id(
-                            item_data['type'], item_data['id'])
+                            item_data['type'], item_data['id'],
+                            compare_with_json=item_data)
                     else:
                         item = Item._from_json(item_data, board=self)
                     assert item_type is None or item.type == item_type
@@ -348,7 +349,8 @@ class Board(object):
         return self.items(item_type='sticky_note',
                           parent_item_id=parent_item_id)
 
-    def item_by_id(self, item_id, *, subdir="items", expected_type=None):
+    def item_by_id(self, item_id, *, subdir="items", expected_type=None,
+                   compare_with_json=None):
         url = ("https://api.miro.com/v2/boards/" + urllib.parse.quote(self.id)
                + "/" + subdir + "/" + urllib.parse.quote(item_id))
         response = self.client._make_auth_request(request=requests.get,
@@ -358,11 +360,24 @@ class Board(object):
             ext_id = subdir + '/' + urllib.parse.quote(item_id)
             raise ValueError(f"Expected type '{expected_type}', got"
                              f" '{json['type']}' for item .../{ext_id}")
+        if compare_with_json is not None:
+            if json == compare_with_json:
+                print(f"(M) New JSON for {item_id} matches old",
+                      file=sys.stderr)
+            else:
+                print(f"(M) New JSON for {item_id} DOESN'T match old:\n"
+                      f"--- old ---\n{compare_with_json}\n"
+                      f"--- new ---\n{json}\n--- --- ---",
+                      file=sys.stderr)
         return Item._from_json(json, board=self)
 
-    def item_by_type_and_id(self, item_type, item_id):
+    def item_by_type_and_id(self, item_type, item_id,
+                            *, compare_with_json=None):
         subclass = Item._get_subclass(item_type)
-        return subclass.by_id(id=item_id, board=self)
+        item = subclass.by_id(id=item_id, board=self,
+                              compare_with_json=compare_with_json)
+        assert item.type == item_type
+        return item
 
     def groups(self):
         url = ("https://api.miro.com/v2/boards/" + urllib.parse.quote(self.id)
@@ -372,8 +387,9 @@ class Board(object):
         }
         items = []
         item_ids = set()
-        # As of 2024-11-15, the 'data' element in JSON is suspect; we force
-        # getting the entire group by ID, instead.
+        # The 'data' element in the JSON returned by the groups query is
+        # suspect; for example, the items list may be incomplete. (Last checked
+        # 2025-06-15.) We force re-fetching each group by ID, instead.
         force_group_fetch = True
         while True:
             response = self.client._make_auth_request(request=requests.get,
@@ -384,6 +400,8 @@ class Board(object):
                 if group_data['id'] not in item_ids:
                     if force_group_fetch:
                         items.append(Group.by_id(group_data['id'], board=self))
+                        # To check whether the groups query is still bad, add:
+                        #             compare_with_json=group_data))
                     else:
                         items.append(Item._from_json(group_data, board=self))
                     item_ids.add(items[-1].id)
@@ -438,9 +456,10 @@ class Item(object):
         return cls.__classes.get(item_type, fallback)
 
     @classmethod
-    def by_id(cls, id, *, board):
+    def by_id(cls, id, *, board, compare_with_json=None):
         item = board.item_by_id(id, subdir=cls.request_subdir(),
-                                expected_type=cls.json_type())
+                                expected_type=cls.json_type(),
+                                compare_with_json=compare_with_json)
         assert type(item) is cls, f"Expected {cls}, got {type(item)}"
         return item
 
