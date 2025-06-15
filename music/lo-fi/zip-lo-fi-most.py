@@ -60,6 +60,7 @@ def main():
     base = os.path.basename(os.path.abspath(os.path.dirname(__file__)))
     top_path = to_abs('.')[0]
     parent_path = os.path.dirname(top_path)
+    zipdir_path = os.path.join(parent_path, 'zip')
     dirs = to_abs('christmas', 'classical', 'games', 'kids', 'musical',
                   '.')
     ignored = to_abs('NCFO practice', 'NCFO audition',
@@ -75,7 +76,7 @@ def main():
                                                  os.path.basename(d)))
             zip_name = f"{base}-{dfrag}.zip"
         zip_path = os.path.relpath(
-            os.path.join(parent_path, zip_name),
+            os.path.join(zipdir_path, zip_name),
             start=curr_parent)
         go_to_dir(curr_parent, curr_name)
         make_zip(zip_path, [curr_name],
