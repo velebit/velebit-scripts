@@ -9,5 +9,10 @@ canonical_file_list () {
 
 canonical_file_list > /tmp/fl_ours.txt
 (cd "$(dirname "$0")"; canonical_file_list > /tmp/fl_lofi.txt)
-meld /tmp/fl_ours.txt /tmp/fl_lofi.txt
+if [[ -n "$DISPLAY" ]]; then
+    meld /tmp/fl_ours.txt /tmp/fl_lofi.txt
+else
+    diff --color=always -u /tmp/fl_ours.txt /tmp/fl_lofi.txt \
+         | less -R
+fi
 rm -f /tmp/fl_ours.txt /tmp/fl_lofi.txt

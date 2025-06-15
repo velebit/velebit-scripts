@@ -25,7 +25,7 @@ ignore=(
     #"/Lofi Girl/Lofi Records - unlisted"
 )
 
-exclude_patterns=( '*.sh' '*~' 'mb-album-ids' )
+exclude_patterns=( '*.sh' '*.py' '*~' 'mb-album-ids' )
 
 # Check if a directory is in the list, or a parent of any in the list.
 is_match_or_parent_of () {
