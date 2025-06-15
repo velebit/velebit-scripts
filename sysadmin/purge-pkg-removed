@@ -1,0 +1,18 @@
+#!/bin/sh
+
+set -- \
+    `dpkg-query --show \
+                --showformat '${db:Status-Status} ${binary:Package}\n' \
+     | awk '($1=="config-files"){print $2}'`
+
+if [ "$#" -eq 0 ]; then
+    echo "*** No packages with config files were found ***"
+    exit 0
+fi
+if apt-get remove --assume-no "$@" | grep -q 'will be REMOVED'; then
+    echo "INTERNAL ERROR: would attempt to remove package(s)!" >&2
+    exit 1
+fi
+
+echo "*** Preparing to purge previously removed packages ***"
+apt-get purge "$@"
