@@ -33,7 +33,7 @@ def print_sticky_notes(board_key, verbosity=0,
                        print_note_id=False, print_note_url=False,
                        print_color=True,
                        print_frame=True, print_frame_id=False,
-                       print_geometry=False):
+                       print_geometry=False, print_times=False):
     board = get_board(board_key, board_key, verbosity=verbosity)
     parents_by_id = {}
     notes_by_frame_id = {}
@@ -58,7 +58,10 @@ def print_sticky_notes(board_key, verbosity=0,
             'frame_id':  frame_id,
             'frame_name': frame_name,
             'size': note.size,
-            'relative_position': note.relative_position})
+            'relative_position': note.relative_position,
+            'time_created': note._json['createdAt'],
+            'time_modified': note._json['modifiedAt'],
+        })
 
     for note_list in notes_by_frame_id.values():
         for note_info in note_list:
@@ -67,6 +70,9 @@ def print_sticky_notes(board_key, verbosity=0,
                 to_print.append(note_info['id'])
             if print_note_url:
                 to_print.append(note_info['link'])
+            if print_times:
+                to_print.append(note_info['time_created'])
+                to_print.append(note_info['time_modified'])
             to_print.append(note_info['name'])
             if print_color:
                 to_print.append(note_info['fill_color'])
@@ -97,7 +103,9 @@ def main():
                        print_note_id=settings.id,
                        print_note_url=settings.url,
                        print_frame_id=settings.id,
-                       print_geometry=(settings.verbose >= 3))
+                       print_geometry=(settings.verbose >= 3),
+                       print_times=(settings.verbose >= 4),
+                       )
 
 
 if __name__ == "__main__":
