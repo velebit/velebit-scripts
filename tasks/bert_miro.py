@@ -312,18 +312,32 @@ class Board(object):
         if parent_item_id is not None:
             params['parent_item_id'] = parent_item_id
         items = []
+        item_ids = set()
+        # In late May and early June 2025, the 'data' element in the JSON item
+        # list sometimes contained garbage (e.g. wrong colors). I added this
+        # code to see whether getting it via the item ID would help... which it
+        # didn't, so this was never enabled except for that test. In any case,
+        # it works correctly again.
+        force_item_fetch = False
         while True:
             response = self.client._make_auth_request(request=requests.get,
                                                       url=url,
                                                       params=params)
             json = response.json()
-            for board_data in json['data']:
-                items.append(Item._from_json(board_data, board=self))
+            for item_data in json['data']:
+                assert item_type is None or item_data['type'] == item_type
+                if item_data['id'] not in item_ids:
+                    if force_item_fetch:
+                        item = self.item_by_type_and_id(
+                            item_data['type'], item_data['id'])
+                    else:
+                        item = Item._from_json(item_data, board=self)
+                    assert item_type is None or item.type == item_type
+                    items.append(item)
+                    item_ids.add(item.id)
             if 'cursor' not in json:
                 break
             params['cursor'] = json['cursor']
-        if item_type is not None:
-            assert all([i.type == item_type for i in items])
         return items
 
     def frames(self, parent_item_id=None):
@@ -334,12 +348,21 @@ class Board(object):
         return self.items(item_type='sticky_note',
                           parent_item_id=parent_item_id)
 
-    def item_by_id(self, item_id):
+    def item_by_id(self, item_id, *, subdir="items", expected_type=None):
         url = ("https://api.miro.com/v2/boards/" + urllib.parse.quote(self.id)
-               + "/items/" + urllib.parse.quote(item_id))
+               + "/" + subdir + "/" + urllib.parse.quote(item_id))
         response = self.client._make_auth_request(request=requests.get,
                                                   url=url)
-        return Item._from_json(response.json(), board=self)
+        json = response.json()
+        if expected_type is not None and json['type'] != expected_type:
+            ext_id = subdir + '/' + urllib.parse.quote(item_id)
+            raise ValueError(f"Expected type '{expected_type}', got"
+                             f" '{json['type']}' for item .../{ext_id}")
+        return Item._from_json(json, board=self)
+
+    def item_by_type_and_id(self, item_type, item_id):
+        subclass = Item._get_subclass(item_type)
+        return subclass.by_id(id=item_id, board=self)
 
     def groups(self):
         url = ("https://api.miro.com/v2/boards/" + urllib.parse.quote(self.id)
@@ -360,7 +383,7 @@ class Board(object):
             for group_data in json['data']:
                 if group_data['id'] not in item_ids:
                     if force_group_fetch:
-                        items.append(self.group_by_id(group_data['id']))
+                        items.append(Group.by_id(group_data['id'], board=self))
                     else:
                         items.append(Item._from_json(group_data, board=self))
                     item_ids.add(items[-1].id)
@@ -368,13 +391,6 @@ class Board(object):
                 break
             params['cursor'] = json['cursor']
         return items
-
-    def group_by_id(self, group_id):
-        url = ("https://api.miro.com/v2/boards/" + urllib.parse.quote(self.id)
-               + "/groups/" + urllib.parse.quote(group_id))
-        response = self.client._make_auth_request(request=requests.get,
-                                                  url=url)
-        return Item._from_json(response.json(), board=self)
 
 
 # ===== Items on a Miro board =====
@@ -407,14 +423,26 @@ class Item(object):
     @classmethod
     def _from_json(cls, json, board=None):
         assert 'type' in json
-        subclass = cls.__classes.get(json['type'], cls)
+        subclass = cls._get_subclass(json['type'],
+                                     fallback=Item)
         return subclass(json=json, board=board)
 
     @classmethod
-    def _register_subclass(cls, json_type):
-        assert json_type not in cls.__classes
-        cls.__classes[json_type] = cls
+    def _register_subclass(cls):
+        assert cls.json_type() not in cls.__classes
+        cls.__classes[cls.json_type()] = cls
         return cls.__classes
+
+    @classmethod
+    def _get_subclass(cls, item_type, fallback=None):
+        return cls.__classes.get(item_type, fallback)
+
+    @classmethod
+    def by_id(cls, id, *, board):
+        item = board.item_by_id(id, subdir=cls.request_subdir(),
+                                expected_type=cls.json_type())
+        assert type(item) is cls, f"Expected {cls}, got {type(item)}"
+        return item
 
     @property
     def _json(self):
@@ -490,6 +518,14 @@ class Item(object):
 class Frame(Item):
     """A frame item from a Miro board."""
 
+    @staticmethod  # there's no @staticproperty!
+    def json_type():
+        return 'frame'
+
+    @staticmethod  # there's no @staticproperty!
+    def request_subdir():
+        return 'frames'
+
     @property
     def text(self):
         return self._get_property('data', 'title')
@@ -501,22 +537,38 @@ class Frame(Item):
         return self.items(item_type='sticky_note')
 
 
-Frame._register_subclass('frame')
+Frame._register_subclass()
 
 
 class StickyNote(Item):
     """A sticky_note item from a Miro board."""
+
+    @staticmethod  # there's no @staticproperty!
+    def json_type():
+        return 'sticky_note'
+
+    @staticmethod  # there's no @staticproperty!
+    def request_subdir():
+        return 'sticky_notes'
 
     @property
     def text(self):
         return html2text(self._get_property('data', 'content'))
 
 
-StickyNote._register_subclass('sticky_note')
+StickyNote._register_subclass()
 
 
 class Shape(Item):
     """A shape item from a Miro board."""
+
+    @staticmethod  # there's no @staticproperty!
+    def json_type():
+        return 'shape'
+
+    @staticmethod  # there's no @staticproperty!
+    def request_subdir():
+        return 'shapes'
 
     @property
     def text(self):
@@ -527,22 +579,38 @@ class Shape(Item):
         return self._get_property('data', 'shape')
 
 
-Shape._register_subclass('shape')
+Shape._register_subclass()
 
 
 class Text(Item):
     """A text item from a Miro board."""
+
+    @staticmethod  # there's no @staticproperty!
+    def json_type():
+        return 'text'
+
+    @staticmethod  # there's no @staticproperty!
+    def request_subdir():
+        return 'texts'
 
     @property
     def text(self):
         return html2text(self._get_property('data', 'content'))
 
 
-Text._register_subclass('text')
+Text._register_subclass()
 
 
 class Group(Item):
     """A group from a Miro board."""
+
+    @staticmethod  # there's no @staticproperty!
+    def json_type():
+        return 'group'
+
+    @staticmethod  # there's no @staticproperty!
+    def request_subdir():
+        return 'groups'
 
     @property
     def item_ids(self):
@@ -553,7 +621,7 @@ class Group(Item):
         return [self.board.item_by_id(str(i)) for i in self.item_ids]
 
 
-Group._register_subclass('group')
+Group._register_subclass()
 
 
 # ===== managing saved authentication and the client object =====
@@ -623,12 +691,12 @@ def get_board(board_id, board_name, auth=None, verbosity=0):
 
 def get_frame(board, frame_id, frame_name, verbosity=0):
     verbosity_threshold, extra_msg = 1, ''
-    frame = board.item_by_id(frame_id)
+    frame = Frame.by_id(frame_id, board=board)
     if frame is None:
         pass  # getting by name is unimplemented
         # ... verbosity_threshold, extra_msg = 0, '*by name*, fix the ID!'
     assert frame is not None, "No frame found"
-    assert type(frame) is Frame, "Bad type for frame"
+    assert type(frame) is Frame, f"Bad type for frame: {type(frame)}"
     if verbosity >= verbosity_threshold:
         print(f"(M) Selected frame '{frame.text}' ({frame.id}){extra_msg}",
               file=sys.stderr)
