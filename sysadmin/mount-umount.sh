@@ -3,12 +3,19 @@
 ##### mounting local partitions #####
 
 find_partition () {
-    local partlabel="$1"; shift
+    local part_name="$1"; shift
     local seen=()
-    local d
+    local d r s
     # More names can be added here, but should be mutually exclusive
-    for d in /dev/disk/by-partlabel/"$partlabel"; do
-        if [ -b "$d" ]; then seen+=( "$d" ); fi
+    for d in /dev/disk/by-partlabel/"$part_name" \
+             /dev/disk/by-label/"$part_name"; do
+        if [[ -b "$d" ]]; then
+            r="$(realpath "$d")"
+            for s in "${seen[@]}"; do
+                if [[ "x$r" = "x$s" ]]; then continue 2; fi
+            done
+            seen+=( "$r" )
+        fi
     done
     if [ "${#seen[@]}" -eq 0 ]; then
         echo "No matching partitions found!" >&2
