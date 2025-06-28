@@ -221,25 +221,40 @@ def is_card_template(card):
     return False
 
 
-def get_cards_with_info(board, cards, /, include_templates=True, verbosity=0):
+def get_cards_with_info(board, cards, /, include_templates=True):
     existing = dict()
     for c in board.open_cards():
         if include_templates or not is_card_template(c):
             existing.setdefault(c.name, []).append(c)
-    cards = [{**info, 'cards': existing.get(info['name'], [])}
-             for info in cards]
+    return [{**info, 'cards': existing.get(info['name'], [])}
+            for info in cards]
+
+
+def log_existing_cards(cards, /, verbosity=0, check_together=False):
+    if verbosity < 0:
+        return  # verbosity 0 required to log
     for info in cards:
-        if len(info['cards']) == 1:
-            if verbosity >= 1:
-                print("(T) Card '{name}' already exists!"
-                      .format(name=info['name']),
+        if len(info['cards']) == 1 and verbosity < 1:
+            continue  # at verbosity 0 need >1 card, don't bother checking more
+        if check_together:
+            counts = (len(info['cards']),)
+        else:
+            counts = (len([c for c in info['cards']
+                           if not is_card_template(c)]),
+                      len([c for c in info['cards']
+                           if is_card_template(c)]))
+        have_count_above_1 = (len([n for n in counts if n > 1]) > 0)
+        if have_count_above_1 or verbosity >= 1:
+            counts_str = '+'.join([str(n) for n in counts])
+            use_singular = (len(counts) == 1 and counts[0] == 1)
+            if use_singular:
+                print(f"(T) {counts_str} card matching {info['name']!r}"
+                      " already exists!",
                       file=sys.stderr)
-        elif len(info['cards']) > 1:
-            if verbosity >= 0:
-                print("(T) {num} cards matching '{name}' already exist!"
-                      .format(name=info['name'], num=len(info['cards'])),
+            else:
+                print(f"(T) {counts_str} cards matching {info['name']!r}"
+                      " already exist!",
                       file=sys.stderr)
-    return cards
 
 
 def create_cards_with_info(tlist, cards, labels=None, verbosity=0):
@@ -254,10 +269,15 @@ def create_cards_with_info(tlist, cards, labels=None, verbosity=0):
     return cards
 
 
-def get_or_create_cards_with_info(tlist, cards, labels=None, verbosity=0):
-    cards = get_cards_with_info(tlist.board, cards, verbosity=verbosity)
-    missing = [c for c in cards if 'cards' not in c or len(c['cards']) == 0]
+def get_or_create_cards_with_info(tlist, cards, labels=None, /, verbosity=0,
+                                  log_existing_together=False):
+    cards = get_cards_with_info(tlist.board, cards)
+    log_existing_cards(cards, verbosity=verbosity,
+                       check_together=log_existing_together)
+    missing = [c for c in cards
+               if 'cards' not in c or len(c['cards']) == 0]
     if len(missing) > 0:
+        # Note: will update `cards` by updating members of `missing`!
         create_cards_with_info(tlist, missing,
                                labels=labels, verbosity=verbosity)
     return cards

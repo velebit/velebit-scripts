@@ -219,8 +219,8 @@ def update_trello(settings, tasks):
                     inbox_list, working, default_labels,
                     verbosity=settings.verbose)
             else:
-                card_info = bt.get_cards_with_info(
-                    board, working, verbosity=settings.verbose)
+                card_info = bt.get_cards_with_info(board, working)
+                # will not produce output about existing/multiple cards
             cards = bt.cards_from_info(card_info)
             if s is Src.DONE:
                 bt.move_cards_not_in_lists_to_list(
