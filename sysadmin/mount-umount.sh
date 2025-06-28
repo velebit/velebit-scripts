@@ -222,9 +222,17 @@ create_mountpoint () {
     return 0
 }
 
-remove_mountpoint () {
+remove_mountpoint_quietly () {
     local dir="$1"; shift
     if ! rmdir "$dir"; then
+	return 1
+    fi
+    return 0
+}
+
+remove_mountpoint () {
+    local dir="$1"; shift
+    if ! remove_mountpoint_quietly "$dir"; then
         echo "Warning: could not remove $dir!" >&2
 	return 1
     fi
@@ -232,15 +240,37 @@ remove_mountpoint () {
 }
 
 construct_remote_path () {
-    host_name="$1"; shift
-    share="$1"; shift
-    case "$host_name:$share" in
-	aunt-louisa:shared)   echo "/common/$share/export" ;;
-	aunt-louisa:scratch)  echo "/common/$share/export" ;;
-	aunt-louisa:music)    echo "/common/scratch/export/$share" ;;
-	aunt-louisa:photos)   echo "/common/shared/export/$share" ;;
+    local host_name="$1"; shift
+    local share_or_path="$1"; shift
+    case "$host_name:$share_or_path" in
+	*:*:*|*/*:*|*//*|*:.*) ;;  # invalid
+	*:/*)                 echo "${share_or_path%%/}" ;;
+	*:*/*)                ;;  # invalid (path doesn't start with /)
+	aunt-louisa:shared)   echo "/common/$share_or_path/export" ;;
+	aunt-louisa:scratch)  echo "/common/$share_or_path/export" ;;
+	aunt-louisa:music)    echo "/common/scratch/export/$share_or_path" ;;
+	aunt-louisa:photos)   echo "/common/shared/export/$share_or_path" ;;
 	aunt-louisa:gm-uf)    echo "/common/users/bert/export/gaming/gm-uf2021-5e" ;;
-	aunt-louisa:*)        echo "/common/home/$share/export" ;;
+	aunt-louisa:*)        echo "/common/home/$share_or_path/export" ;;
+    esac
+}
+
+construct_share_name () {
+    local share_or_path="$1"; shift
+
+    case "$share_or_path" in
+	*:*|*//*|.*) ;;  # invalid
+	/*)
+	    local name="$share_or_path"
+	    name="${name//\//_}"
+	    name="${name##_}"
+	    name="${name%%_}"
+	    echo "path_$name"
+	    ;;
+	*/*) ;;  # invalid
+	*)
+	    echo "$share_or_path"
+	    ;;
     esac
 }
 
@@ -263,8 +293,14 @@ do_mount_smb () {
 	return 1  # message already shown
     fi
 
-    sudo mount -t "$type" -o username="$user",uid="$user",rw \
-	 //"$host_addr"/"$share" "$dir"
+    if ! sudo mount -t "$type" -o username="$user",uid="$user",rw \
+	     //"$host_addr"/"$share" "$dir"; then
+        local rc="$?"
+        if [[ "$rc" -eq 0 ]]; then rc=1; fi
+        remove_mountpoint_quietly "$dir"  # ignore any errors
+        return "$rc"
+    fi
+    return 0
 }
 
 
@@ -285,6 +321,7 @@ do_umount_smb () {
     fi
     if ! sudo umount "$dir"; then
 	echo "Warning: could not unmount $dir." >&2
+        remove_mountpoint_quietly "$dir"  # ignore any errors
 	return 1
     fi
     if ! remove_mountpoint "$dir"; then
@@ -297,13 +334,15 @@ do_umount_smb () {
 do_mount_sshfs () {
     local host_name="$1"; shift
     local host_addr="$1"; shift
-    local share="$1"; shift
+    local share_or_path="$1"; shift
     local rpath="$1"; shift  # optional
 
     if [[ -z "$rpath" ]]; then
-	rpath="$(construct_remote_path "$host_name" "$share")"
+	rpath="$(construct_remote_path "$host_name" "$share_or_path")"
 	if [[ -z "$rpath" ]]; then return 2; fi
     fi
+    local share="$(construct_share_name "$share_or_path")"
+    if [[ -z "$share" ]]; then return 2; fi
 
     local user="$(id -un)"
     local type=ssh
@@ -321,14 +360,23 @@ do_mount_sshfs () {
     # assume ssh-agent may be holding credentials for Git
     local ssh_options=( -o PubkeyAuthentication=no
 			-o PasswordAuthentication=yes )
-    sshfs "$user"@"$host_addr":"$rpath" "$dir" "${ssh_options[@]}"
+    if ! sshfs "$user"@"$host_addr":"$rpath" "$dir" "${ssh_options[@]}"; then
+        local rc="$?"
+        if [[ "$rc" -eq 0 ]]; then rc=1; fi
+        remove_mountpoint_quietly "$dir"  # ignore any errors
+        return "$rc"
+    fi
+    return 0
 }
 
 
 do_umount_sshfs () {
     local host_name="$1"; shift
     local host_addr="$1"; shift
-    local share="$1"; shift
+    local share_or_path="$1"; shift
+
+    local share="$(construct_share_name "$share_or_path")"
+    if [[ -z "$share" ]]; then return 2; fi
 
     local user="$(id -un)"
     local type=ssh
@@ -344,6 +392,7 @@ do_umount_sshfs () {
     fi
     if ! "${umount_cmd[@]}"; then
 	echo "Warning: could not unmount $dir." >&2
+        remove_mountpoint_quietly "$dir"  # ignore any errors
 	return 1
     fi
     if ! remove_mountpoint "$dir"; then
