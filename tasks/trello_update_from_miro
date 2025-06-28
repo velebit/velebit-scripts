@@ -15,6 +15,8 @@ MIRO_TRIAGE_FRAME_ID, MIRO_TRIAGE_FRAME_NAME = \
     '3458764534889282821', 'A&#43;b short term tasks that need eval'
 MIRO_ACTIVE_FRAME_ID, MIRO_ACTIVE_FRAME_NAME = \
     '3458764558974521944', 'Eisenhowered A&#43;b short term list'
+MIRO_PERIODIC_FRAME_ID, MIRO_PERIODIC_FRAME_NAME = \
+    '3458764632524709740', 'Periodic tasks'
 MIRO_DONE_FRAME_ID, MIRO_DONE_FRAME_NAME = \
     '3458764534889282822', 'Done'
 
@@ -87,6 +89,7 @@ def read_miro_board_frames(verbosity=0):
     tasks_active = []
     for frame_id, frame_name, frame_tag in (
             (MIRO_ACTIVE_FRAME_ID, MIRO_ACTIVE_FRAME_NAME, Src.ACTIVE),
+            (MIRO_PERIODIC_FRAME_ID, MIRO_PERIODIC_FRAME_NAME, Src.ACTIVE),
             (MIRO_TRIAGE_FRAME_ID, MIRO_TRIAGE_FRAME_NAME, Src.TRIAGE),
             (MIRO_DONE_FRAME_ID, MIRO_DONE_FRAME_NAME, Src.DONE),
             ):
