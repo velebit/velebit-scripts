@@ -91,6 +91,7 @@ add_if "!$is_headless"      graphviz
 add_if always               iputils-ping traceroute
 add_if always               telnet ncat
 add_if always               wget curl
+add_if always               zst
 add_if always               tcpdump dhcpdump tshark nmap
 add_if "!$is_headless"      wireshark
 add_if always               lsof iotop time
