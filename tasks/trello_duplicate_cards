@@ -1,6 +1,78 @@
-#!/bin/bash
+#!/home/bert/.local/lib/python/venv/tasks/bin/python3
 # Show all duplicate cards from a board (by default, 'bert active').
-# Current implementation is super inefficient.
+# Template cards are ignored unless they are themselves duplicate.
+import argparse
+from collections import defaultdict
+import sys
+import trello.exceptions
+from bert_trello import (get_board, create_auth_token, read_auth_data,
+                         is_card_template)
 
-"$(dirname "$0")"/trello_cards_from_board --no-list -t "${1:-bert active}" \
-    | sed -e 's,^..,,' | sort | uniq -dc
+
+def create_level_1():
+    # Note: specifying the factory argument by name (default_factory=...)
+    # as documented on docs.python.org fails with Python 3.11
+    return defaultdict(list)
+
+
+def create_level_2():
+    return defaultdict(create_level_1)
+
+
+def process_cards(board_key, settings):
+    try:
+        board = get_board(board_key, board_key, verbosity=settings.verbosity)
+    except trello.exceptions.Unauthorized:
+        board = get_board(board_key, board_key, verbosity=settings.verbosity,
+                          auth=create_auth_token(read_auth_data()))
+    seen = create_level_2()
+    cards_iter = board.open_cards()
+    for card in cards_iter:
+        # tlist = card.get_list()
+        cards = seen[str(card.name)][is_card_template(card)]
+        cards.append(card)
+        if settings.verbosity >= 0:
+            print("+" if len(cards) > 1 else ".", end="",
+                  file=sys.stderr, flush=True)
+    if settings.verbosity >= 0:
+        print(file=sys.stderr, flush=True)
+    for name, name_dict in seen.items():
+        for is_template, cards in name_dict.items():
+            if len(cards) > 1:
+                print(f"{name!r}{' (template)' if is_template else ''}:")
+                card_info = list()
+                for c in cards:
+                    created_date = c.created_date
+                    info_bits = [
+                        f"created {created_date.strftime('%Y-%m-%d')}",
+                        # Not sure if this is actually useful:
+                        f"updated {c.date_last_activity.strftime('%Y-%m-%d')}",
+                        f"in {c.get_list().name!r}",
+                        # f"id {c.id}",
+                        f"\n    url {c.short_url}",
+                    ]
+                    info = "  " + ", ".join(info_bits)
+                    card_info.append((created_date, info))
+                card_info.sort(key=lambda ci: ci[0])
+                for ci in card_info:
+                    print(ci[1])
+
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-v', '--verbose', dest='verbosity',
+                        action='count', default=0)
+    parser.add_argument('-q', '--quiet', dest='verbosity',
+                        action='store_const', const=-1)
+    parser.add_argument('board', nargs='?', default='bert active')
+    settings = parser.parse_args()
+    return settings
+
+
+def main():
+    settings = parse_args()
+    process_cards(settings.board, settings)
+
+
+if __name__ == "__main__":
+    main()
