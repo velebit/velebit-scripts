@@ -26,8 +26,7 @@ def process_cards(board_key, settings):
         board = get_board(board_key, board_key, verbosity=settings.verbosity,
                           auth=create_auth_token(read_auth_data()))
     seen = create_level_2()
-    cards_iter = board.open_cards()
-    for card in cards_iter:
+    for card in board.open_cards():
         cards = seen[str(card.name)][is_card_template(card)]
         cards.append(card)
         if settings.verbosity >= 0:

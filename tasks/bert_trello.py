@@ -455,11 +455,14 @@ def update_orphan_labeled_tasks(board, label_rules, tasks, verbosity=0):
 #        assert frozenset(card.labels) == want_labels
 
 
-# ===== printing card information in a uniform way =====
+# ===== formatting and printing card information in a uniform way =====
 
-def print_cards(cards, *, key=lambda c: c.created_date,
-                print_template=False, print_created=True, print_updated=True,
-                print_list=True, print_id=False, print_url=True):
+def format_cards(cards, *, key=None,
+                 print_template=False, print_created=True, print_updated=True,
+                 print_list=True, print_id=False, print_url=True):
+    if key is None:
+        def key(c):
+            return c.created_date
     card_info = list()
     for c in cards:
         info_bits = []
@@ -482,5 +485,9 @@ def print_cards(cards, *, key=lambda c: c.created_date,
         card_info.append((key(c), c.name, len(card_info), info))
     # `card_info` tuples are already ordered for comparability.
     card_info.sort()
-    for _, _, _, info in card_info:
-        print(info)
+    return [info for _, _, _, info in card_info]
+
+
+def print_cards(cards, **kwargs):
+    for cf in format_cards(cards, **kwargs):
+        print(cf)
