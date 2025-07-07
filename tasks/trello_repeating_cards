@@ -1,0 +1,215 @@
+#!/home/bert/.local/lib/python/venv/tasks/bin/python3
+# Show all repeating cards from a board (by default, 'bert active').
+import argparse
+import calendar
+import datetime
+import json
+import sys
+import trello.exceptions
+import zoneinfo
+from bert_trello import (get_board, create_auth_token, read_auth_data,
+                         get_open_board_by_id)
+
+# The ID(s) used by the repeater Trello plug-in
+IDS_PLUGIN_REPEAT = ('57b47fb862d25a30298459b1',)
+
+
+class Outputter:
+    """
+    A helper class to manage output, including interleaving of progress
+    marks with regular output.
+    """
+
+    def __init__(self, verbosity, *, out=None, progress_out=None):
+        """
+        Initialize the object.
+
+        `verbosity` specifies the object's initial verbosity.
+        Regular messages will be sent to `out`, or to `sys.stdout`.
+        Progress output will be sent to `progress_out`, or to `sys.stderr`.
+        """
+        self.__verbosity = verbosity
+        self.__out = out
+        self.__progress_out = progress_out
+        self.__progress_newline = False
+
+    def __del__(self):
+        "Clean up the output (by emitting a newline if needed) on destruction."
+        self.flush_progress()
+
+    @property
+    def verbosity(self):
+        "The object's current verbosity."
+        return self.__verbosity
+
+    @verbosity.setter
+    def verbosity(self, value):
+        self.__verbosity = value
+
+    def progress(self, mark, *, verbosity=0):
+        """
+        Print a progress mark if the object's verbosity is at least
+        `verbosity`. A newline will not be added.
+        """
+        if self.__verbosity >= verbosity:
+            out = self.__progress_out if self.__progress_out is not None \
+                else sys.stderr
+            print(mark, end="", file=out, flush=True)
+            self.__progress_newline = True
+
+    def flush_progress(self):
+        "Add a newline to the progress output if any marks were printed."
+        if self.__progress_newline:
+            out = self.__progress_out if self.__progress_out is not None \
+                else sys.stderr
+            print(file=out, flush=True)
+            self.__progress_newline = False
+
+    def message(self, message, *, verbosity=-1):
+        """
+        Print a regular message if the object's verbosity is at least
+        `verbosity`. A newline will be added.
+        """
+        if self.__verbosity >= verbosity:
+            self.flush_progress()
+            out = self.__out if self.__out is not None else sys.stdout
+            print(message, file=out)
+
+
+class Lookup:
+    def __init__(self, lookup_function):
+        self.__cache = {}
+        self.__lookup = lookup_function
+
+    def get(self, key):
+        try:
+            return self.__cache[key]
+        except KeyError:  # not cached
+            answer = self.__lookup(key)
+            self.__cache[key] = answer
+            return answer
+
+    def put(self, key, value):
+        self.__cache[key] = value
+
+
+main_board_id = None
+board_lookup = None
+list_lookup = None
+
+
+def format_period(repeat):
+    if repeat['period'] == "weekly":
+        # Repeater's day 0 is Sunday; calendar's is Monday...
+        wdays = ", ".join([calendar.day_abbr[(i + 6) % 7]
+                           for i in repeat['weekdays']])
+        if repeat['interval'] == 1:
+            return f"every week on {wdays}"
+        return f"every {repeat['interval']} weeks on {wdays}"
+    raise NotImplementedError(
+        f"Period {repeat['period']!r} is not yet supported")
+
+
+def format_repeat(card, repeat, *, one_line=False):
+    card_list = list_lookup.get((main_board_id, card.list_id))
+    card_info = f"{card.name!r} in list {card_list.name!r}:"
+    info_bits = []
+
+    target_list = list_lookup.get(
+        (repeat['idTargetBoard'], repeat['idTargetList']))
+    list_info = f"list {target_list.name!r}"
+    if repeat['idTargetBoard'] != main_board_id:
+        list_info += f" of board {target_list.board.name!r}"
+    target_location = repeat['position']
+    info_bits.append(f"to the {target_location} of {list_info}")
+
+    period = format_period(repeat)
+    time = f"{repeat['time']['h']:02d}:{repeat['time']['m']:02d}"
+    # Repeater apparently uses UNIX time times 1000 (milliseconds since epoch)
+    next_datetime = datetime.datetime.fromtimestamp(
+        repeat['nextRecurrence'] / 1000, tz=zoneinfo.ZoneInfo(repeat['tz']))
+    next_time = next_datetime.strftime('%Y-%m-%d %H:%M')
+    info_bits.append(f"{period} at {time}, next is {next_time}")
+
+    prefix = " " if one_line else "\n    "
+    sep = "," + prefix
+    return card_info + prefix + sep.join(info_bits)
+
+
+def process_cards(board_key, settings):
+    try:
+        board = get_board(board_key, board_key, verbosity=settings.verbosity)
+    except trello.exceptions.Unauthorized:
+        board = get_board(board_key, board_key, verbosity=settings.verbosity,
+                          auth=create_auth_token(read_auth_data()))
+    global main_board_id, board_lookup, list_lookup
+    main_board_id = board.id
+
+    def find_board(id):
+        return get_open_board_by_id(board.client, id)
+    board_lookup = Lookup(find_board)
+    board_lookup.put(main_board_id, board)
+
+    def find_list(board_and_id):
+        board_id, list_id = board_and_id
+        if board_id is None:
+            board_id = main_board_id
+        return board_lookup.get(board_id).get_list(list_id)
+    list_lookup = Lookup(find_list)
+
+    out = Outputter(verbosity=settings.verbosity)
+    unsorted_list = []
+    for card in board.open_cards():
+        repeat_data = [p for p in card.plugin_data
+                       if p['idPlugin'] in IDS_PLUGIN_REPEAT]
+        if not repeat_data:
+            out.progress(".")  # No repeat data.
+        elif len(repeat_data) > 1:
+            out.progress("@")  # Multiple records. Should be impossible!
+        elif repeat_data[0]['value'] == '{}':
+            out.progress("-")  # Have repeat data, but no repeat is set.
+        else:
+            try:
+                repeat = json.loads(repeat_data[0]['value'])['recurrence']
+            except (json.decoder.JSONDecodeError, TypeError, KeyError):
+                # Invalid JSON, or not a dict, or no 'recurrence' element.
+                # All of those should be impossible!
+                out.progress("%")
+                continue
+            text = format_repeat(card, repeat, one_line=settings.one_line)
+            if settings.sorted:
+                unsorted_list.append((int(repeat['nextRecurrence']), text))
+            else:
+                out.message(text)
+    if settings.sorted:
+        unsorted_list.sort(key=lambda e: e[0])
+        for ntime, text in unsorted_list:
+            out.message(text)
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description='Show info on repeating cards.'
+    )
+    parser.add_argument('-v', '--verbose', dest='verbosity',
+                        action='count', default=0,
+                        help='Be more verbose. Can be repeated.')
+    parser.add_argument('-q', '--quiet', dest='verbosity',
+                        action='store_const', const=-1,
+                        help='Be non-verbose.')
+    parser.add_argument('-1', '--one-line', action='store_true',
+                        help='Show the info for every card on one line.')
+    parser.add_argument('-s', '--sorted', action='store_true',
+                        help='Show the entries sorted by trigger time.')
+    parser.add_argument('board', nargs='?', default='bert active')
+    settings = parser.parse_args()
+    return settings
+
+
+def main():
+    settings = parse_args()
+    process_cards(settings.board, settings)
+
+
+if __name__ == "__main__":
+    main()
