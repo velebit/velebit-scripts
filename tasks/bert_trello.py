@@ -453,3 +453,33 @@ def update_orphan_labeled_tasks(board, label_rules, tasks, verbosity=0):
                                 verbosity=verbosity)
         # The assertion is unreliable because the card.labels update is delayed
 #        assert frozenset(card.labels) == want_labels
+
+
+# ===== printing card information in a uniform way =====
+
+def print_cards(cards, *, key=lambda c: c.created_date,
+                print_template=False, print_created=True, print_updated=True,
+                print_list=True, print_id=False, print_url=True):
+    card_info = list()
+    for c in cards:
+        info_bits = []
+        if print_template and is_card_template(c):
+            info_bits.append("template")
+        if print_created:
+            info_bits.append(
+                f"created {c.created_date.strftime('%Y-%m-%d')}")
+        if print_updated:
+            # Not sure if this is actually useful:
+            info_bits.append(
+                f"updated {c.date_last_activity.strftime('%Y-%m-%d')}")
+        if print_list:
+            info_bits.append(f"in {c.get_list().name!r}")
+        if print_id:
+            info_bits.append(f"id {c.id}")
+        if print_url:
+            info_bits.append(f"\n      url {c.short_url}")
+        info = "    " + ", ".join(info_bits)
+        card_info.append((key(c), info))
+    card_info.sort(key=lambda ci: ci[0])
+    for ci in card_info:
+        print(ci[1])
