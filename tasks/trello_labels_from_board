@@ -53,8 +53,12 @@ def print_labels(board_key, settings):
         label_uses = get_label_uses(board)
         if settings.count:
             label_sort_func = sort_by_uses
-    for label in sorted(sorted(board.get_labels(), key=lambda i: i.name),
-                        key=label_sort_func):
+    # Use a Schwartzian transform. Tuples are ordered for comparability.
+    # https://docs.python.org/3/howto/sorting.html#decorate-sort-undecorate
+    labels = [(label_sort_func(label), label.name, i, label)
+              for i, label in enumerate(board.get_labels())]
+    labels.sort()
+    for _, _, _, label in labels:
         fields = []
         if settings.verbose > 0:
             fields.append(label.id)

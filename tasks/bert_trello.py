@@ -479,7 +479,8 @@ def print_cards(cards, *, key=lambda c: c.created_date,
         if print_url:
             info_bits.append(f"\n      url {c.short_url}")
         info = "    " + ", ".join(info_bits)
-        card_info.append((key(c), info))
-    card_info.sort(key=lambda ci: ci[0])
-    for ci in card_info:
-        print(ci[1])
+        card_info.append((key(c), c.name, len(card_info), info))
+    # `card_info` tuples are already ordered for comparability.
+    card_info.sort()
+    for _, _, _, info in card_info:
+        print(info)

@@ -107,10 +107,12 @@ def read_miro_board_frames(verbosity=0):
 
 
 def deduplicate_tasks(tasks):
-    # Order tasks so the "most important" groupings come first, because those
-    # are the ones that will be kept. Relies on stable sort.
-    tasks = sorted(tasks, key=lambda x: x['who'].value)
-    tasks = sorted(tasks, key=lambda x: x['src'].value)
+    # Use a Schwartzian transform. Tuples are ordered for comparability.
+    # https://docs.python.org/3/howto/sorting.html#decorate-sort-undecorate
+    tasks = [(t['src'].value, t['who'].value, i, t)
+             for i, t in enumerate(tasks)]
+    tasks.sort()
+    tasks = [t for src, who, i, t in tasks]
     result_tasks = []
     skip_names = set()
     for info in tasks:
