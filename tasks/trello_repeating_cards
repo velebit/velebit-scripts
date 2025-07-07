@@ -110,10 +110,18 @@ def format_period(repeat):
         f"Period {repeat['period']!r} is not yet supported")
 
 
-def format_repeat(card, repeat, *, one_line=False):
+def format_repeat(card, repeat, *, one_line=False, show_url=True):
     card_list = list_lookup.get((main_board_id, card.list_id))
     card_info = f"{card.name!r} in list {card_list.name!r}:"
     info_bits = []
+
+    period = format_period(repeat)
+    time = f"{repeat['time']['h']:02d}:{repeat['time']['m']:02d}"
+    # Repeater apparently uses UNIX time times 1000 (milliseconds since epoch)
+    next_datetime = datetime.datetime.fromtimestamp(
+        repeat['nextRecurrence'] / 1000, tz=zoneinfo.ZoneInfo(repeat['tz']))
+    next_time = next_datetime.strftime('%Y-%m-%d %H:%M')
+    info_bits.append(f"{period} at {time}, next is {next_time}")
 
     target_list = list_lookup.get(
         (repeat['idTargetBoard'], repeat['idTargetList']))
@@ -123,13 +131,9 @@ def format_repeat(card, repeat, *, one_line=False):
     target_location = repeat['position']
     info_bits.append(f"to the {target_location} of {list_info}")
 
-    period = format_period(repeat)
-    time = f"{repeat['time']['h']:02d}:{repeat['time']['m']:02d}"
-    # Repeater apparently uses UNIX time times 1000 (milliseconds since epoch)
-    next_datetime = datetime.datetime.fromtimestamp(
-        repeat['nextRecurrence'] / 1000, tz=zoneinfo.ZoneInfo(repeat['tz']))
-    next_time = next_datetime.strftime('%Y-%m-%d %H:%M')
-    info_bits.append(f"{period} at {time}, next is {next_time}")
+    if show_url:
+        prefix = "" if one_line else "  "
+        info_bits.append(f"{prefix}url {card.short_url}")
 
     prefix = " " if one_line else "\n    "
     sep = "," + prefix
@@ -176,9 +180,12 @@ def process_cards(board_key, settings):
                 # All of those should be impossible!
                 out.progress("%")
                 continue
-            text = format_repeat(card, repeat, one_line=settings.one_line)
+            text = format_repeat(card, repeat, one_line=settings.one_line,
+                                 show_url=(not settings.one_line
+                                           or settings.verbosity >= 1))
             if settings.sorted:
                 unsorted_list.append((int(repeat['nextRecurrence']), text))
+                out.progress("+")
             else:
                 out.message(text)
     if settings.sorted:
