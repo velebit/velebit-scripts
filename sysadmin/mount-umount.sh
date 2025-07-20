@@ -3,12 +3,27 @@
 ##### mounting local partitions #####
 
 find_partition () {
-    local part_name="$1"; shift
+    local part_request="$1"; shift
     local seen=()
     local d r s
     # More names can be added here, but should be mutually exclusive
-    for d in /dev/disk/by-partlabel/"$part_name" \
-             /dev/disk/by-label/"$part_name"; do
+    local maybe=()
+    case "$part_request" in
+        by-*/*/*)
+            echo "Unexpected request for '$part_request'!" >&2; return
+            ;;
+        by-*/*)
+            maybe+=( /dev/disk/"$part_request" )
+            ;;
+        */*)
+            echo "Unexpected request for '$part_request'!" >&2; return
+            ;;
+        *)
+            maybe+=( /dev/disk/by-partlabel/"$part_request" )
+            maybe+=( /dev/disk/by-label/"$part_request" )
+            ;;
+    esac
+    for d in "${maybe[@]}"; do
         if [[ -b "$d" ]]; then
             r="$(realpath "$d")"
             for s in "${seen[@]}"; do
@@ -124,8 +139,8 @@ umount_device () {
 }
 
 do_mount () {
-    local part_name="$1"; shift
-    local part="$(find_partition "$part_name")"
+    local part_request="$1"; shift
+    local part="$(find_partition "$part_request")"
     [ -n "$part" ] || return 1
     local dev="$(mountable_partition "$part")"
     if [ "($dev)" = "(locked)" ]; then
@@ -163,9 +178,9 @@ do_mount () {
 }
 
 do_umount () {
-    local part_name="$1"; shift
+    local part_request="$1"; shift
     local should_eject="$1"; shift
-    local part="$(find_partition "$part_name")"
+    local part="$(find_partition "$part_request")"
     [ -n "$part" ] || return 1
     local dev="$(mountable_partition "$part")"
     if [ "($dev)" = "(locked)" ]; then

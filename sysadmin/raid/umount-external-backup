@@ -2,4 +2,4 @@
 
 source "$(dirname "$(realpath -e "$0")")"/../mount-umount.sh || exit 9
 
-do_umount backup yes_eject
+do_umount by-partlabel/backup yes_eject
