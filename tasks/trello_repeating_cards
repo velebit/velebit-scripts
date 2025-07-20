@@ -5,6 +5,7 @@ import calendar
 import datetime
 import json
 import sys
+import trello.card
 import trello.exceptions
 import zoneinfo
 from bert_trello import (get_board, create_auth_token, read_auth_data,
@@ -46,12 +47,12 @@ class Outputter:
     def verbosity(self, value):
         self.__verbosity = value
 
-    def progress(self, mark, *, verbosity=0):
+    def progress(self, mark, *, level=0):
         """
         Print a progress mark if the object's verbosity is at least
-        `verbosity`. A newline will not be added.
+        `level`. A newline will not be added.
         """
-        if self.__verbosity >= verbosity:
+        if self.__verbosity >= level:
             out = self.__progress_out if self.__progress_out is not None \
                 else sys.stderr
             print(mark, end="", file=out, flush=True)
@@ -65,12 +66,12 @@ class Outputter:
             print(file=out, flush=True)
             self.__progress_newline = False
 
-    def message(self, message, *, verbosity=-1):
+    def message(self, message, *, level=-1):
         """
         Print a regular message if the object's verbosity is at least
-        `verbosity`. A newline will be added.
+        `level`. A newline will be added.
         """
-        if self.__verbosity >= verbosity:
+        if self.__verbosity >= level:
             self.flush_progress()
             out = self.__out if self.__out is not None else sys.stdout
             print(message, file=out)
@@ -98,6 +99,19 @@ board_lookup = None
 list_lookup = None
 
 
+def format_day_ordinal(num):
+    if 1 <= num <= 31:
+        if 11 <= num <= 13:
+            return f"{num}th"
+        else:
+            suffix = {1: 'st', 2: 'nd', 3: 'rd'}
+            return f"{num}{suffix.get(num % 10, 'th')}"
+    elif num == -1:
+        return "last"
+    raise NotImplementedError(
+        f"Day index {num!r} is not supported")
+
+
 def format_period(repeat):
     if repeat['period'] == "weekly":
         # Repeater's day 0 is Sunday; calendar's is Monday...
@@ -106,14 +120,34 @@ def format_period(repeat):
         if repeat['interval'] == 1:
             return f"every week on {wdays}"
         return f"every {repeat['interval']} weeks on {wdays}"
+    elif repeat['period'] == "monthly":
+        days = ' and '.join([format_day_ordinal(d) for d in repeat['days']])
+        if repeat['interval'] == 1:
+            return f"every month on {days} day"
+        return f"every {repeat['interval']} months on {days} day"
+    elif repeat['period'] == "yearly":
+        # Repeater's month 1 is February; calendar's is January...
+        dates = ' and '.join([
+            f"{calendar.month_abbr[int(d['m']) + 1]} {d['d']}"
+            for d in repeat['dates']])
+        if repeat['interval'] == 1:
+            return f"every year on {dates}"
+        return f"every {repeat['interval']} years on {dates}"
     raise NotImplementedError(
-        f"Period {repeat['period']!r} is not yet supported")
+        f"Period {repeat['period']!r} is not yet supported for {repeat!r}")
 
 
-def format_repeat(card, repeat, *, one_line=False, show_url=True):
+def format_repeat(card, repeat, *, one_line=False, show_src_list=True,
+                  show_src_id=False, show_url=True):
     card_list = list_lookup.get((main_board_id, card.list_id))
-    card_info = f"{card.name!r} in list {card_list.name!r}:"
     info_bits = []
+
+    card_info = f"{card.name!r}"
+    if show_src_list:
+        card_info += f" in list {card_list.name!r}"
+    if show_src_id:
+        card_info += f", id {card.id}"
+    card_info += ":"
 
     period = format_period(repeat)
     time = f"{repeat['time']['h']:02d}:{repeat['time']['m']:02d}"
@@ -140,7 +174,7 @@ def format_repeat(card, repeat, *, one_line=False, show_url=True):
     return card_info + prefix + sep.join(info_bits)
 
 
-def process_cards(board_key, settings):
+def set_up_resources(board_key, settings):
     try:
         board = get_board(board_key, board_key, verbosity=settings.verbosity)
     except trello.exceptions.Unauthorized:
@@ -161,9 +195,18 @@ def process_cards(board_key, settings):
         return board_lookup.get(board_id).get_list(list_id)
     list_lookup = Lookup(find_list)
 
+    return board
+
+
+def process_cards(board_key, settings):
+    board = set_up_resources(board_key, settings)
     out = Outputter(verbosity=settings.verbosity)
     unsorted_list = []
-    for card in board.open_cards():
+    if settings.card:
+        card_iter = (board.get_card(cid) for cid in settings.card)
+    else:
+        card_iter = board.open_cards()
+    for card in card_iter:
         repeat_data = [p for p in card.plugin_data
                        if p['idPlugin'] in IDS_PLUGIN_REPEAT]
         if not repeat_data:
@@ -181,8 +224,11 @@ def process_cards(board_key, settings):
                 out.progress("%")
                 continue
             text = format_repeat(card, repeat, one_line=settings.one_line,
-                                 show_url=(not settings.one_line
-                                           or settings.verbosity >= 1))
+                                 show_src_list=True,
+                                 show_src_id=(settings.verbosity >= 2),
+                                 show_url=(settings.verbosity >= 1
+                                           if settings.one_line
+                                           else settings.verbosity >= 0))
             if settings.sorted:
                 unsorted_list.append((int(repeat['nextRecurrence']), text))
                 out.progress("+")
@@ -205,6 +251,8 @@ def parse_args():
     parser.add_argument('-q', '--quiet', dest='verbosity',
                         action='store_const', const=-1,
                         help='Be non-verbose.')
+    parser.add_argument('-C', '--card', metavar='ID', action='append',
+                        help='Only show the specified card(s).')
     parser.add_argument('-1', '--one-line', action='store_true',
                         help='Show the info for every card on one line.')
     parser.add_argument('-s', '--sorted', action='store_true',
