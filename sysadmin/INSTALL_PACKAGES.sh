@@ -57,6 +57,10 @@ else
     exit 1
 fi
 
+## System configuration that is NOT automatically installed
+#     systemd-networkd
+#     systemd-resolved
+
 #XXX!!!XXX
 #firmware-iwlwifi
 
