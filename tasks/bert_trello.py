@@ -1,4 +1,5 @@
 #!/not-executable/python3
+import dateutil
 import json
 import os
 import sys
@@ -243,7 +244,7 @@ def log_existing_cards(cards, /, verbosity=0, check_together=False):
                            if not is_card_template(c)]),
                       len([c for c in info['cards']
                            if is_card_template(c)]))
-        have_count_above_1 = (len([n for n in counts if n > 1]) > 0)
+        have_count_above_1 = any([n > 1 for n in counts])
         if have_count_above_1 or verbosity >= 1:
             counts_str = '+'.join([str(n) for n in counts])
             use_singular = (len(counts) == 1 and counts[0] == 1)
@@ -458,29 +459,56 @@ def update_orphan_labeled_tasks(board, label_rules, tasks, verbosity=0):
 # ===== formatting and printing card information in a uniform way =====
 
 def format_cards(cards, *, key=None,
-                 print_template=False, print_created=True, print_updated=True,
-                 print_list=True, print_id=False, print_url=True):
+                 show_template=False, show_created=True, show_updated=True,
+                 show_list=True, show_id=False, show_start=False,
+                 show_due=False, newline_before_start_due=True,
+                 show_url=True, newline_before_url=True,
+                 timezone=None):
     if key is None:
         def key(c):
             return c.created_date
     card_info = list()
     for c in cards:
         info_bits = []
-        if print_template and is_card_template(c):
+        if show_template and is_card_template(c):
             info_bits.append("template")
-        if print_created:
+        if show_created:
+            created_date = c.created_date.astimezone(timezone)
             info_bits.append(
-                f"created {c.created_date.strftime('%Y-%m-%d')}")
-        if print_updated:
+                f"created {created_date.strftime('%Y-%m-%d')}")
+        if show_updated:
             # Not sure if this is actually useful:
+            date_last_activity = c.date_last_activity.astimezone(timezone)
             info_bits.append(
-                f"updated {c.date_last_activity.strftime('%Y-%m-%d')}")
-        if print_list:
+                f"updated {date_last_activity.strftime('%Y-%m-%d')}")
+        if show_list:
             info_bits.append(f"in {c.get_list().name!r}")
-        if print_id:
+        if show_id:
             info_bits.append(f"id {c.id}")
-        if print_url:
-            info_bits.append(f"\n      url {c.short_url}")
+        start_or_due_nl = newline_before_start_due
+        if show_start:
+            start = c._json_obj.get('start', '')
+            if start:
+                start_date = dateutil.parser.parse(start).astimezone(timezone)
+                info = f"start on {start_date.strftime('%Y-%m-%d')}"
+                if start_or_due_nl:
+                    start_or_due_nl = False
+                    info = "\n    " + info
+                info_bits.append(info)
+        if show_due:
+            due_date = c.due_date
+            if due_date:
+                due_date = due_date.astimezone(timezone)
+                info = f"due on {due_date.strftime('%Y-%m-%d at %I:%M%p')}"
+                if start_or_due_nl:
+                    start_or_due_nl = False
+                    info = "\n    " + info
+                info_bits.append(info)
+        if show_url:
+            info = f"url {c.short_url}"
+            if newline_before_url:
+                info = "\n      " + info  # note: extra indent!
+            info_bits.append(info)
         info = "    " + ", ".join(info_bits)
         card_info.append((key(c), c.name, len(card_info), info))
     # `card_info` tuples are already ordered for comparability.

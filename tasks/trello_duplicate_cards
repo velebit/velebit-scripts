@@ -44,13 +44,15 @@ def process_cards(board_key, settings):
                     >= settings.threshold)
             if show:
                 print(f"{name!r} (including templates):")
-                print_cards([*non_templates, *templates], print_template=True)
+                print_cards([*non_templates, *templates], print_template=True,
+                            show_start=True, show_due=True)
         else:
             show_cards = (len(non_templates) >= settings.threshold)
             show_templates = (len(templates) >= settings.threshold)
             if show_cards:
                 print(f"{name!r} (cards):")
-                print_cards(non_templates)
+                print_cards(non_templates,
+                            show_start=True, show_due=True)
                 if settings.show_templates_with_cards:
                     if show_templates:
                         print("  matching templates:  see below")
@@ -59,17 +61,20 @@ def process_cards(board_key, settings):
                         # the threshold could have been modified so that
                         # there are multiple. So we use plural.
                         print("  matching templates:")
-                        print_cards(templates)
+                        print_cards(templates,
+                                    show_start=True, show_due=True)
             if show_templates:
                 print(f"{name!r} (templates):")
-                print_cards(templates)
+                print_cards(templates,
+                            show_start=True, show_due=True)
                 if settings.show_cards_with_templates:
                     if show_cards:
                         print("  matching cards:  see above")
                     elif non_templates:
                         # See above; use plural.
                         print("  matching cards:")
-                        print_cards(non_templates)
+                        print_cards(non_templates,
+                                    show_start=True, show_due=True)
 
 
 def parse_args():
