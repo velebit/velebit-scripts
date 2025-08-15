@@ -206,6 +206,13 @@ def update_trello(settings, tasks):
     # - if Miro done, move to Trello done
     # - if Miro not done, move any Trello done to Trello inbox
 
+    # Normally, if there is a template card with a given name, non-template
+    # cards with the same name will not be moved (so that a weekly instance
+    # can go to Done and stay there, while the repeating task stays active).
+    # To move all cards, even non-template cards matching a template, set
+    # this to True:
+    move_template_clones = False
+
     all_tasks = []
     for s in Src:
         for w in Who:
@@ -224,13 +231,18 @@ def update_trello(settings, tasks):
                 card_info = bt.get_cards_with_info(board, working)
                 # will not produce output about existing/multiple cards
             cards = bt.cards_from_info(card_info)
+            templates = [c for c in cards if bt.is_card_template(c)]
+            if len(templates) == 0 or move_template_clones:
+                cards_to_move = cards
+            else:
+                cards_to_move = templates
             if s is Src.DONE:
                 bt.move_cards_not_in_lists_to_list(
-                    cards, [done_list], done_list,
+                    cards_to_move, [done_list], done_list,
                     verbosity=settings.verbose, dry_run=not settings.move)
             else:
                 bt.move_cards_from_lists_to_list(
-                    cards, [done_list], inbox_list,
+                    cards_to_move, [done_list], inbox_list,
                     verbosity=settings.verbose, dry_run=not settings.move)
             bt.update_card_labels(cards, rules,
                                   verbosity=settings.verbose)
