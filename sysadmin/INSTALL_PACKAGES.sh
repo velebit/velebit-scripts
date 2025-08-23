@@ -1,6 +1,7 @@
 #!/bin/bash
 
 apt_install='apt install --no-upgrade'
+#apt_install='apt install --no-upgrade --assume-no'
 #apt_install='apt install --no-upgrade --install-suggests'
 #apt_install="`dirname "$0"`/check-package-recommends"
 
@@ -78,6 +79,7 @@ add_if "$is_primary_os"     discover hdparm
 add_if "$is_primary_os"     mdadm
 add_if "$is_primary_os"     f3    # flash memory capacity
 add_if "$is_primary_os"     fio iozone3  # flash memory (etc) performance
+add_if always               parted fdisk gdisk
 add_if "$is_primary_os"     cryptsetup-bin cryptsetup-run keyutils
 add_if "$is_primary_os"     kpartx
 add_if "$is_server"         partclone
@@ -86,6 +88,7 @@ add_if "$is_primary_os"     squashfs-tools
 add_if always               perl perl-doc
 add_if always               python3 ipython3
 # Note: python3-pip is no longer useful on Debian 12. Thanks a lot, PEP 668.
+add_if always               pipx
 add_if "!$is_headless"      python3-tk
 #add_if "!$is_headless"      python3-numpy python3-scipy python3-matplotlib
 #add_if "!$is_headless"      python3-sympy
@@ -108,7 +111,7 @@ add_if "$is_server"         foomatic-db-engine
 add_if "$is_server"         printer-driver-all openprinting-ppds
 add_if "$is_primary_os"     cups printer-driver-cups-pdf
 add_if "$is_primary_os"     sane sane-utils xsane
-add_if "!$is_headless"      task-cinnamon-desktop
+#add_if "!$is_headless"      task-cinnamon-desktop
 add_if "$is_bert_desktop"   task-xfce-desktop
 add_if "$is_multiuser"      task-mate-desktop
 add_if "$is_multiuser"      task-lxqt-desktop
@@ -119,7 +122,7 @@ add_if "$is_multiuser"      libnotify-bin
 add_if "$is_server"         restic
 add_if "$is_primary_os"     rclone
 
-add_if "$is_server"         isc-dhcp-server
+#add_if "$is_server"         isc-dhcp-server
 add_if "$is_server"         samba samba-vfs-modules
 add_if always               rsync
 add_if always               jigdo-file
@@ -167,6 +170,7 @@ add_if "$is_primary_os"     sonic-pi
 add_if "$is_primary_os"     sloccount
 # These may be useful for bootstraping node.js / typescript development:
 #add_if "$is_bert_desktop"   nodejs npm ts-node
+add_if "$is_primary_os"     shellcheck
 
 ### OpenWRT ImageBuilder dependencies
 #add_if "$is_server"         libncurses5-dev libncursesw5-dev  # <- transitional
@@ -198,7 +202,7 @@ add_if "!$is_headless"      audacity
 add_if "!$is_headless"      musescore
 add_if "!$is_vm"            vorbis-tools ogmtools
 add_if "!$is_vm"            jhead libimage-exiftool-perl exiv2
-add_if "!$is_headless"      paprefs
+#add_if "!$is_headless"      paprefs
 add_if "!$is_vm"            sox libsox-fmt-all
 add_if "$is_media"          vlc libavcodec-extra
 add_if "$is_media"          ffmpeg
@@ -227,7 +231,8 @@ add_if "!$is_headless"      devede
 
 #### CD/DVD burninating
 add_if "!$is_vm"            genisoimage xorriso
-add_if "!$is_vm"            wodim cdrskin cdrdao cue2toc
+add_if "!$is_vm"            wodim cdrskin cdrdao
+#add_if "!$is_vm"            cue2toc
 add_if "!$is_headless"      k3b brasero xfburn
 add_if "!$is_vm"            libcdio-utils
 add_if "!$is_vm"            cdck
