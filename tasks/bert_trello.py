@@ -284,8 +284,12 @@ def get_or_create_cards_with_info(tlist, cards, labels=None, /, verbosity=0,
     return cards
 
 
+def grouped_cards_from_info(info):
+    return [list(c['cards']) for c in info]
+
+
 def cards_from_info(info):
-    return flatten((c['cards'] for c in info))
+    return flatten(grouped_cards_from_info(info))
 
 
 def get_or_create_cards(tlist, cards, labels=None, verbosity=0):
