@@ -103,7 +103,9 @@ def get_multiple_labels_by_name(board, names):
 
 
 def get_any_list_by_id(board, id):
-    return select_one(board.list_lists(), item_id_is(id))
+    tlist = trello.trellolist.List(board, id)
+    tlist.fetch()
+    return tlist
 
 
 def get_any_list_by_name(board, name):
@@ -111,7 +113,8 @@ def get_any_list_by_name(board, name):
 
 
 def get_open_list_by_id(board, id):
-    return select_one(board.open_lists(), item_id_is(id))
+    tlist = get_any_list_by_id(board, id)
+    return None if tlist.closed else tlist
 
 
 def get_open_list_by_name(board, name):

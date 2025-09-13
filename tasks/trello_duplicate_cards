@@ -3,10 +3,12 @@
 # Template cards are ignored unless they are themselves duplicate.
 import argparse
 from collections import defaultdict
+from functools import cache
+import re
 import sys
 import trello.exceptions
 from bert_trello import (get_board, create_auth_token, read_auth_data,
-                         is_card_template, print_cards)
+                         get_any_list_by_id, is_card_template, print_cards)
 
 
 def create_level_1():
@@ -19,6 +21,17 @@ def create_level_2():
     return defaultdict(create_level_1)
 
 
+@cache
+def is_done_list(board, list_id):
+    tlist = get_any_list_by_id(board, list_id)
+    return re.search(r'\b(?:done|gotovo)\b',
+                     tlist.name, re.IGNORECASE)
+
+
+def ignore_done_lists(cards):
+    return (c for c in cards if not is_done_list(c.board, c.list_id))
+
+
 def process_cards(board_key, settings):
     try:
         board = get_board(board_key, board_key, verbosity=settings.verbosity)
@@ -26,7 +39,10 @@ def process_cards(board_key, settings):
         board = get_board(board_key, board_key, verbosity=settings.verbosity,
                           auth=create_auth_token(read_auth_data()))
     seen = create_level_2()
-    for card in board.open_cards():
+    cards_iter = board.open_cards()
+    if settings.card_filter:
+        cards_iter = settings.card_filter(cards_iter)
+    for card in cards_iter:
         cards = seen[str(card.name)][is_card_template(card)]
         cards.append(card)
         if settings.verbosity >= 0:
@@ -113,6 +129,9 @@ def parse_args():
                         action='store', type=int, default=2,
                         help=('Look for >= N cards of a given type, instead'
                               ' of >= 2, when looking for duplicates.'))
+    parser.add_argument('--ignore-done', '--ignore_done', dest='card_filter',
+                        action='store_const', const=ignore_done_lists,
+                        help='Ignore "done" lists by name.')
     parser.add_argument('board', nargs='?', default='bert active')
     settings = parser.parse_args()
     if settings.threshold < 1:
