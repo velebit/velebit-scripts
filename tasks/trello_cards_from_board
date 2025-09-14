@@ -43,8 +43,9 @@ def process_cards(board_key, settings):
                       and (not tlist.closed or settings.print_archived))]
         assert len(tlists) > 0, \
             f"No lists matching '{settings.filter_list}' found"
+        card_filter = 'all' if settings.print_archived else 'open'
         cards_iter = itertools.chain.from_iterable(
-            [tlist.list_cards() for tlist in tlists])
+            [tlist.list_cards(card_filter=card_filter) for tlist in tlists])
     assert cards_iter is not None
     for card in cards_iter:
         list_id = card.list_id
