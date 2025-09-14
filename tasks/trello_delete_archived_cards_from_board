@@ -23,8 +23,12 @@ def process_cards(board_key, settings):
                       "because of list filter.", file=sys.stderr)
                 continue  # skip this card
         name = card.name  # preserve before deletion
-        card.delete()
-        print(f"(T) Archived card '{name}' deleted.", file=sys.stderr)
+        if not settings.dry_run:
+            card.delete()
+            print(f"(T) Archived card '{name}' deleted.", file=sys.stderr)
+        else:
+            print(f"(T) Archived card '{name}' would be deleted.",
+                  file=sys.stderr)
     if settings.verbose >= 1:
         print("Checking lists.", file=sys.stderr)
     for tlist in board.closed_lists():
@@ -37,9 +41,13 @@ def process_cards(board_key, settings):
                 continue  # skip this list
         for card in tlist.list_cards():
             name = card.name  # preserve before deletion
-            card.delete()
-            print(f"(T) Card '{name}' from archived list deleted.",
-                  file=sys.stderr)
+            if not settings.dry_run:
+                card.delete()
+                print(f"(T) Card '{name}' from archived list deleted.",
+                      file=sys.stderr)
+            else:
+                print(f"(T) Card '{name}' from archived list"
+                      " would be deleted.", file=sys.stderr)
     if settings.verbose >= 2:
         print("Done.", file=sys.stderr)
 
@@ -48,6 +56,7 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('-v', '--verbose', action='count', default=0)
     parser.add_argument('-l', '--filter-list', metavar='LIST_NAME_OR_ID')
+    parser.add_argument('-n', '--dry-run', action='store_true')
     parser.add_argument('board')
     settings = parser.parse_args()
     return settings
