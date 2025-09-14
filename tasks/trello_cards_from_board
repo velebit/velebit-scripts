@@ -2,10 +2,26 @@
 # List all cards (showing the list name, card name, and optionally
 # description and IDs) for the specified board.
 import argparse
+from functools import cache
 import itertools
 import trello.exceptions
 from bert_trello import (get_board, create_auth_token, read_auth_data,
-                         is_card_template)
+                         get_any_list_by_id, is_card_template)
+
+
+@cache
+def _get_list(board, list_id):
+    return get_any_list_by_id(board, list_id)
+
+
+@cache
+def get_list_name(board, list_id):
+    return _get_list(board, list_id).name
+
+
+@cache
+def get_list_closed(board, list_id):
+    return _get_list(board, list_id).closed
 
 
 def process_cards(board_key, settings):
@@ -31,16 +47,18 @@ def process_cards(board_key, settings):
             [tlist.list_cards() for tlist in tlists])
     assert cards_iter is not None
     for card in cards_iter:
-        tlist = card.get_list()
-        closed = (card.closed or tlist.closed)
+        list_id = card.list_id
+        is_card_closed = card.closed
+        is_list_closed = get_list_closed(board, list_id)
+        closed = (is_card_closed or is_list_closed)
         if not closed or settings.print_archived:
             status, fields = '', []
             if settings.list:
-                status += ('#' if tlist.closed else ' ')
-                status += ('#' if card.closed else ' ')
+                status += ('#' if is_list_closed else ' ')
+                status += ('#' if is_card_closed else ' ')
                 if settings.verbose > 0:
-                    fields.append(tlist.id)
-                fields.append(tlist.name)
+                    fields.append(list_id)
+                fields.append(get_list_name(board, list_id))
             else:
                 status += ('#' if closed else ' ')
             if settings.verbose > 0:
