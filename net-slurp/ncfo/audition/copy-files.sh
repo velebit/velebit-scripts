@@ -1,34 +1,62 @@
-#!/bin/sh
+#!/bin/bash
+
+dir=files
 
 if [ ! -e links.lst ]; then
-    ~/scripts/net-slurp/plinks.pl -h -pt mp3/index.html > links.lst
+    ~/scripts/net-slurp/plinks.pl -h -pt -t "${dir}"/index.html > links.lst
 fi
 
-rm -rf ../Luka
-mkdir ../Luka
-cp -v \
-`perl -ne '/Harmony Audition/||next;s/^[^\t]*\t//;/^Sop/||next;s,.*/,mp3/,;print' links.lst` \
-../Luka
+get_for () {
+    local who="$1"; shift
+    local tab='	'
+    local filter_h filter_pt prefix h pt t url audio
+    while [[ "$#" -gt 0 ]]; do
+        filter_h="$1"; shift
+        filter_pt="$1"; shift
+        local prefix="$1"; shift
+        if [[ -n "${prefix}" ]]; then
+            prefix="${prefix} "
+        fi
+        while IFS="${tab}" read -r h pt t url; do
+            if [[ "$h" == *"${filter_h}"* ]] \
+                   && [[ "$pt" == "${filter_pt}"* ]] \
+                   && [[ "$url" == *.mp3 ]]; then
+                audio="$(basename "$url")"
+                echo "${dir}/${audio}=${who}/${prefix}${t}.mp3"
+            fi
+        done < links.lst
+    done
+}
 
-rm -rf ../Katarina
-mkdir ../Katarina
-cp -v \
-`perl -ne '/Solo Audition/||next;s/^[^\t]*\t//;/^High Sop/||next;s,.*/,mp3/,;print' links.lst` \
-`perl -ne '/Harmony Audition/||next;s/^[^\t]*\t//;/^Sop/||next;s,.*/,mp3/,;print' links.lst` \
-../Katarina
+generate () {
+    #get_for Luka \
+    #        'Solo Audition' 'Mezzo' 'L solo A1' \
+    #        'Solo Audition' 'Tenor' 'L solo T' \
+    #        'Harmony Audition' 'Treble' 'L harm SA'
+    get_for Abbe \
+            'Solo Audition' 'Mezzo' 'A solo A1' \
+            'Solo Audition' 'Tenor' 'A solo A2' \
+            'Harmony Audition' 'Treble' 'A harm SA' \
+            'Harmony Audition' 'Tenor' 'A harm T'
+    get_for bert \
+            'Solo Audition' 'Bass' 'b solo B' \
+            'Harmony Audition' 'Tenor' 'b harm T' \
+            'Harmony Audition' 'Bass' 'b harm B'
+}
 
-rm -rf ../Abbe
-mkdir ../Abbe
-cp -v \
-`perl -ne '/Solo Audition/||next;s/^[^\t]*\t//;/^Mezzo Sop/||next;s,.*/,mp3/,;print' links.lst` \
-`perl -ne '/Harmony Audition/||next;s/^[^\t]*\t//;/^Alt/||next;s,.*/,mp3/,;print' links.lst` \
-`perl -ne '/Harmony Audition/||next;s/^[^\t]*\t//;/^Ten/||next;s,.*/,mp3/,;print' links.lst` \
-../Abbe
+ENUM_ARGS=(--keep-existing)
+PF_ARGS=()
+ID3_WIPE_ARGS=(--wipe)
 
-rm -rf ../bert
-mkdir ../bert
-cp -v \
-`perl -ne '/Solo Audition/||next;s/^[^\t]*\t//;/^(?:...)?Bass/||next;s,.*/,mp3/,;print' links.lst` \
-`perl -ne '/Harmony Audition/||next;s/^[^\t]*\t//;/^Ten/||next;s,.*/,mp3/,;print' links.lst` \
-`perl -ne '/Harmony Audition/||next;s/^[^\t]*\t//;/^(?:...)?Bass/||next;s,.*/,mp3/,;print' links.lst` \
-../bert
+# rm -rf Luka Abbe bert
+
+generate \
+    | ./enumerate.pl "${ENUM_ARGS[@]}" \
+    | ./omit-if-missing.pl \
+    | ./playlists-from-process.pl \
+    | ./process-files.py "${PF_ARGS[@]}"
+
+word_idx="$( (./canonicalize-filenames.pl --print-short;echo and_add_1) | wc -w)"
+./id3_tags.py -d audition \
+              -p "$(./canonicalize-filenames.pl -ps) " -tn -xw"${word_idx}" \
+              "${ID3_WIPE_ARGS[@]}"
