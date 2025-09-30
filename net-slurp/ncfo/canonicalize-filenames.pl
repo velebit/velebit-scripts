@@ -4,7 +4,6 @@ use strict;
 use open ':std', ':encoding(UTF-8)';
 
 use Cwd qw( getcwd );
-use File::Spec qw( splitpath catpath splitdir );
 use Getopt::Long;
 
 # ----------------------------------------------------------------------
