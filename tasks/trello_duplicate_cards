@@ -129,7 +129,8 @@ def parse_args():
                         action='store', type=int, default=2,
                         help=('Look for >= N cards of a given type, instead'
                               ' of >= 2, when looking for duplicates.'))
-    parser.add_argument('--ignore-done', '--ignore_done', dest='card_filter',
+    parser.add_argument('-D', '--ignore-done', '--ignore_done',
+                        dest='card_filter',
                         action='store_const', const=ignore_done_lists,
                         help='Ignore "done" lists by name.')
     parser.add_argument('board', nargs='?', default='bert active')
