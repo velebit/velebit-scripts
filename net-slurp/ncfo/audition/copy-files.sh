@@ -36,8 +36,7 @@ generate () {
     get_for Abbe \
             'Solo Audition' 'Mezzo' 'A solo A1' \
             'Solo Audition' 'Tenor' 'A solo A2' \
-            'Harmony Audition' 'Treble' 'A harm SA' \
-            'Harmony Audition' 'Tenor' 'A harm T'
+            'Harmony Audition' 'Treble' 'A harm SA'
     get_for bert \
             'Solo Audition' 'Bass' 'b solo B' \
             'Harmony Audition' 'Tenor' 'b harm T' \
