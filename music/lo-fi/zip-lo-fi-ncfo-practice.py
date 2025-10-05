@@ -61,7 +61,7 @@ def main():
     top_path = to_abs('.')[0]
     parent_path = os.path.dirname(top_path)
     zipdir_path = os.path.join(parent_path, 'zip')
-    dirs = to_abs('NCFO practice')
+    dirs = to_abs('NCFO practice', 'NCFO audition')
     ignored = tuple()
     for d in dirs:
         curr_name = os.path.basename(d)
@@ -69,7 +69,7 @@ def main():
         if d == top_path:
             zip_name = f"{base}.zip"
         else:
-            dfrag = re.sub(r'_*-_*', '-', re.sub(r'[/ ]+', '_',
+            dfrag = re.sub(r'_*-_*', '-', re.sub(r'\W+', '_',
                                                  os.path.basename(d)))
             zip_name = f"{base}-{dfrag}.zip"
         zip_path = os.path.relpath(

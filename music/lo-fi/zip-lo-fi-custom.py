@@ -81,7 +81,7 @@ def main():
         if d == top_path:
             zip_name = f"{base}-custom.zip"
         else:
-            dfrag = re.sub(r'_*-_*', '-', re.sub(r'[/ ]+', '_',
+            dfrag = re.sub(r'_*-_*', '-', re.sub(r'\W+', '_',
                                                  os.path.basename(d)))
             zip_name = f"{base}-custom-{dfrag}.zip"
         zip_path = os.path.relpath(
