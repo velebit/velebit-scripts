@@ -56,6 +56,22 @@ def process_logfile(path, settings):
                     replace_plus, line)
              for line in lines]
 
+    if settings.strip_time:
+        lines = [re.sub(r'\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]:\s+',
+                        '', line)
+                 for line in lines]
+    if settings.strip_color:
+        lines = [re.sub(r'\033\[\d+(?:;\d+)*m', '', line)
+                 for line in lines]
+    if settings.duration:
+        lines = [re.sub((r'@\+\d{2,}:\d{2}:\d{2}\s+'
+                         r'(?:\+\d{2,}:\d{2}:\d{2}|\(start\))\s+'
+                         r'(?:-(\d{2,}:\d{2}:\d{2})|(\(end\)))\s+'
+                         r'@-\d{2,}:\d{2}:\d{2}'),
+                        r'\1\2', line)
+                 for line in lines
+                 if re.search(r'(?:Backing up|Cleaning up)', line)]
+
     print(path)
     for line in lines:
         print(line)
@@ -66,6 +82,9 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description='Read a `raid-backup` log and show timing of steps.'
     )
+    parser.add_argument('--keep-time', dest='strip_time', action='store_false')
+    parser.add_argument('--strip-color', action='store_true')
+    parser.add_argument('--duration', action='store_true')
     parser.add_argument('logfile', nargs='+', metavar='LOGFILE',
                         help='Log file(s) to read.')
     settings = parser.parse_args()
