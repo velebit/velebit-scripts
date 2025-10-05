@@ -1,0 +1,250 @@
+#!/usr/bin/python3
+import argparse
+import datetime as dt
+import re
+
+
+def XXX_process_logfile(path, settings):
+    def format_hms(s):
+        m = s // 60
+        s -= m * 60
+        h = m // 60
+        m -= h * 60
+        return f"{h:02d}:{m:02d}:{s:02d}"
+
+    def replace_plus(match):
+        nonlocal start
+        nonlocal prev
+        stamp = match.group(1)
+        time = dt.datetime.strptime(stamp, '%Y-%m-%d %H:%M:%S')
+        if start is None:
+            start = time
+            prev = time
+            since_prev = '(start)'
+        else:
+            since_prev = '+' + format_hms(int((time - prev).total_seconds()))
+        since_start = '@+' + format_hms(int((time - start).total_seconds()))
+        prev = time
+        return f"[{stamp}]:  {since_start:>10s}  {since_prev:>9s}"
+
+    def replace_minus(match):
+        nonlocal end
+        nonlocal next
+        stamp = match.group(1)
+        time = dt.datetime.strptime(stamp, '%Y-%m-%d %H:%M:%S')
+        if end is None:  # assumes going backwards
+            end = time
+            next = time
+            since_next = '(end)'
+        else:
+            since_next = '-' + format_hms(int((next - time).total_seconds()))
+        since_end = '@-' + format_hms(int((end - time).total_seconds()))
+        next = time
+        return f"[{stamp}]:  {since_next:>9s}  {since_end:>10s}"
+
+    with open(path, 'r') as f:
+        lines = [line.rstrip() for line in f if re.search(r'^-- ', line)]
+
+    end = None
+    next = None
+    lines = reversed([re.sub(r'\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]',
+                             replace_minus, line)
+                      for line in reversed(lines)])
+    start = None
+    prev = None
+    lines = [re.sub(r'\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]:',
+                    replace_plus, line)
+             for line in lines]
+
+    if settings.strip_time:
+        lines = [re.sub(r'\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]:\s+',
+                        '', line)
+                 for line in lines]
+    if settings.duration:
+        lines = [re.sub((r'@\+\d{2,}:\d{2}:\d{2}\s+'
+                         r'(?:\+\d{2,}:\d{2}:\d{2}|\(start\))\s+'
+                         r'(?:-(\d{2,}:\d{2}:\d{2})|(\(end\)))\s+'
+                         r'@-\d{2,}:\d{2}:\d{2}'),
+                        r'\1\2', line)
+                 for line in lines
+                 if re.search(r'(?:Backing up|Cleaning up)', line)]
+
+    print(path)
+    for line in lines:
+        print(line)
+    print('')
+
+
+def strip_color(text):
+    return re.sub(r'\033\[\d+(?:;\d+)*m', '', text)
+
+
+def read_logfile(path):
+    log_data = {'path': path}
+    completed = False
+    last_time = None
+    with open(path, 'r') as f:
+        time_data = []
+        for line in f:
+            line = strip_color(line.rstrip())
+            if not re.search(r'^-- ', line):
+                continue
+            match = re.search(
+                    r'^-- \[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\] -- (.*)$',
+                    line)
+            assert match, f"Unexpected line format: {line}"
+            time = dt.datetime.strptime(match.group(1), '%Y-%m-%d %H:%M:%S')
+            text = match.group(2).strip()
+            text = re.sub(r'/media/\w+/backup(?:_\w+)?/', r'{backup}/', text)
+            if re.search(r'^(?:Backing up|Cleaning up)', text):
+                assert len(time_data) == 0 or 'end' in time_data[-1]
+                time_data.append({'text': text, 'begin': time})
+            else:
+                if len(time_data) > 0 and 'end' not in time_data[-1]:
+                    time_data[-1]['end'] = time
+                    time_data[-1]['duration'] = \
+                        time_data[-1]['end'] - time_data[-1]['begin']
+                if re.search(r'disk margin', text):
+                    completed = True
+                last_time = time
+        if completed:
+            assert len(time_data) == 0 or 'end' in time_data[-1], \
+                f"No end time for path {path}"
+        if len(time_data) == 0:
+            log_data['actions'] = None
+            log_data['begin'] = None
+            log_data['end'] = None
+            log_data['completed'] = None
+        else:
+            log_data['actions'] = time_data
+            log_data['begin'] = time_data[0]['begin']
+            if not completed or last_time is None:
+                log_data['end'] = None
+                log_data['completed'] = False
+            else:
+                log_data['end'] = last_time
+                log_data['completed'] = True
+    return log_data
+
+
+def get_actions(log_data):
+    if log_data['actions'] is None:
+        return []
+    else:
+        return [a['text'] for a in log_data['actions']]
+
+
+def check_actions(log_data, actions):
+    log_actions = get_actions(log_data)
+    for a in actions:
+        if a not in log_actions:
+            print(f"{log_data['path']}: Missing action {a!r}")
+    for a in log_actions:
+        if a not in actions:
+            print(f"{log_data['path']}: Unexpected action {a!r}")
+
+
+def collate_times(past_logs_data, actions):
+    collated = []
+    for action in actions:
+        matching = [a for log_data in past_logs_data if log_data['actions']
+                    for a in log_data['actions'] if a['text'] == action]
+        durations = [a['duration'] for a in matching if 'duration' in a]
+        assert durations, "No matching durations (!?)"
+        collated.append({'text': action,
+                         'duration_min': min(durations),
+                         'duration_max': max(durations)})
+    return collated
+
+
+def print_estimate(active_log_data, collated_times):
+    # first, print data for already completed and started actions
+    if active_log_data['actions']:
+        next_start_min_max = (active_log_data['begin'],) * 2
+        begin = next_start_min_max[0].strftime('%H:%M:%S')
+        range = f"{begin}:"
+        print(f"{'started':<10s} {range:<20s} (backup started)")
+        for a in active_log_data['actions']:
+            if 'duration' in a:
+                end = a['end'].strftime('%H:%M:%S')
+                range = f"{end}:"
+                print(f"{'ended':<10s} {range:<20s} {a['text']}")
+                next_start_min_max = (a['end'],) * 2
+            else:
+                # started but not completed
+                range = [c for c in collated_times if c['text'] == a['text']]
+                assert len(range) == 1
+                end_min_max = (a['begin'] + range[0]['duration_min'],
+                               a['begin'] + range[0]['duration_max'])
+                # if we're already past the expected time, adjust it
+                now = dt.datetime.now()
+                end_min_max = tuple((max((e, now)) for e in end_min_max))
+                end = [t.strftime('%H:%M:%S') for t in end_min_max]
+                if end_min_max[1] > end_min_max[0]:
+                    range = f"{end[0]} - {end[1]}:"
+                else:
+                    range = f"{end[0]}:"
+                print(f"{'expected':<10s} {range:<20s} {a['text']}")
+                next_start_min_max = end_min_max
+            collated_times = \
+                [c for c in collated_times if c['text'] != a['text']]
+    else:
+        next_start_min_max = (dt.datetime.now(),) * 2  # fallback if no data
+        begin = next_start_min_max[0].strftime('%H:%M:%S')
+        range = f"{begin}:"
+        print(f"{'starting':<10s} {range:<20s} (assumed start time)")
+
+    # print data for remaining expected actions
+    for c in collated_times:
+        end_min_max = (next_start_min_max[0] + c['duration_min'],
+                       next_start_min_max[1] + c['duration_max'])
+        end = [t.strftime('%H:%M:%S') for t in end_min_max]
+        if end_min_max[1] > end_min_max[0]:
+            range = f"{end[0]} - {end[1]}:"
+        else:
+            range = f"{end[0]}:"
+        print(f"{'expected':<10s} {range:<20s} {c['text']}")
+        next_start_min_max = end_min_max
+
+
+def process_logfiles(settings):
+    references = [read_logfile(f) for f in settings.reference_logs]
+    for r in references:
+        if not r['completed']:
+            print(f"Warning: reference log {r['path']} has not completed,"
+                  " skipping.")
+    references = [r for r in references if r['completed']]
+    assert len(references) > 0, "No valid reference logs left."
+    actions = get_actions(references[-1])
+    for r in references:
+        check_actions(r, actions)
+    history = collate_times(references, actions)
+    active = read_logfile(settings.active_log)
+    if active['completed']:
+        end = active['end'].strftime('%H:%M:%S')
+        print(f"Error: supposedly active log {active['path']}"
+              f" has completed at {end}!")
+    else:
+        print_estimate(active, history)
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description='Read `raid-backup` logs and estimate backup completion.'
+    )
+    parser.add_argument('reference_logs', nargs='+', metavar='REFERENCE_LOG',
+                        help=('Log file(s) to read to deduce the order'
+                              ' and timing.'))
+    parser.add_argument('active_log', metavar='ACTIVE_LOG',
+                        help='Log file for the in-progress backup.')
+    settings = parser.parse_args()
+    return settings
+
+
+def main():
+    settings = parse_args()
+    process_logfiles(settings)
+
+
+if __name__ == "__main__":
+    main()
