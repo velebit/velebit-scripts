@@ -259,6 +259,7 @@ construct_remote_path () {
     local share_or_path="$1"; shift
     case "$host_name:$share_or_path" in
 	*:*:*|*/*:*|*//*|*:.*) ;;  # invalid
+	*:/)                  echo "/" ;;
 	*:/*)                 echo "${share_or_path%%/}" ;;
 	*:*/*)                ;;  # invalid (path doesn't start with /)
 	aunt-louisa:shared)   echo "/common/$share_or_path/export" ;;
@@ -267,6 +268,7 @@ construct_remote_path () {
 	aunt-louisa:photos)   echo "/common/shared/export/$share_or_path" ;;
 	aunt-louisa:gm-uf)    echo "/common/users/bert/export/gaming/gm-uf2021-5e" ;;
 	aunt-louisa:*)        echo "/common/home/$share_or_path/export" ;;
+	openwrt:root)         echo "/" ;;
     esac
 }
 
@@ -275,6 +277,10 @@ construct_share_name () {
 
     case "$share_or_path" in
 	*:*|*//*|.*) ;;  # invalid
+	/)
+	    local name="root"
+	    echo "path_$name"
+	    ;;
 	/*)
 	    local name="$share_or_path"
 	    name="${name//\//_}"
@@ -286,6 +292,16 @@ construct_share_name () {
 	*)
 	    echo "$share_or_path"
 	    ;;
+    esac
+}
+
+get_ssh_remote_user () {
+    local local_user="$1"; shift
+    local host_name="$1"; shift
+    local share_or_path="$1"; shift
+    case "$host_name:$share_or_path" in
+	openwrt:*)            echo "root" ;;
+	*)                    echo "$local_user" ;;
     esac
 }
 
@@ -360,6 +376,7 @@ do_mount_sshfs () {
     if [[ -z "$share" ]]; then return 2; fi
 
     local user="$(id -un)"
+    local ruser="$(get_ssh_remote_user "$user" "$host_name" "$share_or_path")"
     local type=ssh
     local parent=/media/"$user"/"$type"
     local dir="$parent"/"$host_name"/"$share"
@@ -375,7 +392,7 @@ do_mount_sshfs () {
     # assume ssh-agent may be holding credentials for Git
     local ssh_options=( -o PubkeyAuthentication=no
 			-o PasswordAuthentication=yes )
-    if ! sshfs "$user"@"$host_addr":"$rpath" "$dir" "${ssh_options[@]}"; then
+    if ! sshfs "$ruser"@"$host_addr":"$rpath" "$dir" "${ssh_options[@]}"; then
         local rc="$?"
         if [[ "$rc" -eq 0 ]]; then rc=1; fi
         remove_mountpoint_quietly "$dir"  # ignore any errors
