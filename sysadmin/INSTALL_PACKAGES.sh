@@ -245,11 +245,11 @@ add_if "$is_media"          lame fdkaac
 
 ### PDF tools
 add_if "!$is_vm"            pdftk-java
-add_if "$is_bert_desktop"   texlive-extra-utils  # pdfjam, pdfbook and friends
+add_if "$is_media"          texlive-extra-utils  # pdfjam, pdfbook and friends
 add_if "!$is_headless"      xournal
 
 ### other document tools
-add_if "$is_bert_desktop"   pandoc
+add_if "$is_media"          pandoc
 add_if "$is_primary_os"     librecad
 
 #### 32-bit compat (for e.g. Brother binaries)
