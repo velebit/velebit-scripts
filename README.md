@@ -1,6 +1,6 @@
 # My random scripts
 
-This repository collects many of my random publicly available scripts. They are released into the public domain under the [Unlicense](UNLICENSE) (unless that’s not legally possible in your jurisdiction, in which case there’s a weak fallback license). But in the perhaps unlikely case that you find them useful, I’d be happy to hear about it.
+This repository collects many of my random publicly available scripts. The scripts in the `develop` Git branch are released into the public domain under the [Unlicense](UNLICENSE) (unless public domain is not a legal possibility in your jurisdiction, in which case there’s a weak fallback license). In the perhaps unlikely case that you find these scripts useful, I’d love to hear about it.
 
 ## Known Bugs and Interactions
 
