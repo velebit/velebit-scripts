@@ -1,6 +1,11 @@
 #!/bin/bash
 
-cd "$(dirname "$0")" || exit 1
+if [[ "$(basename "$0")" == *-here* ]]; then
+    # If invoked via a symlink whose name contains `-here`, get the list for
+    # the directory where the symlink is. (Not currently used.)
+    cd "$(dirname "$0")" || exit 1
+fi
+echo "(Working in $(pwd))" >&2
 
 process_tags () {
     local line curr_dir prev_dir
