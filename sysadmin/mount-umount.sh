@@ -216,9 +216,9 @@ do_umount () {
 is_local_address () {
     local host_addr="$1"; shift
     if [ -n "$(ip addr show to "$host_addr/32")" ]; then
-	return 0  # address matches a local interface
+        return 0  # address matches a local interface
     else
-	return 1  # address is remote
+        return 1  # address is remote
     fi
 }
 
@@ -226,13 +226,13 @@ create_mountpoint () {
     local dir="$1"; shift
     local parent="$1"; shift
     if [[ ! -d "$dir" ]]; then
-	if [[ -n "$parent" ]] && [[ ! -d "$parent" ]]; then
+        if [[ -n "$parent" ]] && [[ ! -d "$parent" ]]; then
             echo "Warning: $parent does not exist." >&2
-	fi
-	if ! mkdir -p "$dir"; then
+        fi
+        if ! mkdir -p "$dir"; then
             echo "Error: could not create $dir!" >&2
-	    return 1
-	fi
+            return 1
+        fi
     fi
     return 0
 }
@@ -240,7 +240,7 @@ create_mountpoint () {
 remove_mountpoint_quietly () {
     local dir="$1"; shift
     if ! rmdir "$dir"; then
-	return 1
+        return 1
     fi
     return 0
 }
@@ -249,7 +249,7 @@ remove_mountpoint () {
     local dir="$1"; shift
     if ! remove_mountpoint_quietly "$dir"; then
         echo "Warning: could not remove $dir!" >&2
-	return 1
+        return 1
     fi
     return 0
 }
@@ -257,18 +257,29 @@ remove_mountpoint () {
 construct_remote_path () {
     local host_name="$1"; shift
     local share_or_path="$1"; shift
-    case "$host_name:$share_or_path" in
-	*:*:*|*/*:*|*//*|*:.*) ;;  # invalid
-	*:/)                  echo "/" ;;
-	*:/*)                 echo "${share_or_path%%/}" ;;
-	*:*/*)                ;;  # invalid (path doesn't start with /)
-	aunt-louisa:shared)   echo "/common/$share_or_path/export" ;;
-	aunt-louisa:scratch)  echo "/common/$share_or_path/export" ;;
-	aunt-louisa:music)    echo "/common/scratch/export/$share_or_path" ;;
-	aunt-louisa:photos)   echo "/common/shared/export/$share_or_path" ;;
-	aunt-louisa:gm-uf)    echo "/common/users/bert/export/gaming/gm-uf2021-5e" ;;
-	aunt-louisa:*)        echo "/common/home/$share_or_path/export" ;;
-	openwrt:root)         echo "/" ;;
+    case "${host_name}:${share_or_path}" in
+        *:*:*|*/*:*|*//*|*:.*)
+            ;;  # invalid
+        *:/)
+            echo "/" ;;
+        *:/*)
+            echo "${share_or_path%%/}" ;;
+        *:*/*)
+            ;;  # invalid (path doesn't start with /)
+        aunt-louisa:shared)
+            echo "/common/${share_or_path}/export" ;;
+        aunt-louisa:scratch)
+            echo "/common/${share_or_path}/export" ;;
+        aunt-louisa:music)
+            echo "/common/scratch/export/${share_or_path}" ;;
+        aunt-louisa:photos)
+            echo "/common/shared/export/${share_or_path}" ;;
+        aunt-louisa:gm-uf)
+            echo "/common/users/bert/export/gaming/gm-uf2021-5e" ;;
+        aunt-louisa:*)
+            echo "/common/home/${share_or_path}/export" ;;
+        openwrt:root)
+            echo "/" ;;
     esac
 }
 
@@ -276,22 +287,22 @@ construct_share_name () {
     local share_or_path="$1"; shift
 
     case "$share_or_path" in
-	*:*|*//*|.*) ;;  # invalid
-	/)
-	    local name="root"
-	    echo "path_$name"
-	    ;;
-	/*)
-	    local name="$share_or_path"
-	    name="${name//\//_}"
-	    name="${name##_}"
-	    name="${name%%_}"
-	    echo "path_$name"
-	    ;;
-	*/*) ;;  # invalid
-	*)
-	    echo "$share_or_path"
-	    ;;
+        *:*|*//*|.*) ;;  # invalid
+        /)
+            local name="root"
+            echo "path_$name"
+            ;;
+        /*)
+            local name="$share_or_path"
+            name="${name//\//_}"
+            name="${name##_}"
+            name="${name%%_}"
+            echo "path_$name"
+            ;;
+        */*) ;;  # invalid
+        *)
+            echo "$share_or_path"
+            ;;
     esac
 }
 
@@ -300,8 +311,8 @@ get_ssh_remote_user () {
     local host_name="$1"; shift
     local share_or_path="$1"; shift
     case "$host_name:$share_or_path" in
-	openwrt:*)            echo "root" ;;
-	*)                    echo "$local_user" ;;
+        openwrt:*)            echo "root" ;;
+        *)                    echo "$local_user" ;;
     esac
 }
 
@@ -317,15 +328,15 @@ do_mount_smb () {
     local dir="$parent"/"$host_name"/"$share"
 
     if is_local_address "$host_addr"; then
-	echo "Error: requested mounting on the server." >&2
-	return 1
+        echo "Error: requested mounting on the server." >&2
+        return 1
     fi
     if ! create_mountpoint "$dir" "$parent"; then
-	return 1  # message already shown
+        return 1  # message already shown
     fi
 
     if ! sudo mount -t "$type" -o username="$user",uid="$user",rw \
-	     //"$host_addr"/"$share" "$dir"; then
+             //"$host_addr"/"$share" "$dir"; then
         local rc="$?"
         if [[ "$rc" -eq 0 ]]; then rc=1; fi
         remove_mountpoint_quietly "$dir"  # ignore any errors
@@ -347,16 +358,16 @@ do_umount_smb () {
     local dir="$parent"/"$host_name"/"$share"
 
     if [[ ! -d "$dir" ]]; then
-	echo "Warning: $dir does not exist, skipped." >&2
-	return 0
+        echo "Warning: $dir does not exist, skipped." >&2
+        return 0
     fi
     if ! sudo umount "$dir"; then
-	echo "Warning: could not unmount $dir." >&2
+        echo "Warning: could not unmount $dir." >&2
         remove_mountpoint_quietly "$dir"  # ignore any errors
-	return 1
+        return 1
     fi
     if ! remove_mountpoint "$dir"; then
-	return 1  # message already shown
+        return 1  # message already shown
     fi
     return 0
 }
@@ -369,8 +380,8 @@ do_mount_sshfs () {
     local rpath="$1"; shift  # optional
 
     if [[ -z "$rpath" ]]; then
-	rpath="$(construct_remote_path "$host_name" "$share_or_path")"
-	if [[ -z "$rpath" ]]; then return 2; fi
+        rpath="$(construct_remote_path "$host_name" "$share_or_path")"
+        if [[ -z "$rpath" ]]; then return 2; fi
     fi
     local share="$(construct_share_name "$share_or_path")"
     if [[ -z "$share" ]]; then return 2; fi
@@ -382,16 +393,16 @@ do_mount_sshfs () {
     local dir="$parent"/"$host_name"/"$share"
 
     if is_local_address "$host_addr"; then
-	echo "Error: requested mounting on the server." >&2
-	return 1
+        echo "Error: requested mounting on the server." >&2
+        return 1
     fi
     if ! create_mountpoint "$dir" "$parent"; then
-	return 1  # message already shown
+        return 1  # message already shown
     fi
 
     # assume ssh-agent may be holding credentials for Git
     local ssh_options=( -o PubkeyAuthentication=no
-			-o PasswordAuthentication=yes )
+                        -o PasswordAuthentication=yes )
     if ! sshfs "$ruser"@"$host_addr":"$rpath" "$dir" "${ssh_options[@]}"; then
         local rc="$?"
         if [[ "$rc" -eq 0 ]]; then rc=1; fi
@@ -419,16 +430,16 @@ do_umount_sshfs () {
     umount_cmd=( umount "$dir" )             # recent Linux, OS X, *BSD...
 
     if [[ ! -d "$dir" ]]; then
-	echo "Warning: $dir does not exist, skipped." >&2
-	return 0
+        echo "Warning: $dir does not exist, skipped." >&2
+        return 0
     fi
     if ! "${umount_cmd[@]}"; then
-	echo "Warning: could not unmount $dir." >&2
+        echo "Warning: could not unmount $dir." >&2
         remove_mountpoint_quietly "$dir"  # ignore any errors
-	return 1
+        return 1
     fi
     if ! remove_mountpoint "$dir"; then
-	return 1  # message already shown
+        return 1  # message already shown
     fi
     return 0
 }
@@ -442,9 +453,9 @@ get_smb_shares () {
     local parent=/media/"$user"/"$type"
     local dir
     for dir in "$parent"/"$host_name"/*; do
-	if [[ -d "$dir" ]]; then
-	    basename "$dir"
-	fi
+        if [[ -d "$dir" ]]; then
+            basename "$dir"
+        fi
     done
 }
 
@@ -456,8 +467,8 @@ get_sshfs_shares () {
     local parent=/media/"$user"/"$type"
     local dir
     for dir in "$parent"/"$host_name"/*; do
-	if [[ -d "$dir" ]]; then
-	    basename "$dir"
-	fi
+        if [[ -d "$dir" ]]; then
+            basename "$dir"
+        fi
     done
 }
