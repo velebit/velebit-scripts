@@ -226,8 +226,12 @@ def update_trello(settings, tasks):
             create = (s is not Src.DONE)
             if create:
                 card_info = bt.get_or_create_cards_with_info(
-                    inbox_list, working, default_labels,
-                    verbosity=settings.verbose)
+                    inbox_list,
+                    working,
+                    default_labels,
+                    verbosity=settings.verbose,
+                    log_ignore_duplicates_in_lists={"done": [done_list.id]},
+                )
             else:
                 card_info = bt.get_cards_with_info(board, working)
                 # will not produce output about existing/multiple cards

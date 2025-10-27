@@ -234,31 +234,62 @@ def get_cards_with_info(board, cards, /, include_templates=True):
             for info in cards]
 
 
-def log_existing_cards(cards, /, verbosity=0, check_together=False):
+def log_existing_cards(
+    cards, /, verbosity=0, separate_templates=True, ignore_duplicates_in_lists={}
+):
     if verbosity < 0:
         return  # verbosity 0 required to log
     for info in cards:
-        if len(info['cards']) == 1 and verbosity < 1:
-            continue  # at verbosity 0 need >1 card, don't bother checking more
-        if check_together:
-            counts = (len(info['cards']),)
+        if len(info["cards"]) == 1 and verbosity < 1:
+            continue  # at verbosity 0 need >1 total card, don't bother checking more
+        group_parts = []
+        need_to_log = False
+        cards = list(info["cards"])
+        if separate_templates:
+            template_cards = [c for c in cards if is_card_template(c)]
+            cards = [c for c in cards if c not in template_cards]  # remove from cards
+            group_parts.insert(0, f"{len(template_cards)} template")
+            if len(template_cards) > 1:
+                need_to_log = True
+        if ignore_duplicates_in_lists:
+            cards_with_list_id = [(c, c.list_id) for c in cards]
+            ignored_parts = []
+            for ignore_name, ignore_list_ids in ignore_duplicates_in_lists.items():
+                ignored = [
+                    c_id for c_id in cards_with_list_id if c_id[1] in ignore_list_ids
+                ]
+                cards_with_list_id = [
+                    c_id for c_id in cards_with_list_id if c_id not in ignored
+                ]  # remove from cards
+                ignored_parts.append(f"{len(ignored)} {ignore_name}")
+            # prepend ignored_parts to group_parts
+            for part in reversed(ignored_parts):
+                group_parts.insert(0, part)
+            # never update need_to_log for ignored cards
+            cards = [c for c, id in cards_with_list_id]
+        if len(group_parts) == 0:
+            # if everything is together, don't bother labeling
+            group_parts.insert(0, str(len(cards)))
+            saw_one_single_card = len(cards) == 1
         else:
-            counts = (len([c for c in info['cards']
-                           if not is_card_template(c)]),
-                      len([c for c in info['cards']
-                           if is_card_template(c)]))
-        have_count_above_1 = any([n > 1 for n in counts])
-        if have_count_above_1 or verbosity >= 1:
-            counts_str = '+'.join([str(n) for n in counts])
-            use_singular = (len(counts) == 1 and counts[0] == 1)
-            if use_singular:
-                print(f"(T) {counts_str} card matching {info['name']!r}"
-                      " already exists!",
-                      file=sys.stderr)
+            group_parts.insert(0, f"{len(cards)} active")
+            saw_one_single_card = False
+        if len(cards) > 1:
+            need_to_log = True
+        if need_to_log or verbosity >= 1:
+            all_counts = " + ".join(group_parts)
+            if saw_one_single_card:
+                print(
+                    f"(T) {all_counts} card matching {info['name']!r}"
+                    " already exists!",
+                    file=sys.stderr,
+                )
             else:
-                print(f"(T) {counts_str} cards matching {info['name']!r}"
-                      " already exist!",
-                      file=sys.stderr)
+                print(
+                    f"(T) {all_counts} cards matching {info['name']!r}"
+                    " already exist!",
+                    file=sys.stderr,
+                )
 
 
 def create_cards_with_info(tlist, cards, labels=None, verbosity=0):
@@ -273,17 +304,26 @@ def create_cards_with_info(tlist, cards, labels=None, verbosity=0):
     return cards
 
 
-def get_or_create_cards_with_info(tlist, cards, labels=None, /, verbosity=0,
-                                  log_existing_together=False):
+def get_or_create_cards_with_info(
+    tlist,
+    cards,
+    labels=None,
+    /,
+    verbosity=0,
+    log_templates_separately=True,
+    log_ignore_duplicates_in_lists={},
+):
     cards = get_cards_with_info(tlist.board, cards)
-    log_existing_cards(cards, verbosity=verbosity,
-                       check_together=log_existing_together)
-    missing = [c for c in cards
-               if 'cards' not in c or len(c['cards']) == 0]
+    log_existing_cards(
+        cards,
+        verbosity=verbosity,
+        separate_templates=log_templates_separately,
+        ignore_duplicates_in_lists=log_ignore_duplicates_in_lists,
+    )
+    missing = [c for c in cards if "cards" not in c or len(c["cards"]) == 0]
     if len(missing) > 0:
         # Note: will update `cards` by updating members of `missing`!
-        create_cards_with_info(tlist, missing,
-                               labels=labels, verbosity=verbosity)
+        create_cards_with_info(tlist, missing, labels=labels, verbosity=verbosity)
     return cards
 
 
