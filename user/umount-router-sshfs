@@ -4,14 +4,47 @@ host_addr=10.10.80.210
 
 source "$(dirname "$(realpath -e "$0")")"/../sysadmin/mount-umount.sh || exit 9
 
+Usage () {
+    local exit_code="${1:-0}"; shift
+    local message
+    case "${exit_code}" in
+        [0-9]|[1-9][0-9]|[1-9][0-9][0-9]|-[0-9]|-[1-9][0-9]|-[1-9][0-9][0-9]) ;;
+        *)
+            set -- "Internal error: invalid exit code '${exit_code}'" "$@"
+            exit_code=255 ;;
+    esac
+    if [[ "${exit_code}" -ne 0 ]]; then
+        exec >&2
+    fi
+    if [[ "$#" -gt 0 ]]; then
+        for message in "$@"; do
+            echo "${message}"
+        done
+        echo ""
+    fi
+    echo "Usage: $(basename "$0") (SHARE | REMOTE_ABSOLUTE_PATH) ..."
+    echo "  or:  $(basename "$0")  # to unmount all sshfs mounts from ${host_name}"
+    exit "${exit_code}"
+}
+
+for arg in "$@"; do
+    if [[ "${arg}" == "--help" ]] || [[ "${arg}" == "-h" ]] || [[ "${arg}" == "-?" ]]; then
+        Usage 0
+    elif [[ "${arg}" == -* ]]; then
+        Usage 1 "Unknown flag '${arg}'"
+    fi
+done
 if [[ "$#" -eq 0 ]]; then
     set -- $(get_sshfs_shares "$host_name")
     if [[ "$#" -eq 0 ]]; then
-	echo "No shares specified and none found." >&2
+        Usage 2 "No shares specified and none found."
     else
-	echo "Will unmount: $*" >&2
+        echo "Will unmount: $*" >&2
     fi
 fi
+result=0
 for share in "$@"; do
-    do_umount_sshfs "$host_name" "$host_addr" "$share"
+    if ! do_umount_sshfs "$host_name" "$host_addr" "$share"; then
+        result=9
+    fi
 done

@@ -4,10 +4,38 @@ host_addr=10.10.80.80
 
 source "$(dirname "$(realpath -e "$0")")"/../sysadmin/mount-umount.sh || exit 9
 
+Usage () {
+    local exit_code="${1:-0}"; shift
+    local message
+    case "${exit_code}" in
+        [0-9]|[1-9][0-9]|[1-9][0-9][0-9]|-[0-9]|-[1-9][0-9]|-[1-9][0-9][0-9]) ;;
+        *)
+            set -- "Internal error: invalid exit code '${exit_code}'" "$@"
+            exit_code=255 ;;
+    esac
+    if [[ "${exit_code}" -ne 0 ]]; then
+        exec >&2
+    fi
+    if [[ "$#" -gt 0 ]]; then
+        for message in "$@"; do
+            echo "${message}"
+        done
+        echo ""
+    fi
+    echo "Usage: $(basename "$0") SMB_SHARE ..."
+    exit "${exit_code}"
+}
+
+for arg in "$@"; do
+    if [[ "${arg}" == "--help" ]] || [[ "${arg}" == "-h" ]] || [[ "${arg}" == "-?" ]]; then
+        Usage 0
+    elif [[ "${arg}" == -* ]]; then
+        Usage 1 "Unknown flag '${arg}'"
+    fi
+done
 if [[ "$#" -eq 0 ]]; then
-    echo "No shares specified!" >&2
-    exit 2
+    Usage 2 "No shares specified!"
 fi
 for share in "$@"; do
-    do_mount_smb "$host_name" "$host_addr" "$share" || exit 1
+    do_mount_smb "$host_name" "$host_addr" "$share" || exit 9
 done
