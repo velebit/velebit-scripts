@@ -1,31 +1,99 @@
 #!/home/bert/.local/lib/python/venv/default/bin/python
 
 import argparse
+import datetime
 import icalendar.cal
 import sys
+from typing import BinaryIO, Sequence
 
 
-def ical_sort(text, verbose=0):
-    cal = icalendar.cal.Calendar.from_ical(text)
-    cal.subcomponents.sort(key=lambda e: (e['dtstart'].dt, e['summary']))
-    return cal.to_ical(sorted=True)
+def read_ical_from_fh(fh: BinaryIO) -> icalendar.cal.Calendar:
+    data = fh.read()
+    return icalendar.cal.Calendar.from_ical(data)
 
 
-def parse_args():
+def read_ical(filename: str) -> icalendar.cal.Calendar:
+    if filename == "-":
+        return read_ical_from_fh(sys.stdin.buffer)
+    else:
+        with open(filename, "rb") as fh:
+            return read_ical_from_fh(fh)
+
+
+def write_ical_to_fh(
+    cal: icalendar.cal.Calendar, fh: BinaryIO, *, sorted: bool = True
+) -> None:
+    fh.write(cal.to_ical(sorted=sorted))
+
+
+def write_ical(cal: icalendar.cal.Calendar, filename: str) -> None:
+    if filename == "-":
+        write_ical_to_fh(cal, sys.stdout.buffer)
+    else:
+        with open(filename, "wb") as fh:
+            write_ical_to_fh(cal, fh)
+
+
+def merge_calendars(cals: Sequence[icalendar.cal.Calendar]) -> icalendar.cal.Calendar:
+    if not cals:
+        return icalendar.cal.Calendar()
+    if len(cals) == 1:
+        return cals[0]
+    prod_id = "merged: " + ", ".join(
+        {
+            pid if pid is not None else "???"
+            for pid in {cal.get("prodid") for cal in cals}
+        }
+    )
+    merged_cal = icalendar.cal.Calendar(prodid=prod_id)
+    for cal in cals:
+        for component in cal.subcomponents:
+            merged_cal.add_component(component)
+    return merged_cal
+
+
+def normalize_to_datetime(
+    stamp: datetime.datetime | datetime.date,
+) -> datetime.datetime:
+    if isinstance(stamp, datetime.datetime):
+        dt = stamp
+    else:
+        dt = datetime.datetime.combine(stamp, datetime.time.min)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=datetime.datetime.now().astimezone().tzinfo)
+    return dt
+
+
+def sort_calendar(cal: icalendar.cal.Calendar) -> None:
+    cal.subcomponents.sort(
+        key=lambda e: (normalize_to_datetime(e["dtstart"].dt), e["summary"])
+    )
+
+
+def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument('-v', '--verbose', action='count', default=0)
-    parser.add_argument('file', nargs='?', metavar='FILE|-')
+    parser.add_argument("-v", "--verbose", action="count", default=0)
+    parser.add_argument(
+        "-o",
+        "--output",
+        metavar="FILE",
+        help="iCalendar file to write to, or - for stdout (which is the default)",
+        default="-",
+    )
+    parser.add_argument(
+        "file",
+        nargs="*",
+        metavar="FILE",
+        help="iCalendar file to sort, or - for stdin",
+        default=["-"],
+    )
     settings = parser.parse_args()
     return settings
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     settings = parse_args()
-    if settings.file is None:
-        settings.file = '-'
-    if settings.file == '-':
-        data = sys.stdin.buffer.read()
-    else:
-        with open(settings.file, 'rb') as fh:
-            data = fh.read()
-    sys.stdout.buffer.write(ical_sort(data, verbose=settings.verbose))
+    input_calendars = [read_ical(f) for f in settings.file]
+    output_calendar = merge_calendars(input_calendars)
+    sort_calendar(output_calendar)
+    write_ical(output_calendar, settings.output)
