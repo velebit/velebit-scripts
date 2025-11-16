@@ -17,10 +17,11 @@ for uri in "${unique_uris[@]}"; do
 	 "$uri" \
 	 2>&1 | tee check-links.frag.log
     cat check-links.frag.log >> check-links.log
+    uri_host_path="${uri#*://}"  # remove https://, http://, etc
     wget --load-cookies cookies.txt \
 	 -P check-links -x -N --restrict-file-names=windows \
 	 --wait=0.25 -nv --spider \
-	 -i "check-links/${uri#http://}" --force-html --base="$uri" \
+	 -i "check-links/${uri_host_path}" --force-html --base="$uri" \
 	 2>&1 | tee check-links.frag.log
     cat check-links.frag.log >> check-links.log
 done

@@ -24,9 +24,10 @@ rm -f check-cols.frag.log
 fmt='%40s %s\n'
 
 for uri in "${unique_uris[@]}"; do
+    uri_host_path="${uri#*://}"  # remove https://, http://, etc
     ./print-table-links.pl --base "$uri" \
                            --show-bold-or-heading --show-text-at-row 0 \
-                           "check-cols/${uri#http://}" \
+                           "check-cols/${uri_host_path}" \
     | tee /tmp/CLCF \
     | while IFS='	' read -r table col link; do
         voice="${table/ Chorus MP3s/}"; voice="${voice/ and /+}"
