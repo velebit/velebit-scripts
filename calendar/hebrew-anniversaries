@@ -4,18 +4,18 @@ import argparse
 import arrow
 import convertdate
 import csv
+from dataclasses import dataclass
 import datetime as dt
-
-# import dateutil
 import enum
+
+# Note: the hebcal package's implementation of Hebrew dates just reuses pyluach, so skipping
 
 # We used to use ics, but icalendar is better maintained
 import icalendar
 import pyluach.dates
 import re
 import sys
-
-# Note: the hebcal package's implementation just reuses pyluach, so skipping
+from typing import Dict, List, Tuple
 
 
 USE_PL = True
@@ -35,18 +35,24 @@ class AdarPreference(enum.Enum):
     BOTH = enum.auto()
 
 
+@dataclass
+class Event:
+    name: str
+    dates: List[arrow.Arrow]
+
+
 # When an initial event happened in Adar of a non-leap year, the
 # customs about which Adar to use for its anniversaries in leap years
 # are complicated:
 # https://web.archive.org/web/20210803134534/https://schechter.edu/when-a-person-passed-away-in-adar-when-is-the-yahrzeit-observed-in-a-leap-year-responsa-in-a-moment-volume-5-issue-no-4-february-2011/
-def default_adar_preference():
+def default_adar_preference() -> AdarPreference:
     raise NotImplementedError("I don't know how to deal with non-leap Adar")
 
 
-def gregorian2hebrew(date):
-    date = arrow.get(date)
-    gregorian_ymd = (date.year, date.month, date.day)
-    hebrew_ymd = None
+def gregorian2hebrew(date: arrow.Arrow) -> Tuple[int, int, int]:
+    arrow_date = arrow.get(date)
+    gregorian_ymd = (arrow_date.year, arrow_date.month, arrow_date.day)
+    hebrew_ymd: Tuple[int, int, int] | None = None
     if USE_PL:
         h0 = pyluach.dates.GregorianDate(*gregorian_ymd).to_heb()
         h_ymd0 = (h0.year, h0.month, h0.day)
@@ -64,9 +70,9 @@ def gregorian2hebrew(date):
     return hebrew_ymd
 
 
-def hebrew2gregorian(hebrew_ymd):
+def hebrew2gregorian(hebrew_ymd: Tuple[int, int, int]) -> arrow.Arrow:
     hebrew_ymd = tuple(hebrew_ymd)
-    gregorian_ymd = None
+    gregorian_ymd: Tuple[int, int, int] | None = None
     if USE_PL:
         g0 = pyluach.dates.HebrewDate(*hebrew_ymd).to_greg()
         g_ymd0 = (g0.year, g0.month, g0.day)
@@ -89,8 +95,8 @@ def hebrew2gregorian(hebrew_ymd):
     return gregorian_date
 
 
-def hebrew_year_is_leap(hebrew_year):
-    is_leap = None
+def hebrew_year_is_leap(hebrew_year: int) -> bool:
+    is_leap: bool | None = None
     if USE_PL:
         try:
             _ = pyluach.dates.HebrewDate(hebrew_year, MONTH_ADAR_II, 1)
@@ -117,9 +123,9 @@ def hebrew_year_is_leap(hebrew_year):
     return is_leap
 
 
-def hebrew2text(hebrew_ymd):
+def hebrew2text(hebrew_ymd: Tuple[int, int, int]) -> str:
     hebrew_ymd = tuple(hebrew_ymd)
-    text = None
+    text: str | None = None
     if USE_PL:
         h0 = pyluach.dates.HebrewDate(*hebrew_ymd)
         t0 = (
@@ -148,20 +154,20 @@ def hebrew2text(hebrew_ymd):
     return text
 
 
-def remove_year(date_text):
+def remove_year(date_text: str) -> str:
     date_no_year = re.sub(r",?\s+\d{4}$", "", date_text)
     assert date_no_year != date_text, f"Failed to strip year from {date_text!r}"
     return date_no_year
 
 
-def capitalize_first(text):
+def capitalize_first(text: str) -> str:
     # note: text.capitalize() doesn't work because it *lowercases* the rest
     if len(text) == 0:
         return text
     return text[0].upper() + text[1:]
 
 
-def get_adar_preference(hebrew_ymd):
+def get_adar_preference(hebrew_ymd: Tuple[int, int, int]) -> AdarPreference | None:
     if hebrew_ymd[1] == MONTH_ADAR_II:
         return AdarPreference.SECOND  # event was in Adar II, prefer that
     elif hebrew_ymd[1] == MONTH_ADAR:
@@ -173,7 +179,9 @@ def get_adar_preference(hebrew_ymd):
         return None  # event wasn't in Adar at all, nothing to worry about
 
 
-def apply_adar_preference(hebrew_ymd, preference):
+def apply_adar_preference(
+    hebrew_ymd: Tuple[int, int, int], preference: AdarPreference | None
+) -> Tuple[int, int, int]:
     hebrew_ymd = list(hebrew_ymd)
     if hebrew_ymd[1] >= MONTH_ADAR:
         if not hebrew_year_is_leap(hebrew_ymd[0]):
@@ -185,11 +193,15 @@ def apply_adar_preference(hebrew_ymd, preference):
     return tuple(hebrew_ymd)
 
 
-def next_year(hebrew_ymd, adar_preference):
+def next_year(
+    hebrew_ymd: Tuple[int, int, int], adar_preference: AdarPreference | None
+) -> Tuple[int, int, int]:
     return apply_adar_preference((hebrew_ymd[0] + 1, *hebrew_ymd[1:3]), adar_preference)
 
 
-def next_instance(hebrew_ymd, adar_preference):
+def next_instance(
+    hebrew_ymd: Tuple[int, int, int], adar_preference: AdarPreference | None
+) -> Tuple[int, int, int]:
     if (
         adar_preference == AdarPreference.BOTH
         and hebrew_ymd[1] == MONTH_ADAR
@@ -208,7 +220,7 @@ def events(
     events_until: str | None = DEFAULT_END_DATE,
     shabbat_before: bool = False,
     separate: bool = False,
-):
+) -> List[Event]:
     gdate_origin = arrow.get(gregorian_origin)
     if events_from is not None:
         gdate_from = arrow.get(events_from)
@@ -218,10 +230,10 @@ def events(
         gdate_until = arrow.get(events_until)
     else:
         gdate_until = arrow.get(DEFAULT_END_DATE)
-    hebrew_ymd = gregorian2hebrew(gdate_origin)
-    adar_pref = get_adar_preference(hebrew_ymd)
-    actual_events = []
-    shabbat_before_events = []
+    hebrew_ymd: Tuple[int, int, int] = gregorian2hebrew(gdate_origin)
+    adar_pref: AdarPreference | None = get_adar_preference(hebrew_ymd)
+    actual_events: List[Event] = []
+    shabbat_before_events: List[Event] = []
 
     while True:
         gregorian_date = hebrew2gregorian(hebrew_ymd)
@@ -241,7 +253,7 @@ def events(
                 assert shabbat_before_date > gregorian_date.shift(days=-7)
                 assert shabbat_before_date < gregorian_date
                 shabbat_before_events.append(
-                    {"name": f"Shabbat before {what}", "dates": [shabbat_before_date]}
+                    Event(name=f"Shabbat before {what}", dates=[shabbat_before_date])
                 )
 
         pretty_hebrew = hebrew2text(hebrew_ymd)
@@ -254,10 +266,10 @@ def events(
             pretty_hebrew = remove_year(pretty_hebrew)
             event_name = "{} ({})".format(capitalize_first(what), pretty_hebrew)
         actual_events.append(
-            {
-                "name": event_name,
-                "dates": [gregorian_date],
-            }
+            Event(
+                name=event_name,
+                dates=[gregorian_date],
+            )
         )
 
         hebrew_ymd = next_hebrew_ymd
@@ -270,27 +282,25 @@ def events(
             if len(group) > 0:
                 combined = group[0]
                 for e in group[1:]:
-                    # Checking that e["name"] must match combined["name"]
-                    # doesn't work because of Adar / Adar I / Adar II
-                    combined["dates"].extend(e["dates"])
+                    # Checking that e.name must match combined.name wouldn't
+                    # work because of Adar / Adar I / Adar II
+                    combined.dates.extend(e.dates)
                 events.append(combined)
-    # events.sort(key=lambda e: tuple(e["dates"]))
+    # events.sort(key=lambda e: tuple(e.dates))
     return events
 
 
-def print_ical(entries):
+def print_ical(entries: List[Event]) -> None:
     cal = icalendar.Calendar(
         prodid="hebrew-anniversaries - bert at mit dot edu", version="2.0"
     )
     alarm_back = dt.timedelta(hours=-12)
     for e in entries:
-        assert len(e["dates"]) > 0
-        date = arrow.get(e["dates"][0])
-        repeat_dates = (
-            [arrow.get(d) for d in e["dates"]] if len(e["dates"]) >= 2 else []
-        )
+        assert len(e.dates) > 0
+        date = arrow.get(e.dates[0])
+        repeat_dates = [arrow.get(d) for d in e.dates] if len(e.dates) >= 2 else []
         event = icalendar.Event(
-            summary=e["name"],
+            summary=e.name,
             dtstart=icalendar.vDate(date.date()),
             # end is the next day, as from hebcal.com
             dtend=icalendar.vDate(date.shift(days=1).date()),
@@ -307,12 +317,12 @@ def print_ical(entries):
     sys.stdout.buffer.write(cal.to_ical(sorted=True))
 
 
-def read_info_from_fh(fh):
+def read_info_from_fh(fh) -> List[Dict[str, str]]:
     csv_reader = csv.DictReader(fh)
     return [event for event in csv_reader if not event["what"].startswith("#")]
 
 
-def read_info(filename):
+def read_info(filename: str) -> List[Dict[str, str]]:
     if filename == "-":
         return read_info_from_fh(sys.stdin)
     else:
@@ -320,7 +330,14 @@ def read_info(filename):
             return read_info_from_fh(fh)
 
 
-def get_value(info, key, default=None, *, required=False, allow_empty=False):
+def get_value(
+    info: Dict[str, str],
+    key: str,
+    default: str | None = None,
+    *,
+    required: bool = False,
+    allow_empty: bool = False,
+) -> str | None:
     if key not in info or info[key] is None:
         if required:
             raise KeyError(f"Error: missing {key} value in data")
@@ -333,7 +350,7 @@ def get_value(info, key, default=None, *, required=False, allow_empty=False):
     return value
 
 
-def get_bool(info, key, default=True):
+def get_bool(info: Dict[str, str], key: str, default: bool = True) -> bool:
     value = get_value(info, key, None)
     if value is None or value == "":
         return default
@@ -350,12 +367,12 @@ def get_bool(info, key, default=True):
 
 
 def generate(
-    arg_list,
+    arg_list: List[Dict[str, str]],
     *,
     verbose: int = 0,
     separate: bool = False,
-):
-    entries = []
+) -> None:
+    entries: List[Event] = []
     for event in arg_list:
         origin_date = get_value(event, "start_date", required=True)
         events_from = get_value(event, "events_start")
@@ -374,11 +391,11 @@ def generate(
                 separate=separate,
             )
         )
-    entries.sort(key=lambda e: tuple(e["dates"]))
+    entries.sort(key=lambda e: tuple(e.dates))
     print_ical(entries)
 
 
-def parse_args():
+def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "-v",
