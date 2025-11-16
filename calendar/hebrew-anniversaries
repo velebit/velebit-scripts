@@ -5,8 +5,10 @@ import arrow
 import convertdate
 import csv
 import datetime as dt
+
 # import dateutil
 import enum
+
 # We used to use ics, but icalendar is better maintained
 import icalendar
 import pyluach.dates
@@ -71,20 +73,19 @@ def hebrew2gregorian(hebrew_ymd):
         if gregorian_ymd is None:
             gregorian_ymd = g_ymd0
         else:
-            assert gregorian_ymd == g_ymd0, \
-                "{} != {}".format(gregorian_ymd, g_ymd0)
+            assert gregorian_ymd == g_ymd0, "{} != {}".format(gregorian_ymd, g_ymd0)
     if USE_CD:
         g_ymd2 = tuple(convertdate.hebrew.to_gregorian(*hebrew_ymd))
         if gregorian_ymd is None:
             gregorian_ymd = g_ymd2
         else:
-            assert gregorian_ymd == g_ymd2, \
-                "{} != {}".format(gregorian_ymd, g_ymd2)
+            assert gregorian_ymd == g_ymd2, "{} != {}".format(gregorian_ymd, g_ymd2)
     assert gregorian_ymd is not None
     gregorian_date = arrow.Arrow(*gregorian_ymd)
     check_hebrew_ymd = gregorian2hebrew(gregorian_date)
-    assert check_hebrew_ymd == hebrew_ymd, \
-        "{} != {}".format(check_hebrew_ymd, hebrew_ymd)
+    assert check_hebrew_ymd == hebrew_ymd, "{} != {}".format(
+        check_hebrew_ymd, hebrew_ymd
+    )
     return gregorian_date
 
 
@@ -105,8 +106,9 @@ def hebrew_year_is_leap(hebrew_year):
         # exception for month 13 in a non-leap year
         rosh_hodesh_adar_ii = (hebrew_year, MONTH_ADAR_II, 1)
         actual_hebrew_date = convertdate.hebrew.from_gregorian(
-            *convertdate.hebrew.to_gregorian(*rosh_hodesh_adar_ii))
-        il2 = (actual_hebrew_date == rosh_hodesh_adar_ii)
+            *convertdate.hebrew.to_gregorian(*rosh_hodesh_adar_ii)
+        )
+        il2 = actual_hebrew_date == rosh_hodesh_adar_ii
         if is_leap is None:
             is_leap = il2
         else:
@@ -120,15 +122,15 @@ def hebrew2text(hebrew_ymd):
     text = None
     if USE_PL:
         h0 = pyluach.dates.HebrewDate(*hebrew_ymd)
-        t0 = (f"{h0:%-d %B %Y}"
-              .replace(' Tishrei ', ' Tishri ')
-              .replace(' Cheshvan ', ' Heshvan ')
-              .replace(' Teves ', ' Teveth ')
-              .replace(' Adar 1 ', ' Adar I ')
-              .replace(' Adar 2 ', ' Adar II ')
-              .replace(' Nissan ', ' Nisan ')
-              .replace(' Iyar ', ' Iyyar ')
-              )
+        t0 = (
+            f"{h0:%-d %B %Y}".replace(" Tishrei ", " Tishri ")
+            .replace(" Cheshvan ", " Heshvan ")
+            .replace(" Teves ", " Teveth ")
+            .replace(" Adar 1 ", " Adar I ")
+            .replace(" Adar 2 ", " Adar II ")
+            .replace(" Nissan ", " Nisan ")
+            .replace(" Iyar ", " Iyyar ")
+        )
         if text is None:
             text = t0
         else:
@@ -136,14 +138,20 @@ def hebrew2text(hebrew_ymd):
     if USE_CD:
         t2 = convertdate.hebrew.format(*hebrew_ymd)
         if hebrew_ymd[1] >= MONTH_ADAR and hebrew_year_is_leap(hebrew_ymd[0]):
-            t2 = (t2.replace(' Adar ', ' Adar I ')
-                  .replace(' Adar I Bet ', ' Adar II '))
+            t2 = t2.replace(" Adar ", " Adar I ").replace(" Adar I Bet ", " Adar II ")
         if text is None:
             text = t2
         else:
             assert text == t2, "{} != {}".format(text, t2)
     assert text is not None
+    assert re.search(r"^\d{1,2} \w+(?: I| II)? \d{4}$", text)
     return text
+
+
+def remove_year(date_text):
+    date_no_year = re.sub(r",?\s+\d{4}$", "", date_text)
+    assert date_no_year != date_text, f"Failed to strip year from {date_text!r}"
+    return date_no_year
 
 
 def capitalize_first(text):
@@ -178,88 +186,147 @@ def apply_adar_preference(hebrew_ymd, preference):
 
 
 def next_year(hebrew_ymd, adar_preference):
-    return apply_adar_preference((hebrew_ymd[0]+1, *hebrew_ymd[1:3]),
-                                 adar_preference)
+    return apply_adar_preference((hebrew_ymd[0] + 1, *hebrew_ymd[1:3]), adar_preference)
 
 
 def next_instance(hebrew_ymd, adar_preference):
-    if (adar_preference == AdarPreference.BOTH
-            and hebrew_ymd[1] == MONTH_ADAR
-            and hebrew_year_is_leap(hebrew_ymd[0])):
+    if (
+        adar_preference == AdarPreference.BOTH
+        and hebrew_ymd[1] == MONTH_ADAR
+        and hebrew_year_is_leap(hebrew_ymd[0])
+    ):
         return (hebrew_ymd[0], MONTH_ADAR_II, hebrew_ymd[2])
     else:
         return next_year(hebrew_ymd, adar_preference)
 
 
-def events(what, gregorian_start, gregorian_end=DEFAULT_END_DATE,
-           start_next_year=False, shabbat_before=False):
-    gregorian_start = arrow.get(gregorian_start)
-    gregorian_end = arrow.get(gregorian_end)
-    hebrew_ymd = gregorian2hebrew(gregorian_start)
+def events(
+    what: str,
+    gregorian_origin: str | arrow.Arrow,
+    *,
+    events_from: str | None = None,
+    events_until: str | None = DEFAULT_END_DATE,
+    shabbat_before: bool = False,
+    separate: bool = False,
+):
+    gdate_origin = arrow.get(gregorian_origin)
+    if events_from is not None:
+        gdate_from = arrow.get(events_from)
+    else:
+        gdate_from = gdate_origin.shift(days=-1)
+    if events_until is not None:
+        gdate_until = arrow.get(events_until)
+    else:
+        gdate_until = arrow.get(DEFAULT_END_DATE)
+    hebrew_ymd = gregorian2hebrew(gdate_origin)
     adar_pref = get_adar_preference(hebrew_ymd)
-    events = []
+    actual_events = []
+    shabbat_before_events = []
 
-    if start_next_year:
-        hebrew_ymd = next_year(hebrew_ymd, adar_pref)  # start one year later
     while True:
         gregorian_date = hebrew2gregorian(hebrew_ymd)
-        if gregorian_date >= gregorian_end:
+        next_hebrew_ymd = next_instance(hebrew_ymd, adar_pref)
+        if gregorian_date < gdate_from:
+            hebrew_ymd = next_hebrew_ymd
+            continue
+        if gregorian_date >= gdate_until:
             break
 
         if shabbat_before:
             if gregorian_date.weekday() != WEEKDAY_SATURDAY:
-                shabbat_before_date = (gregorian_date.shift(days=-7)
-                                       .shift(weekday=WEEKDAY_SATURDAY))
+                shabbat_before_date = gregorian_date.shift(days=-7).shift(
+                    weekday=WEEKDAY_SATURDAY
+                )
                 assert shabbat_before_date.weekday() == WEEKDAY_SATURDAY
                 assert shabbat_before_date > gregorian_date.shift(days=-7)
                 assert shabbat_before_date < gregorian_date
-                events.append({'name': f"Shabbat before {what}",
-                               'date': shabbat_before_date})
+                shabbat_before_events.append(
+                    {"name": f"Shabbat before {what}", "dates": [shabbat_before_date]}
+                )
 
         pretty_hebrew = hebrew2text(hebrew_ymd)
-        pretty_gregorian = gregorian_date.format('MMM D, YYYY')
-        events.append({'name': "{} ({} / {})".format(capitalize_first(what),
-                                                     pretty_hebrew,
-                                                     pretty_gregorian),
-                       'date': gregorian_date})
-        hebrew_ymd = next_instance(hebrew_ymd, adar_pref)
+        if separate:
+            pretty_gregorian = gregorian_date.format("MMM D, YYYY")
+            event_name = "{} ({} / {})".format(
+                capitalize_first(what), pretty_hebrew, pretty_gregorian
+            )
+        else:
+            pretty_hebrew = remove_year(pretty_hebrew)
+            event_name = "{} ({})".format(capitalize_first(what), pretty_hebrew)
+        actual_events.append(
+            {
+                "name": event_name,
+                "dates": [gregorian_date],
+            }
+        )
+
+        hebrew_ymd = next_hebrew_ymd
+
+    if separate:
+        events = [*actual_events, *shabbat_before_events]
+    else:
+        events = []
+        for group in (actual_events, shabbat_before_events):
+            if len(group) > 0:
+                combined = group[0]
+                for e in group[1:]:
+                    # Checking that e["name"] must match combined["name"]
+                    # doesn't work because of Adar / Adar I / Adar II
+                    combined["dates"].extend(e["dates"])
+                events.append(combined)
+    # events.sort(key=lambda e: tuple(e["dates"]))
     return events
 
 
 def print_ical(entries):
     cal = icalendar.Calendar(
-        prodid='hebrew-anniversaries - bert at mit dot edu', version='2.0')
+        prodid="hebrew-anniversaries - bert at mit dot edu", version="2.0"
+    )
     alarm_back = dt.timedelta(hours=-12)
     for e in entries:
-        date = arrow.get(e['date'])
-        event = icalendar.Event(summary=e['name'],
-                                dtstart=icalendar.vDate(date.date()),
-                                # end is the next day, as from hebcal.com
-                                dtend=icalendar.vDate(
-                                    date.shift(days=1).date()),
-                                transp='TRANSPARENT')
+        assert len(e["dates"]) > 0
+        date = arrow.get(e["dates"][0])
+        repeat_dates = (
+            [arrow.get(d) for d in e["dates"]] if len(e["dates"]) >= 2 else []
+        )
+        event = icalendar.Event(
+            summary=e["name"],
+            dtstart=icalendar.vDate(date.date()),
+            # end is the next day, as from hebcal.com
+            dtend=icalendar.vDate(date.shift(days=1).date()),
+            # produces multiple entries, which is verbose but allowed by the
+            # standard; not sure how to generate a comma separated list.
+            rdate=[icalendar.vDate(d.date()) for d in repeat_dates],
+            transp="TRANSPARENT",
+        )
         # Note: `event` doesn't currently contain a UID
-        alarm = icalendar.Alarm(action='DISPLAY', description='')
-        alarm.add('trigger', alarm_back)  # can't be passed to constructor!
+        alarm = icalendar.Alarm(action="DISPLAY", description="")
+        alarm.add("trigger", alarm_back)  # can't be passed to constructor!
         event.add_component(alarm)
         cal.add_component(event)
     sys.stdout.buffer.write(cal.to_ical(sorted=True))
 
 
+def read_info_from_fh(fh):
+    csv_reader = csv.DictReader(fh)
+    return [event for event in csv_reader if not event["what"].startswith("#")]
+
+
 def read_info(filename):
-    with open(filename, 'r', newline='') as fh:
-        csv_reader = csv.DictReader(fh)
-        return [event for event in csv_reader
-                if not event['what'].startswith('#')]
+    if filename == "-":
+        return read_info_from_fh(sys.stdin)
+    else:
+        with open(filename, "r", newline="") as fh:
+            return read_info_from_fh(fh)
 
 
-def get_value(info, key, default=None, required=False, allow_empty=False):
+def get_value(info, key, default=None, *, required=False, allow_empty=False):
     if key not in info or info[key] is None:
         if required:
             raise KeyError(f"Error: missing {key} value in data")
         return default
     value = info[key].strip()
-    if value == '' and not allow_empty:
+    if value == "" and not allow_empty:
         if required:
             raise ValueError(f"Error: empty {key} value in data")
         return default
@@ -268,50 +335,86 @@ def get_value(info, key, default=None, required=False, allow_empty=False):
 
 def get_bool(info, key, default=True):
     value = get_value(info, key, None)
-    if value is None or value == '':
+    if value is None or value == "":
         return default
-    elif re.search(r'^(?:y|yes|t|true|da|1)$', value, flags=re.I):
+    elif re.search(r"^(?:y|yes|t|true|da|1)$", value, flags=re.I):
         return True
-    elif re.search(r'^(?:n|no|f|false|ne|0)$', value, flags=re.I):
+    elif re.search(r"^(?:n|no|f|false|ne|0)$", value, flags=re.I):
         return False
     else:
-        print("Warning: unknown boolean value "
-              f"{value!r}, defaulting to {default!r}", file=sys.stderr)
+        print(
+            f"Warning: unknown boolean value {value!r}, defaulting to {default!r}",
+            file=sys.stderr,
+        )
         return default
 
 
-def generate(arg_list):
+def generate(
+    arg_list,
+    *,
+    verbose: int = 0,
+    separate: bool = False,
+):
     entries = []
     for event in arg_list:
-        entries.extend(events(
-            get_value(event, 'what', required=True),
-            get_value(event, 'start_date', required=True),
-            get_value(event, 'end_date', default=DEFAULT_END_DATE),
-            start_next_year=get_bool(event, 'start_next_year', False),
-            shabbat_before=get_bool(event, 'also_shabbat_before', True)))
-    entries.sort(key=lambda e: e['date'])
+        origin_date = get_value(event, "start_date", required=True)
+        events_from = get_value(event, "events_start")
+        if events_from is None:
+            start_next_year = get_bool(event, "start_next_year", False)
+            if start_next_year:
+                events_from = arrow.get(origin_date).shift(days=1).date()
+        events_until = get_value(event, "end_date", default=DEFAULT_END_DATE)
+        entries.extend(
+            events(
+                get_value(event, "what", required=True),
+                gregorian_origin=origin_date,
+                events_from=events_from,
+                events_until=events_until,
+                shabbat_before=get_bool(event, "also_shabbat_before", True),
+                separate=separate,
+            )
+        )
+    entries.sort(key=lambda e: tuple(e["dates"]))
     print_ical(entries)
 
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-v', '--verbose', action='count', default=0,
-                        help='increase verbosity (which may not do anything)')
-    parser.add_argument('csv', metavar='CSV_INFO',
-                        nargs='?', default='dates.csv',
-                        help=("a CSV file containing the information about the"
-                              " events. At a minimum, the fields in the CSV"
-                              " file must include 'what' (the name of the"
-                              " event) and 'start_date' (usually as"
-                              " YYYY-MM-DD, but any format that arrow"
-                              " understands will do). If 'what' starts with"
-                              " '#', the entry will be ignored. Events will be"
-                              " generated on Hebrew anniversaries of"
-                              " 'start_date', until (optional) 'end_date'."))
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="count",
+        default=0,
+        help="increase verbosity (which may not do anything)",
+    )
+    parser.add_argument(
+        "--separate",
+        action="store_true",
+        help=("generate separate events, not one event with irregular recurrence"),
+    )
+    parser.add_argument(
+        "csv",
+        metavar="CSV_INFO",
+        nargs="?",
+        default="dates.csv",
+        help=(
+            "a CSV file containing the information about the"
+            " events. At a minimum, the fields in the CSV"
+            " file must include 'what' (the name of the"
+            " event) and 'start_date' (usually as"
+            " YYYY-MM-DD, but any format that arrow"
+            " understands will do). If 'what' starts with"
+            " '#', the entry will be ignored. Events will be"
+            " generated on Hebrew anniversaries of"
+            " 'start_date', until (optional) 'end_date'."
+        ),
+    )
     settings = parser.parse_args()
     return settings
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     settings = parse_args()
-    generate(read_info(settings.csv))
+    generate(
+        read_info(settings.csv), verbose=settings.verbose, separate=settings.separate
+    )
