@@ -193,16 +193,16 @@ process_text_section_columns () {
     sed -e '/\.mp3$/I!d' `# skip non-MP3 links` \
         -e '/^'"$section"'/I!d' `# filter sections (bold-or-heading)` \
         -e 's/^[^	]*	//' `# remove section (bold-or-heading)` \
-        `# Remove //, which is the hardcoded separator from --show-less-indented:` \
+        `# Remove //, which is the hardcoded separator from less-indented:` \
         -e 's,^\([^	]*\)  *//  *,\1 ,' \
         -e 's,^\([^	]*\)  *//  *,\1 ,' \
         -e 's,^\([^	]*\)  *//  *,\1 ,' \
-        -e 's/^\([^	]*\)	[^	]*/\1/' `# remove --show-previous-line-text` \
-        -e 's/^\([^	]*\)	[^	]*/\1/' `# remove --show-line-text` \
+        -e 's/^\([^	]*\)	[^	]*/\1/' `# keep less-indented, remove previous-line-text` \
+        -e 's/^\([^	]*\)	[^	]*/\1/' `# remove line-text` \
         -e '' \
-        -e 's/^\([^	]*\)	/\1 /' `# combine --show-line-before-link into track name` \
-        -e 's/^\([^	]*\)	/\1 /' `# combine --show-text into track name` \
-        -e 's/^\([^	]*\)	[^	]*/\1/' `# remove --show-line-after-link` \
+        -e 's/^\([^	]*\)	/\1 /' `# combine line-before-link into track name` \
+        -e 's/^\([^	]*\)	/\1 /' `# combine text into track name` \
+        -e 's/^\([^	]*\)	[^	]*/\1/' `# remove line-after-link` \
         `# If there's an unclosed parenthesis in the track name, force it closed:` \
         -e 's/^\([^	]*([^)	]*\)	/\1)	/' \
         -e 's/^\([^	]*\)[:\*\?"<>|~]/\1/' \
@@ -293,18 +293,26 @@ extract_demorch () {
     cat "$plist" \
         | sed -e '/\.mp3$/I!d' \
               -e '/^'"$section"'/I!d' `# filter sections` \
-              -e 's/^[^	]*	//' `# remove section (-hb)` \
-              -e 's/^[^	]*	//' `# remove less indented (-li)` \
-              -e 's/^[^	]*	//' `# remove previous line (-plt)` \
-              -e '/^[^	]*, complete/d' `# filter same line text (-lt)` \
+              -e 's/^[^	]*	//' `# remove section (bold-or-heading)` \
+              `# Remove //, which is the hardcoded separator from less-indented:` \
+              -e 's,^\([^	]*\)  *//  *,\1 ,' \
+              -e 's,^\([^	]*\)  *//  *,\1 ,' \
+              -e 's,^\([^	]*\)  *//  *,\1 ,' \
+              -e 's/^\([^	]*\)	[^	]*/\1/' `# keep less-indented, remove previous-line-text` \
+              -e 's/^\([^	]*	\)[^	]*	/\1/' `# remove same line text (line-text)` \
+              -e 's/^\([^	]*\)	/\1 /' `# combine same line before link (line-before-link) into track name` \
+              -e 's/^\([^	]*\)	/\1 /' `# combine link text (text) into track name` \
+              -e 's/^\([^	]*\)	/\1 /' `# combine same line after link (line-after-link) into track name` \
               `# remove some common labeling we don't care about:` \
-              -e 's/^\([^	]*\) *(updated [^()	]*)\?/\1/I' \
-              -e 's/^\([^	]*\) *\[new!\? [^][	]*\]\?/\1/I' \
-              -e 's/^\([^	]*	\)[^	]*	/\1/' `# remove same line before link (-lb)` \
-              -e 's/^\([^	]*	\)[^	]*	/\1/' `# remove link text (-t)` \
-              -e 's/^\([^	]*	\)[^	]*	/\1/' `# remove same line after link (-la)` \
+              -e 's,\( *-\)\?  *rev [1-9][0-9]\?/[1-9][0-9]\?/1[78] ([^()	]*),,I' \
+              -e 's, *(\(added  *\|updated  *\)\?[1-9][0-9]\?/[1-9][0-9]\?/1[78]),,I' \
+              -e 's, *(updated  *12/30),,I' `# specific update from 2017` \
+              -e 's,^\(act  *II*  *scene  *[1-9][0-9]*[a-z]\?\)\(  *-\)\? *,\1 - ,I' `# add - if missing after scene` \
               `# use the scene "#.#" number from filename if available:` \
-              -e 's/^\([^	]*	\)\(.*\(Sc\|Practice_\)\([1-9][0-9]*\)[-.]\([1-9][0-9]*\)\)/\4.\5 \1\2/' \
+              `# commented out block\
+              -e 's,^act  *II*  *scene  *[1-9][0-9]*[a-z]\?\( -.*	.*_act1_\?sc\)\([1-9][0-9]*[a-z]\?\)\([-_]\),Act I Scene \2\1\2,I' \
+              -e 's,^act  *II*  *scene  *[1-9][0-9]*[a-z]\?\( -.*	.*_act2_\?sc\)\([1-9][0-9]*[a-z]\?\)\([-_]\),Act II Scene \2\1\2,I' \
+              # end of commented-out block` \
               -e 's/^\([^	]*\)[:\*\?"<>|]/\1/' \
               -e 's/^\([^	]*\)[:\*\?"<>|]/\1/' \
               -e 's/^\([^	]*\)[:\*\?"<>|]/\1/' \
@@ -318,14 +326,7 @@ extract_demorch () {
               -e 's/   */ /g' -e 's/^  *//' -e 's/  *	/	/g' \
               -e 's/^\([^	]*\)	\(.*\)$/\2	'"$out_tag:$files_prefix"'\1'"$files_suffix"'/' \
               -e 's,\xe2\x80\x99,'\'',g' \
-              `# Hack: do not include music for bows` \
-              -e '/walkdown/Id' \
               > "$DIR"/"$file".mp3.tmplist
-
-#              -e 's/7\.1 Renegade Hare/7.2 Renegade Hare/' `# fix up track` \
-#              -e 's/7\.2 I Am Tau/7.4 I Am Tau/' `# fix up track` \
-#              -e 's/7\.3 Rain Dance 2/7.6 Rain Dance 2/' `# fix up track` \
-#              -e 's/7\.4 Bring Us Rain 3/7.7 Bring Us Rain 3/' `# fix up track` \
 }
 
 process_section_non_table_extras () {
