@@ -67,11 +67,17 @@ fi
 # solution based on print-table-links for MP3s are organized into a
 # table.  Look for "$plist" or "$tlist".
 
+force_https=yes
+
 use_tables=
+
+# 'AC' is the melody part for Weedpatch
+voice_parts=('Soprano' 'Alto' 'AC' 'Tenor' 'Bass')
 
 plist () {
     local index="$1"; shift
     local plist="${index##*/}"; plist="$DIR/${plist%%.html}.p.tmplist"
+    local pslist="${plist%%.p.tmplist}.ps.tmplist"
     if [ "$plist" = "$DIR/.p.tmplist" ]; then
         echo "... $plist (plist) has no name for index $index" >&2
     elif [ ! -e "$plist" ]; then
@@ -81,13 +87,23 @@ plist () {
                     --show-line-before-link --show-text \
                     --show-line-after-link --merge-links \
                     --base "$base_uri" "$index" > "$plist"
+        if [[ -n "$force_https" ]]; then
+            echo "... $pslist (plist+https)" >&2
+            sed -e 's,	http\(://\(www.\)\?familyopera.org/\),	https\1,g' \
+                < "$plist" > "$pslist"
+        fi
     fi
-    echo "$plist"
+    if [[ -z "$force_https" ]]; then
+        echo "$plist"
+    else
+        echo "$pslist"
+    fi
 }
 
 tlist () {
     local index="$1"; shift
     local tlist="${index##*/}"; tlist="$DIR/${tlist%%.html}.t.tmplist"
+    local tslist="${tlist%%.t.tmplist}.ts.tmplist"
     if [ "$tlist" = "$DIR/.t.tmplist" ]; then
         echo "... $tlist (tlist) has no name for index $index" >&2
     elif [ ! -e "$tlist" ]; then
@@ -113,8 +129,17 @@ tlist () {
                                --ignore-breaks \
                                --repeat-span \
                                --base "$base_uri" "$index" > "$tlist"
+        if [[ -n "$force_https" ]]; then
+            echo "... $tslist (tlist+https)" >&2
+            sed -e 's,	http\(://\(www.\)\?familyopera.org/\),	https\1,g' \
+                < "$tlist" > "$tslist"
+        fi
     fi
-    echo "$tlist"
+    if [[ -z "$force_https" ]]; then
+        echo "$tlist"
+    else
+        echo "$tslist"
+    fi
 }
 
 get_mp3_sections () {
