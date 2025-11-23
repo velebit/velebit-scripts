@@ -146,9 +146,9 @@ get_mp3_sections () {
     local tlist="$1"; shift
     local plist="$1"; shift
     if [[ -n "$use_tables" ]]; then
-        sed -e '/\.mp3$/I!d;s/	.*//' "$tlist" | sort | uniq
+        sed -e '/\.mp3$/I!d;s/	.*//' "$tlist" | uniq
     else
-        sed -e '/\.mp3$/I!d;s/	.*//' "$plist" | sort | uniq
+        sed -e '/\.mp3$/I!d;s/	.*//' "$plist" | uniq
     fi
 }
 
@@ -215,6 +215,12 @@ process_text_section_columns () {
         files_suffix="$files_suffix "
     fi
 
+    local voices_regex=
+    for voice in "${voice_parts[@]}"; do
+        voices_regex="${voices_regex}${voice,,}\\|"
+    done
+    voices_regex="${voices_regex%%\\|}"
+
     sed -e '/\.mp3$/I!d' `# skip non-MP3 links` \
         -e '/^'"$section"'/I!d' `# filter sections (bold-or-heading)` \
         -e 's/^[^	]*	//' `# remove section (bold-or-heading)` \
@@ -244,8 +250,13 @@ process_text_section_columns () {
         -e 's/, *,/,/;s/, *,/,/' -e 's/  *,/,/g;s/, *	/	/' \
         -e 's/^\([^	]*\)	\(.*\)$/\2	'"$out_tag:$files_prefix"'\1'"$files_suffix"'/' \
         -e 's,\xe2\x80\x99,'\'',g' \
+        `# voice subpart labeling` \
+        -e '/\('"${voices_regex}"'\) *1/Is,\(out_file[_a-z]*:[SATB]\) ,\11 ,' \
+        -e '/\('"${voices_regex}"'\) *2/Is,\(out_file[_a-z]*:[SATB]\) ,\12 ,' \
+        -e '/KCCC/s,\(out_file[_a-z]*:[SATB]\) ,\1cc ,' \
         `# final fixups` \
         -e 's/\(Scene \)1 \(1[a-z]\)/\1\2/' \
+        -e 's,\( *-\)\?  *rev [1-9][0-9]\?/[1-9][0-9]\?/1[78] ([^()	]*),,I' \
         -e ''
 }
 
@@ -391,9 +402,6 @@ process_section_non_table_extras () {
         -e 's,\xe2\x80\x99,'\'',g' \
         -e ''
 }
-
-# 'AC' is the melody part for Weedpatch
-voice_parts=('Soprano' 'Alto' 'AC' 'Tenor' 'Bass')
 
 extract_satb_sections () {
     local tlist="$1"; shift
@@ -662,7 +670,33 @@ fi
 
 ### generating generic zip files
 
+split_with_sed () {
+    local input="$1"; shift
+    local result=1
+    local outputs=()
+    local script output
+    while [[ "$#" -gt 0 ]]; do
+        script="$1"; shift
+        output="$1"; shift
+        outputs+=("$output")
+        sed -e "$script" < "$input" > "${DIR}/${output}.tmp"
+        if ! diff -q "${input}" "${DIR}/${output}.tmp" > /dev/null; then
+            result=0
+        fi
+    done
+    if [[ "$result" == 0 ]]; then
+        # some output files are different from the input
+        rm -f "$input"
+        for output in "${outputs[@]}"; do
+            cp -p "${DIR}/${output}.tmp" "${output}"
+        done
+    fi
+    return "$result"
+}
+
+
 if [ -n "$do_generate_zip" ]; then
+    inputs=()
     for i in "$INDEX_CHORUS" "$INDEX_SOLO"; do
         if [ -n "$i" ]; then
             sections=()
@@ -676,14 +710,39 @@ if [ -n "$do_generate_zip" ]; then
                     base_out="AC"
                 fi
                 input="${DIR}/${base}-chorus.mp3.tmplist"
+                inputs+=("$input")
                 if [[ -e "${input}" ]]; then
                     cat "${input}" | sed \
-                        -e '' \
+                        -e '/KCCC/d' \
                         > "${base_out}.mp3.urllist"
+                    if split_with_sed "${base_out}.mp3.urllist" \
+                                      '/:[SATB]2 /d' "${base_out} 1.mp3.urllist" \
+                                      '/:[SATB]1 /d' "${base_out} 2.mp3.urllist"; then
+                        split_with_sed "${base_out} 1.mp3.urllist" \
+                                       '/townie/Id' "${base_out} 1 camper.mp3.urllist" \
+                                       '/camper/Id' "${base_out} 1 townie.mp3.urllist"
+                        split_with_sed "${base_out} 2.mp3.urllist" \
+                                       '/townie/Id' "${base_out} 2 camper.mp3.urllist" \
+                                       '/camper/Id' "${base_out} 2 townie.mp3.urllist"
+                    else
+                        split_with_sed "${base_out}.mp3.urllist" \
+                                       '/townie/Id' "${base_out} camper.mp3.urllist" \
+                                       '/camper/Id' "${base_out} townie.mp3.urllist"
+                    fi
                 fi
             done
         fi
     done
+    cat "${inputs[@]}" | sed \
+        -e '/KCCC/!d' \
+        -e 's/:Scc /:Citizens Committee soprano /' \
+        -e 's/:Acc /:Citizens Committee alto /' \
+        -e 's/:Tcc /:Citizens Committee tenor /' \
+        -e 's/:Bcc /:Citizens Committee bass /' \
+        > "Kern County Citizens Committee.mp3.urllist"
+    if ! [[ -s "Kern County Citizens Committee.mp3.urllist" ]]; then
+        rm -f "Kern County Citizens Committee.mp3.urllist"
+    fi
 
 #    if [ -n "$INDEX_CHORUS" ]; then
 #        section="SUPPORTING"
