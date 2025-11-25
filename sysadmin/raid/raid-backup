@@ -2,12 +2,13 @@
 
 PATH="/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:$PATH"
 
-COLOR_NONE=$'\033[0m'
-COLOR_FAIL=$'\033[31m'
-COLOR_STAT=$'\033[33m'
-COLOR_GOOD=$'\033[32m'
-COLOR_DATE=$'\033[36m'
-
+with_colors () {
+    COLOR_NONE=$'\033[0m'
+    COLOR_FAIL=$'\033[31m'
+    COLOR_STAT=$'\033[33m'
+    COLOR_GOOD=$'\033[32m'
+    COLOR_DATE=$'\033[36m'
+}
 no_colors () {
     COLOR_NONE=''
     COLOR_FAIL=''
@@ -15,7 +16,7 @@ no_colors () {
     COLOR_GOOD=''
     COLOR_DATE=''
 }
-if [ ! -t 1 ]; then no_colors; fi
+if [ -t 1 ]; then with_colors; else no_colors; fi
 
 arg_fail () {
     echo "${COLOR_FAIL}$*${COLOR_NONE}" >&2
@@ -77,6 +78,8 @@ while [ "$#" -gt 0 ]; do
             [ -n "$backup_name" -a "$backup_name" != "$backup_name_int" ] \
                 && arg_fail "You may only specify one of -e and -i."
             backup_name="$backup_name_int" ;;
+       --colors)
+            with_colors ;;
        -?|-h)
             cat <<EOF
 Usage: $(basename "$0") [-n] [-c] [-d] [-e|-i]
@@ -95,19 +98,6 @@ EOF
     shift
 done
 [ -z "$backup_name" ] && backup_name="$backup_name_ext"
-
-while read mountpoint; do
-    for b in "${backup_tlds[@]/%/\/${backup_name}}"; do
-        if [ "($mountpoint)" = "($b)" ]; then
-            if [ -z "$backup" ]; then
-                backup="$b"
-            else
-                arg_fail "Multiple $backup_name directories are mounted."
-            fi
-        fi
-    done
-done < <(mount | awk '{print $3}')
-[ -z "$backup" ] && arg_fail "No $backup_name directory is mounted."
 
 Run () {
     if [ -n "$dryrun" ]; then
@@ -495,8 +485,8 @@ dump_disk_setup () {
             echo "# smartctl -i $d"
             smartctl -i "$d"
             for n in "$d"n[0-9]; do
-                echo "# parted $n unit s p"
-                parted "$n" unit s p
+                echo "# parted -s $n unit s p"
+                parted -s "$n" unit s p
                 for p in "$n"p[0-9]*; do
                     if [ -e "$p" ]; then
                         echo "# mdadm -Q $p"
@@ -512,8 +502,8 @@ dump_disk_setup () {
                 | sed -ne 'h;s/./-/g;p;x;p'
             echo "# smartctl -i $d"
             smartctl -i "$d"
-            echo "# parted $d unit s p"
-            parted "$d" unit s p
+            echo "# parted -s $d unit s p"
+            parted -s "$d" unit s p
             for p in "$d"[0-9]*; do
                 if [ -e "$p" ]; then
                     echo "# mdadm -Q $p"
@@ -565,12 +555,18 @@ dump_disk_setup () {
     return 0
 }
 
+mark_all_as_fail () {
+    while read -r line; do
+        echo "${COLOR_FAIL}$line${COLOR_NONE}"
+    done
+}
+
 write_disk_setup () {
     local setup_file="$1"
     if [ -n "$dryrun" ]; then
         status "Would write setup to $setup_file"
     else
-        if dump_disk_setup > "$setup_file" 2>&1; then
+        if (dump_disk_setup  2> >(mark_all_as_fail)) > "$setup_file"; then
             status "Wrote setup to $setup_file"
         else
             status "Failed while writing setup to $setup_file"
@@ -580,15 +576,31 @@ write_disk_setup () {
 
 
 if [ -n "$partition_check" ]; then
+    # does not require $backup to be set
     check_partition_coverage
     check_partition_list
     exit 0
 fi
 
 if [ -n "$show_disk_setup" ]; then
-    dump_disk_setup
+    # does not require $backup to be set
+    dump_disk_setup 2> >(mark_all_as_fail)
     exit 0
 fi
+
+# set $backup
+while read mountpoint; do
+    for b in "${backup_tlds[@]/%/\/${backup_name}}"; do
+        if [ "($mountpoint)" = "($b)" ]; then
+            if [ -z "$backup" ]; then
+                backup="$b"
+            else
+                arg_fail "Multiple $backup_name directories are mounted."
+            fi
+        fi
+    done
+done < <(mount | awk '{print $3}')
+[ -z "$backup" ] && arg_fail "No $backup_name directory is mounted."
 
 InitialCheckMounted
 
