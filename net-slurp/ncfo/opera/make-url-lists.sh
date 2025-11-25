@@ -623,6 +623,128 @@ if [ -n "$DO_CHECK_LINKS" ]; then
     done
 fi
 
+### generating generic zip files
+
+split_with_sed () {
+    local input="$1"; shift
+    local result=1
+    local outputs=()
+    local script output
+    while [[ "$#" -gt 0 ]]; do
+        script="$1"; shift
+        output="$1"; shift
+        outputs+=("$output")
+        sed -e "$script" < "$input" > "${DIR}/$(basename "${output}").tmp"
+        if [[ -s "${DIR}/$(basename "${output}").tmp" ]] && \
+               ! diff -q "${input}" "${DIR}/$(basename "${output}").tmp" > /dev/null; then
+            result=0
+        fi
+    done
+    if [[ "$result" == 0 ]]; then
+        # some output files are different from the input
+        # we DO NOT remove the input, we will just take care not to copy it!
+        for output in "${outputs[@]}"; do
+            mv "${DIR}/$(basename "${output}").tmp" "${output}"
+        done
+    fi
+    return "$result"
+}
+
+split_camper_townie () {
+    local name_a="$1"; shift
+    local name_b="$1"; shift
+    split_with_sed "${DIR}/${name_a}${name_b}.mp3.tmplist" \
+                   '/townie/Id' "${DIR}/${name_a} camper${name_b}.mp3.tmplist" \
+                   '/camper/Id' "${DIR}/${name_a} townie${name_b}.mp3.tmplist"
+}
+split_1_2 () {
+    local name_a="$1"; shift
+    local name_b="$1"; shift
+    split_with_sed "${DIR}/${name_a}${name_b}.mp3.tmplist" \
+                   '/:[SATB]2 /d' "${DIR}/${name_a} 1${name_b}.mp3.tmplist" \
+                   '/:[SATB]1 /d' "${DIR}/${name_a} 2${name_b}.mp3.tmplist"
+}
+cp_for_zip () {
+    local name="$1"; shift
+    if [ -n "$do_generate_zip" ]; then
+        cp "${DIR}/${name}.mp3.tmplist" "${name}.mp3.urllist"
+    fi
+}
+
+inputs=()
+for i in "$INDEX_CHORUS" "$INDEX_SOLO"; do
+    if [ -n "$i" ]; then
+        sections=()
+        while read -r section; do
+            sections+=("$section")
+        done < <(get_mp3_sections "$(tlist "$i")" "$(plist "$i")")
+        for section in "${sections[@]}"; do
+            base="${section,,}"; base="${base// /-}"
+            base_out="$base"
+            if [[ "${base}" == "ac" ]]; then
+                base_out="AC"
+            fi
+            input="${DIR}/${base}-chorus.mp3.tmplist"
+            if [[ -e "${input}" ]]; then
+                inputs+=("${input}")
+                cat "${input}" | sed \
+                    -e '/KCCC/d' \
+                    > "${DIR}/${base_out}.mp3.tmplist"
+                if split_camper_townie "${base_out}" ""; then
+                    if split_1_2 "${base_out}" " camper"; then
+                        cp_for_zip "${base_out} 1 camper"
+                        cp_for_zip "${base_out} 2 camper"
+                    else
+                        cp_for_zip "${base_out} camper"
+                    fi
+                    if split_1_2 "${base_out}" " townie"; then
+                        cp_for_zip "${base_out} 1 townie"
+                        cp_for_zip "${base_out} 2 townie"
+                    else
+                        cp_for_zip "${base_out} townie"
+                    fi
+                else
+                    if split_1_2 "${base_out}" ""; then
+                        cp_for_zip "${base_out} 1"
+                        cp_for_zip "${base_out} 2"
+                    else
+                        cp_for_zip "${base_out}"
+                    fi
+                fi
+            fi
+        done
+    fi
+done
+if [[ "${#inputs[@]}" -gt 0 ]]; then
+    cat "${inputs[@]}" | sed \
+        -e '/KCCC/!d' \
+        -e 's/:Scc /:Citizens Committee soprano /' \
+        -e 's/:Acc /:Citizens Committee alto /' \
+        -e 's/:Tcc /:Citizens Committee tenor /' \
+        -e 's/:Bcc /:Citizens Committee bass /' \
+        > "${DIR}/Kern County Citizens Committee.mp3.tmplist"
+    if [[ -s "${DIR}/Kern County Citizens Committee.mp3.tmplist" ]]; then
+        cp_for_zip "Kern County Citizens Committee"
+    fi
+fi
+
+#    if [ -n "$INDEX_CHORUS" ]; then
+#        section="SUPPORTING"
+#        get_table_section_field "$(tlist "$INDEX_CHORUS")" "$section" 2 1 \
+#        | while read -r who; do
+#            base="$who"
+#            cat "$(tlist "$INDEX_CHORUS")" \
+#                | remove_field 3 \
+#                | filter_by_field 4 "$who" \
+#                | process_table_section_columns "$section" '[^	]*' \
+#                                                '[^	]*' '' '' \
+#                | sed -e 's/	.*$//' \
+#                      > "$base".mp3zip.urllist
+#            # some links may be repeated in the list, but that's OK
+#        done
+#    fi
+#fi
+
 ### no Katarina ;(
 
 ### Luka (Alto)
@@ -647,7 +769,7 @@ if [ -n "$INDEX_CHORUS" ]; then
     #        >> Luka.mp3.urllist
     #    snip_allow="$snip_deny"
     #done
-    cat "$DIR"/alto-chorus.mp3.tmplist | sed \
+    cat "$DIR"/alto.mp3.tmplist | sed \
         -e '' \
         > Luka.mp3.urllist
 fi
@@ -655,273 +777,18 @@ fi
 ### bert (Tenor)
 # MP3s
 if [ -n "$INDEX_CHORUS" ]; then
-    cat "$DIR"/tenor-chorus.mp3.tmplist | sed \
+    cat "$DIR"/tenor.mp3.tmplist | sed \
         -e 's/out_file:TB /out_file:T /' \
-        > bert.mp3.urllist
+        > Abbe+bert.mp3.urllist
 fi
 
-### Abbe (Alto, Kids, Agnes!)
+### Abbe (Alto)
 # MP3s
-if [ -n "$INDEX_CHORUS" ]; then
-    cat "$DIR"/alto-chorus.mp3.tmplist | sed \
-        -e '' \
-        > Abbe.mp3.urllist
-fi
-
-### generating generic zip files
-
-split_with_sed () {
-    local input="$1"; shift
-    local result=1
-    local outputs=()
-    local script output
-    while [[ "$#" -gt 0 ]]; do
-        script="$1"; shift
-        output="$1"; shift
-        outputs+=("$output")
-        sed -e "$script" < "$input" > "${DIR}/${output}.tmp"
-        if ! diff -q "${input}" "${DIR}/${output}.tmp" > /dev/null; then
-            result=0
-        fi
-    done
-    if [[ "$result" == 0 ]]; then
-        # some output files are different from the input
-        rm -f "$input"
-        for output in "${outputs[@]}"; do
-            cp -p "${DIR}/${output}.tmp" "${output}"
-        done
-    fi
-    return "$result"
-}
-
-
-if [ -n "$do_generate_zip" ]; then
-    inputs=()
-    for i in "$INDEX_CHORUS" "$INDEX_SOLO"; do
-        if [ -n "$i" ]; then
-            sections=()
-            while read -r section; do
-                sections+=("$section")
-            done < <(get_mp3_sections "$(tlist "$i")" "$(plist "$i")")
-            for section in "${sections[@]}"; do
-                base="${section,,}"; base="${base// /-}"
-                base_out="$base"
-                if [[ "${base}" == "ac" ]]; then
-                    base_out="AC"
-                fi
-                input="${DIR}/${base}-chorus.mp3.tmplist"
-                inputs+=("$input")
-                if [[ -e "${input}" ]]; then
-                    cat "${input}" | sed \
-                        -e '/KCCC/d' \
-                        > "${base_out}.mp3.urllist"
-                    if split_with_sed "${base_out}.mp3.urllist" \
-                                      '/:[SATB]2 /d' "${base_out} 1.mp3.urllist" \
-                                      '/:[SATB]1 /d' "${base_out} 2.mp3.urllist"; then
-                        split_with_sed "${base_out} 1.mp3.urllist" \
-                                       '/townie/Id' "${base_out} 1 camper.mp3.urllist" \
-                                       '/camper/Id' "${base_out} 1 townie.mp3.urllist"
-                        split_with_sed "${base_out} 2.mp3.urllist" \
-                                       '/townie/Id' "${base_out} 2 camper.mp3.urllist" \
-                                       '/camper/Id' "${base_out} 2 townie.mp3.urllist"
-                    else
-                        split_with_sed "${base_out}.mp3.urllist" \
-                                       '/townie/Id' "${base_out} camper.mp3.urllist" \
-                                       '/camper/Id' "${base_out} townie.mp3.urllist"
-                    fi
-                fi
-            done
-        fi
-    done
-    cat "${inputs[@]}" | sed \
-        -e '/KCCC/!d' \
-        -e 's/:Scc /:Citizens Committee soprano /' \
-        -e 's/:Acc /:Citizens Committee alto /' \
-        -e 's/:Tcc /:Citizens Committee tenor /' \
-        -e 's/:Bcc /:Citizens Committee bass /' \
-        > "Kern County Citizens Committee.mp3.urllist"
-    if ! [[ -s "Kern County Citizens Committee.mp3.urllist" ]]; then
-        rm -f "Kern County Citizens Committee.mp3.urllist"
-    fi
-
-#    if [ -n "$INDEX_CHORUS" ]; then
-#        section="SUPPORTING"
-#        get_table_section_field "$(tlist "$INDEX_CHORUS")" "$section" 2 1 \
-#        | while read -r who; do
-#            base="$who"
-#            cat "$(tlist "$INDEX_CHORUS")" \
-#                | remove_field 3 \
-#                | filter_by_field 4 "$who" \
-#                | process_table_section_columns "$section" '[^	]*' \
-#                                                '[^	]*' '' '' \
-#                | sed -e 's/	.*$//' \
-#                      > "$base".mp3zip.urllist
-#            # some links may be repeated in the list, but that's OK
-#        done
-#    fi
-fi
-
-### burning CDs for people
-
-if [ -n "$do_generate_cd" -a -n "$INDEX_CHORUS" -a -n "$INDEX_SOLO" ]; then
-    #cat "$DIR"/soprano-chorus.mp3.tmplist | sed \
-    #    -e '/Misrule-sop/d;/Malley-sop-2/{;/2-hi/!d;};/Cornwall-sop-2/d' \
-    #    -e '/Epilogue-part2-sop/d' \
-    #    -e '/Grooms/d;/Cabin Boys/d;/Seamstresses/d;/Ladies-in-Waiting/d' \
-    #    -e '/Lawyers/d;/Dowland/d;/, \(w \)\?\(Cutlass \)\?Crew/d' \
-    #    > XX-cd-s1-chorus.mp3.urllist
-    #cat "$DIR"/soprano-chorus.mp3.tmplist | sed \
-    #    -e '/Misrule-desc/d;/Malley-sop-2-hi/d;/Cornwall-desc/d' \
-    #    -e '/Epilogue-part2-desc/d' \
-    #    -e '/Grooms/d;/Cabin Boys/d;/Seamstresses/d;/Ladies-in-Waiting/d' \
-    #    -e '/Lawyers/d;/Dowland/d;/, \(w \)\?\(Cutlass \)\?Crew/d' \
-    #    > XX-cd-s2-chorus.mp3.urllist
-    #cat "$DIR"/alto-chorus.mp3.tmplist | sed \
-    #    -e '/Grooms/d;/Cabin Boys/d;/Seamstresses/d;/Ladies-in-Waiting/d' \
-    #    -e '/Lawyers/d;/Dowland/d;/, \(w \)\?\(Cutlass \)\?Crew/d' \
-    #    > XX-cd-alto-chorus.mp3.urllist
-    #cat "$DIR"/tenor-chorus.mp3.tmplist | sed \
-    #    -e '/Malley-tenor-2-lo/d' \
-    #    -e '/Grooms/d;/Cabin Boys/d;/Seamstresses/d;/Ladies-in-Waiting/d' \
-    #    -e '/Lawyers/d;/Dowland/d;/, \(w \)\?\(Cutlass \)\?Crew/d' \
-    #    > XX-cd-t1-chorus.mp3.urllist
-    #cat "$DIR"/tenor-chorus.mp3.tmplist | sed \
-    #    -e '/Malley-tenor-2-hi/d' \
-    #    -e '/Grooms/d;/Cabin Boys/d;/Seamstresses/d;/Ladies-in-Waiting/d' \
-    #    -e '/Lawyers/d;/Dowland/d;/, \(w \)\?\(Cutlass \)\?Crew/d' \
-    #    > XX-cd-t2-chorus.mp3.urllist
-    #cat "$DIR"/bass-chorus.mp3.tmplist | sed \
-    #    -e '/WomenOfWar-RevelerBassLo/d;/1583Reprise-Crew-bass-lo/d' \
-    #    -e '/Grooms/d;/Cabin Boys/d;/Seamstresses/d;/Ladies-in-Waiting/d' \
-    #    -e '/Lawyers/d;/Dowland/d;/, \(w \)\?\(Cutlass \)\?Crew/d' \
-    #    > XX-cd-b1-chorus.mp3.urllist
-    #cat "$DIR"/bass-chorus.mp3.tmplist | sed \
-    #    -e '/WomenOfWar-RevelerBassHi/d;/1583Reprise-Crew-bass-hi/d' \
-    #    -e '/Grooms/d;/Cabin Boys/d;/Seamstresses/d;/Ladies-in-Waiting/d' \
-    #    -e '/Lawyers/d;/Dowland/d;/, \(w \)\?\(Cutlass \)\?Crew/d' \
-    #    > XX-cd-b2-chorus.mp3.urllist
-    if false; then
-        cat "$DIR"/alto-chorus.mp3.tmplist | sed \
-            -e '/Master/I,$d' \
-            -e '/Grooms/d;/Cabin Boys/d;/Ladies-in-Waiting/d' \
-            -e '/Lawyers/d;/Dowland/d;/, \(w \)\?\(Cutlass \)\?Crew/d' \
-            > X-cd-joanne-nicklas.mp3.urllist
-        cat "$DIR"/jailers.mp3.tmplist | sed \
-            -e '/Crackity/I!d' \
-            -e '/, \(w \)\?\(Amphillis\|lower\)$/I!d' \
-            -e 's/Amphillis,/ Amphillis,/;s/  / /' \
-            -e 's/ \(Amphillis.*\), \(w \)\?\(Amphillis\|lower\)$/ \2\1/' \
-            >> X-cd-joanne-nicklas.mp3.urllist
-        cat "$DIR"/jailers.mp3.tmplist | sed \
-            -e '/Crackity/Id;/Prosecution/Id' \
-            -e '/, \(w \)\?\(jailers low\)$/I!d' \
-            >> X-cd-joanne-nicklas.mp3.urllist
-        #cat "$DIR"/alto-chorus.mp3.tmplist | sed \
-        #    -e '/Prosecution/I,$!d;/Defense/I,$d' \
-        #    -e '/Lawyers/d' \
-        #    >> X-cd-joanne-nicklas.mp3.urllist
-        cat "$DIR"/jailers.mp3.tmplist | sed \
-            -e '/Prosecution/I!d' \
-            >> X-cd-joanne-nicklas.mp3.urllist
-        cat "$DIR"/alto-chorus.mp3.tmplist | sed \
-            -e '/Defense/I,$!d' \
-            -e '/Grooms/d;/Cabin Boys/d;/Ladies-in-Waiting/d' \
-            -e '/Lawyers/d;/Dowland/d;/, \(w \)\?\(Cutlass \)\?Crew/d' \
-            >> X-cd-joanne-nicklas.mp3.urllist
-    fi
-    if false; then
-        cat "$DIR"/alto-chorus.mp3.tmplist | sed \
-            -e '/Grooms/d;/Cabin Boys/d;/Ladies-in-Waiting/d' \
-            -e '/Lawyers/d;/, \(w \)\?\(Cutlass \)\?Crew/d' \
-            > X-cd-heather-barney.mp3.urllist
-    fi
-fi
-
-### generating zip files for people
-
-if [ -n "$do_generate_zip" -a -n "$INDEX_CHORUS" -a -n "$INDEX_SOLO" ]; then
-    if false; then
-    cat "$DIR"/soprano-chorus.mp3.tmplist | sed \
-            -e '/Grace O.Malley/I,$d' \
-            -e '/Misrule-sop/d' \
-        > "$DIR"/Miriam_Beit-Aharon.mp3people.tmplist
-    cat "$DIR"/thomasina.mp3.tmplist | sed \
-            -e 's/\(out_file:\)\(.*\)Thomasina, /\1Thomasina \2/' \
-            >> "$DIR"/Miriam_Beit-Aharon.mp3people.tmplist
-    cat "$DIR"/soprano-chorus.mp3.tmplist | sed \
-            -e '/Epiphany Cake/I,$!d' \
-            -e '/Pendennis/I{;/Chorus soprano/d;}' \
-            -e '/Cornwall-sop-2/d' \
-            -e '/Epilogue-part2-sop/d' \
-            -e '/Grooms/d;/Seamstresses/d' \
-            -e '/, \(w \)\?\(Cutlass \)\?Crew/d' \
-            -e '/Prosecution/{;/20-46/d;}' \
-            >> "$DIR"/Miriam_Beit-Aharon.mp3people.tmplist
-        cat "$DIR"/Miriam_Beit-Aharon.mp3people.tmplist | sed \
-            -e 's/	.*$//' \
-        > 'Miriam Beit-Aharon'.mp3people.urllist
-    fi
-    if false; then
-        cat "$DIR"/soprano-chorus.mp3.tmplist | sed \
-        -e '/Battle.*Sexes/I,$d' \
-            -e '/Misrule-sop/d;/Malley-sop-2/{;/2-hi/!d;};/Cornwall-sop-2/d' \
-            -e '/Epilogue-part2-sop/d' \
-            -e '/Grooms/d;/Seamstresses/d' \
-            -e '/Lawyers/d;/Dowland/d;/, \(w \)\?\(Cutlass \)\?Crew/d' \
-        -e '/Pendennis-sop/d' \
-            > "$DIR"/Leila_Beit-Aharon.mp3people.tmplist
-        cat "$DIR"/soprano-chorus.mp3.tmplist | sed \
-        -e '/Battle.*Sexes/I,$!d;/1583-sop-2/,$d' \
-            -e '/Misrule-sop/d;/Malley-sop-2/{;/2-hi/!d;};/Cornwall-sop-2/d' \
-            -e '/Epilogue-part2-sop/d' \
-            -e '/Seamstresses/d' \
-            -e '/Lawyers/d;/Dowland/d;/, \(w \)\?\(Cutlass \)\?Crew/d' \
-            >> "$DIR"/Leila_Beit-Aharon.mp3people.tmplist
-        cat "$DIR"/reveler-3.mp3.tmplist | sed \
-        -e '/Reprise/Id' \
-            >> "$DIR"/Leila_Beit-Aharon.mp3people.tmplist
-        cat "$DIR"/soprano-chorus.mp3.tmplist | sed \
-        -e '/1583-sop-2/,$!d;/Lie.*Low/I,$d' \
-            -e '/Misrule-sop/d;/Malley-sop-2/{;/2-hi/!d;};/Cornwall-sop-2/d' \
-            -e '/Epilogue-part2-sop/d' \
-            -e '/Seamstresses/d' \
-            -e '/Lawyers/d;/Dowland/d;/, \(w \)\?\(Cutlass \)\?Crew/d' \
-            >> "$DIR"/Leila_Beit-Aharon.mp3people.tmplist
-        cat "$DIR"/reveler-3.mp3.tmplist | sed \
-        -e '/Reprise/I!d' \
-            >> "$DIR"/Leila_Beit-Aharon.mp3people.tmplist
-        cat "$DIR"/soprano-chorus.mp3.tmplist | sed \
-        -e '/Lie.*Low/I,$!d' \
-            -e '/Misrule-sop/d;/Malley-sop-2/{;/2-hi/!d;};/Cornwall-sop-2/d' \
-            -e '/Epilogue-part2-sop/d' \
-            -e '/Seamstresses/d' \
-            -e '/Lawyers/d;/Dowland/d;/, \(w \)\?\(Cutlass \)\?Crew/d' \
-            >> "$DIR"/Leila_Beit-Aharon.mp3people.tmplist
-        cat "$DIR"/Leila_Beit-Aharon.mp3people.tmplist | sed \
-            -e 's/	.*$//' \
-        | uniq \
-        > 'Leila+Becky Beit-Aharon'.mp3people.urllist
-    fi
-    if false; then
-    cat "$DIR"/bass-chorus.mp3.tmplist | sed \
-            -e '/Grooms/I!d' \
-        >> "$DIR"/Noah_Beit-Aharon.mp3people.tmplist
-    cat "$DIR"/bass-chorus.mp3.tmplist | sed \
-            -e '/sc6/!d;/BassHi/d' \
-            -e '/Grooms/d;/Cabin Boys/d;/Lawyers/d' \
-            -e '/, \(w \)\?\(Cutlass \)\?Crew/d' \
-        >> "$DIR"/Noah_Beit-Aharon.mp3people.tmplist
-    cat "$DIR"/caesar.mp3.tmplist | sed \
-            -e '/NOOP/d' \
-        >> "$DIR"/Noah_Beit-Aharon.mp3people.tmplist
-    cat "$DIR"/bass-chorus.mp3.tmplist | sed \
-            -e '/Encore/!d' \
-        >> "$DIR"/Noah_Beit-Aharon.mp3people.tmplist
-        cat "$DIR"/Noah_Beit-Aharon.mp3people.tmplist | sed \
-            -e 's/	.*$//' \
-        > 'Noah Beit-Aharon'.mp3people.urllist
-    fi
-fi
+#if [ -n "$INDEX_CHORUS" ]; then
+#    cat "$DIR"/tenor.mp3.tmplist | sed \
+#        -e '' \
+#        > Abbe.mp3.urllist
+#fi
 
 #####  video
 if [ -n "$INDEX_VIDEO" ]; then
