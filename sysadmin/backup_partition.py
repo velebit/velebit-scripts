@@ -15,6 +15,7 @@ import re
 import shutil
 import subprocess
 import sys
+import threading
 import time
 import io
 from typing import Callable, NoReturn, TypeVar
@@ -41,7 +42,57 @@ def run_cmd(
     if dry_run:
         print(f"\033[90m    WOULD run: {" ".join(cmd)}\033[0m", file=sys.stderr)
         return subprocess.CompletedProcess(args=cmd, returncode=0, stdout="", stderr="")
-    return subprocess.run(cmd, capture_output=capture_output, check=check, text=True)
+
+    if capture_output:
+        return subprocess.run(cmd, capture_output=True, check=check, text=True)
+
+    # Stream output with coloring, don't collect it
+    process = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=False,  # to preserve '\r' where needed
+    )
+
+    def colorize_and_indent(stream: io.BufferedIOBase, color: str) -> None:
+        indent = "    "
+        reset = "\033[0m"
+        buffer = b""
+        keep_going = True
+        while keep_going:
+            chunk = stream.read(4096)
+            if chunk:
+                buffer += chunk
+            else:
+                keep_going = False
+            lines = re.split(rb"(?<=[\n\r])", buffer)
+            buffer = lines.pop()  # last line isn't complete
+            for line in lines:
+                text = line.decode("utf-8", errors="replace")
+                print(
+                    f"{indent}{color}{text}{reset}", end="", file=sys.stdout, flush=True
+                )
+        if buffer:
+            text = buffer.decode("utf-8", errors="replace")
+            print(f"{indent}{color}{text}{reset}", end="", file=sys.stdout)
+
+    stdout_thread = threading.Thread(
+        target=colorize_and_indent, args=(process.stdout, "\033[33m")
+    )
+    stderr_thread = threading.Thread(
+        target=colorize_and_indent, args=(process.stderr, "\033[31m")
+    )
+    stdout_thread.start()
+    stderr_thread.start()
+    exit_code = process.wait()
+    stdout_thread.join()
+    stderr_thread.join()
+
+    if check and exit_code != 0:
+        raise subprocess.CalledProcessError(exit_code, cmd)
+    return subprocess.CompletedProcess(
+        args=cmd, returncode=exit_code, stdout="", stderr=""
+    )
 
 
 # ------------------------------------------------------------
@@ -87,6 +138,22 @@ class MountInfo:
     def mountpoint(self) -> str:
         """Get the mountpoint path"""
         return self._mountpoint
+
+    def __eq__(self, other: object) -> bool:
+        """Compare two MountInfo objects by their device and mountpoint"""
+        if not isinstance(other, MountInfo):
+            return NotImplemented
+        if type(self) != type(other):
+            return NotImplemented
+        return self.device == other.device and self.mountpoint == other.mountpoint
+
+    def __hash__(self) -> int:
+        """Hash based on type, device, and mountpoint"""
+        return hash((type(self), self.device, self.mountpoint))
+
+    def __repr__(self) -> str:
+        """Dataclass-style repr showing device and mountpoint"""
+        return f"{self.__class__.__name__}(device={self._device!r}, mountpoint={self._mountpoint!r})"
 
 
 # Type variable for MountInfo and its subclasses
@@ -137,6 +204,13 @@ class TemporaryMount(MountInfo):
     def __del__(self):
         """On destruction, unmount the device"""
         self._unmount()
+
+    def __repr__(self) -> str:
+        return (
+            f"{self.__class__.__name__}("
+            f"device={self._device!r}, "
+            f"mountpoint={self._mountpoint!r}, ...)"
+        )
 
     def _mount(self) -> None:
         """Mount a device"""
@@ -218,6 +292,13 @@ class TemporaryBindMount(TemporaryMount):
             "Use 'source_path' instead of 'device' for TemporaryBindMount objects"
         )
 
+    def __repr__(self) -> str:
+        return (
+            f"{self.__class__.__name__}("
+            f"source_path={self._device!r}, "
+            f"mountpoint={self._mountpoint!r})"
+        )
+
 
 # ------------------------------------------------------------
 
@@ -267,16 +348,8 @@ class GenericMountManager:
             ]
 
         if mountpoint is not None:
-            try:
-                real_mount = os.path.realpath(mountpoint)
-            except OSError as exc:
-                if ignore_missing:
-                    return []
-                raise MissingMountError(
-                    f"Mountpoint {mountpoint!r} does not exist!"
-                ) from exc
             matched_dev_objects = [
-                dev for dev in matched_dev_objects if dev.mountpoint == real_mount
+                dev for dev in matched_dev_objects if dev.mountpoint == mountpoint
             ]
 
         return matched_dev_objects
@@ -398,8 +471,6 @@ class PreviouslyMountedManager(GenericMountManager):
         mountpoint: str | None = None,
         ignore_missing: bool = False,
     ) -> list[MountInfo]:
-        if device is None and mountpoint is None:
-            raise ValueError("Must specify device or mountpoint or both")
         return self._select_mount_objects(
             self._previous_mounts,
             device=device,
@@ -430,12 +501,9 @@ class PreviouslyMountedManager(GenericMountManager):
                 dev = parts[0]
                 mount = parts[2]
                 try:
-                    real_dev = os.path.realpath(dev)
-                    real_mount = os.path.realpath(mount)
-                    if real_dev.startswith("/"):
-                        devices.append(
-                            MountInfo(device=real_dev, mountpoint=real_mount)
-                        )
+                    if dev.startswith("/"):
+                        real_dev = os.path.realpath(dev)
+                        devices.append(MountInfo(device=real_dev, mountpoint=mount))
                 except OSError:
                     continue
 
@@ -464,8 +532,6 @@ class TemporaryMountManager(GenericMountManager):
         mountpoint: str | None = None,
         ignore_missing: bool = False,
     ) -> list[TemporaryMount]:
-        if device is None and mountpoint is None:
-            raise ValueError("Must specify device or mountpoint or both")
         object_snapshot: list[TemporaryMount] = [
             obj for obj in [ref() for ref in self._temporary_mounts] if obj is not None
         ]
@@ -1135,15 +1201,15 @@ def update_initrd(root_path: str, *, dry_run: bool = False) -> bool:
         os.makedirs(f"{root_path}/var/tmp", exist_ok=True)
 
     try:
-        result = run_cmd(
+        timer = ElapsedTimer()
+        run_cmd(
             command_prefix + update_cmd,
-            capture_output=True,
+            capture_output=False,
             dry_run=dry_run,
         )
-        for line in result.stdout.splitlines():
-            print(f"\033[93m    {line}\033[0m")
+        print(f"  ...done in {timer.elapsed()}.")
     except subprocess.CalledProcessError:
-        print("\033[91m...FAILED!\033[0m")
+        print("\033[91m  ...FAILED!\033[0m")
         return False
 
     return True
@@ -1166,15 +1232,15 @@ def update_grub(root_path: str, *, dry_run: bool = False) -> bool:
     print(f"  Updating GRUB in {pretty_root}.")
 
     try:
-        result = run_cmd(
+        timer = ElapsedTimer()
+        run_cmd(
             command_prefix + update_cmd,
-            capture_output=True,
+            capture_output=False,
             dry_run=dry_run,
         )
-        for line in result.stdout.splitlines():
-            print(f"\033[93m    {line}\033[0m")
+        print(f"  ...done in {timer.elapsed()}.")
     except subprocess.CalledProcessError:
-        print("\033[91m...FAILED!\033[0m")
+        print("\033[91m  ...FAILED!\033[0m")
         return False
 
     return True
@@ -1371,6 +1437,15 @@ def sync_efi_boot_root(
             if not success and not flags.keep_going:
                 return success
 
+            # HACK: Debian may have mounted efivars
+            maybe_efivars = f"{chroot_prefix}/sys/firmware/efi/efivars"
+            if os.path.ismount(maybe_efivars):
+                run_cmd(
+                    ["umount", maybe_efivars],
+                    capture_output=False,
+                    check=False,
+                )
+
         print(f"...done in {dst_os_update_timer.elapsed()}.")
 
     print("Updating source OS...")
@@ -1461,7 +1536,7 @@ def validate_log_file(log_file: str) -> None:
 def write_to_log_file(log_file: str, text: str, erase: bool = False) -> None:
     """Write text to log file. Not race condition safe!"""
     validate_log_file(log_file)
-    mode = "w" if erase else "r"
+    mode = "w" if erase else "a"
     with open(log_file, mode, encoding="utf-8") as f:
         print(text, file=f)
 
