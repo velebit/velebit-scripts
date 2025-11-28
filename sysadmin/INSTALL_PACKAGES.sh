@@ -112,9 +112,9 @@ add_if "$is_server"         printer-driver-all openprinting-ppds
 add_if "$is_primary_os"     cups printer-driver-cups-pdf
 add_if "$is_primary_os"     sane sane-utils xsane
 #add_if "!$is_headless"      task-cinnamon-desktop
-add_if "$is_bert_desktop"   task-xfce-desktop
+#add_if "!$is_headless"      task-xfce-desktop
 add_if "$is_multiuser"      task-mate-desktop
-add_if "$is_multiuser"      task-lxqt-desktop
+add_if "!$is_headless"      task-lxqt-desktop
 ##XXX TODO add_if "!$is_headless"      xfce4-session # xflock4 -> ?
 ##add_if "$is_primary_os"     gconf-editor # removed in bullseye
 add_if "$is_multiuser"      libnotify-bin

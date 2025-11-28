@@ -65,7 +65,7 @@ add_if always               com.github.tchx84.Flatseal
 #add_if ...                  com.gitlab.davem.ClamTk
 
 ### medical imaging tools
-add_if "$is_server"         br.gov.cti.invesalius
+#add_if "$is_server"         br.gov.cti.invesalius
 #add_if "$is_server"         io.github.nroduit.Weasis
 #add_if "$is_server"         com.github.AlizaMedicalImaging.AlizaMS
 
@@ -86,25 +86,24 @@ add_if "$is_media"          io.github.jliljebl.Flowblade
 
 #### 3D modeling
 add_if "$is_media"          org.blender.Blender
-add_if "$is_media"          net.meshlab.MeshLab
-add_if "$is_media"          io.github.f3d_app.f3d
+#add_if "$is_media"          net.meshlab.MeshLab
+#add_if "$is_media"          io.github.f3d_app.f3d
 add_if "$is_media"          org.openscad.OpenSCAD
-add_if "$is_media"          com.ultimaker.cura
-add_if "$is_media"          com.flashforge.FlashPrint
-add_if "$is_media"          com.prusa3d.PrusaSlicer
+#add_if "$is_media"          com.ultimaker.cura
+#add_if "$is_media"          com.flashforge.FlashPrint
+#add_if "$is_media"          com.prusa3d.PrusaSlicer
 
 #### comms
-add_if always               org.localsend.localsend_app
+#add_if always               org.localsend.localsend_app
 add_if "!$is_headless"      com.discordapp.Discord
 add_if "!$is_headless"      org.signal.Signal
-add_if "$is_multiuser"      com.skype.Client
 add_if "$is_multiuser"      us.zoom.Zoom
 add_if "$is_multiuser"      com.slack.Slack
 
 #### games
 #add_if "$is_multiuser"      com.mojang.Minecraft # <- local manual install
-add_if "$is_multiuser"      io.mrarm.mcpelauncher
-add_if "$is_multiuser"      edu.mit.Scratch
+#add_if "$is_multiuser"      io.mrarm.mcpelauncher
+#add_if "$is_multiuser"      edu.mit.Scratch
 add_if "$is_multiuser"      org.scummvm.ScummVM
 add_if "$is_multiuser,$is_bert_desktop" com.valvesoftware.Steam
 add_if "$is_multiuser"      org.flightgear.FlightGear
@@ -112,7 +111,7 @@ add_if "$is_multiuser"      com.endlessnetwork.passage
 
 #### development and electronics
 add_if "$is_multiuser"      cc.arduino.arduinoide
-add_if "$is_multiuser"      org.fritzing.Fritzing
+#add_if "$is_multiuser"      org.fritzing.Fritzing
 
 #### notes
 add_if "!$is_headless"      md.obsidian.Obsidian
