@@ -7,6 +7,7 @@ so that the other partition will be independently bootable (we hope).
 """
 
 import argparse
+import contextlib
 from dataclasses import dataclass
 from datetime import datetime
 import os
@@ -18,13 +19,12 @@ import sys
 import threading
 import time
 import io
-from typing import Callable, NoReturn, TypeVar
+from typing import Callable, NoReturn
 
 try:
     from typing import Self
 except ImportError:
     from typing_extensions import Self
-import weakref
 
 
 MOUNT_ROOT = "/media"
@@ -111,7 +111,6 @@ class ElapsedTimer:
         """Get the elapsed time since the timer was started"""
         end_time = time.time()
         delta = int(end_time - self.start_time)
-        self.start_time = end_time
         if delta >= 3600:
             return f"{delta // 3600:02d}:{(delta // 60) % 60:02d}:{delta % 60:02d}"
         else:
@@ -121,46 +120,12 @@ class ElapsedTimer:
 # ------------------------------------------------------------
 
 
+@dataclass(frozen=True)
 class MountInfo:
     """Information about a mounted device"""
 
-    def __init__(self, device: str, mountpoint: str):
-        # Note: not using a dataclass here to allow messing with accessors in subclasses
-        self._device = device
-        self._mountpoint = mountpoint
-
-    @property
-    def device(self) -> str:
-        """Get the device path"""
-        return self._device
-
-    @property
-    def mountpoint(self) -> str:
-        """Get the mountpoint path"""
-        return self._mountpoint
-
-    def __eq__(self, other: object) -> bool:
-        """Compare two MountInfo objects by their device and mountpoint"""
-        if not isinstance(other, MountInfo):
-            return NotImplemented
-        if type(self) != type(other):
-            return NotImplemented
-        return self.device == other.device and self.mountpoint == other.mountpoint
-
-    def __hash__(self) -> int:
-        """Hash based on type, device, and mountpoint"""
-        return hash((type(self), self.device, self.mountpoint))
-
-    def __repr__(self) -> str:
-        """Dataclass-style repr showing device and mountpoint"""
-        return f"{self.__class__.__name__}(device={self._device!r}, mountpoint={self._mountpoint!r})"
-
-
-# Type variable for MountInfo and its subclasses
-MountInfoT = TypeVar("MountInfoT", bound="MountInfo")
-
-
-# ------------------------------------------------------------
+    device: str
+    mountpoint: str
 
 
 class FailedMountError(RuntimeError):
@@ -171,13 +136,12 @@ class FailedUnmountError(RuntimeError):
     """Raised when unmounting a device fails"""
 
 
-class TemporaryMount(MountInfo):
+class TemporaryMount:
     """An object corresponding to a temporarily mounted device"""
 
     def __init__(
         self,
-        device: str,
-        mountpoint: str,
+        mount_info: MountInfo,
         *,
         msg_mounting: str | None = None,
         msg_unmounting: str | None = None,
@@ -186,7 +150,7 @@ class TemporaryMount(MountInfo):
         verbose: bool = True,
         dry_run: bool = False,
     ):
-        super().__init__(device=device, mountpoint=mountpoint)
+        self._mount_info = mount_info
         self._msg_mounting = msg_mounting or "Mounting device"
         self._msg_unmounting = msg_unmounting or "Unmounting device"
         self.__mount_options = mount_options or []
@@ -194,68 +158,97 @@ class TemporaryMount(MountInfo):
         self.__verbose = verbose
         self.__dry_run = dry_run
         self.__dir_created: bool = False
-        self._mount()
+        self.__mounted_here: bool = False
+
+    @property
+    def mount_info(self) -> MountInfo:
+        """Get the underlying MountInfo object"""
+        return self._mount_info
 
     @property
     def dir_created(self) -> bool:
         """Whether the mountpoint directory was created by this object"""
         return self.__dir_created
 
+    @property
+    def mounted_here(self) -> bool:
+        """Whether the device is currently mounted"""
+        return self.__mounted_here
+
     def __del__(self):
-        """On destruction, unmount the device"""
-        self._unmount()
+        """On destruction, unmount the device if still mounted as a fallback"""
+        self.unmount()
+
+    def __enter__(self) -> Self:
+        """Enter context manager - mounts the device"""
+        self.mount()
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: object | None,
+    ) -> None:
+        """Exit context manager - unmounts the device"""
+        self.unmount()
 
     def __repr__(self) -> str:
-        return (
-            f"{self.__class__.__name__}("
-            f"device={self._device!r}, "
-            f"mountpoint={self._mountpoint!r}, ...)"
-        )
+        return f"{self.__class__.__name__}(" f"mount_info={self._mount_info!r}, ...)"
 
-    def _mount(self) -> None:
+    def mount(self) -> None:
         """Mount a device"""
+        if self.__mounted_here:
+            return
+
+        device = self._mount_info.device
+        mountpoint = self._mount_info.mountpoint
+
         if self.__verbose:
-            print(
-                f"\033[34m({self._msg_mounting} {self._device!r} on {self._mountpoint!r})\033[0m"
-            )
-        if not os.path.exists(self._mountpoint) and not self.__dry_run:
-            os.makedirs(self._mountpoint)
+            print(f"\033[34m({self._msg_mounting} {device!r} on {mountpoint!r})\033[0m")
+        if not os.path.exists(mountpoint) and not self.__dry_run:
+            os.makedirs(mountpoint)
             self.__dir_created = True
         try:
             run_cmd(
-                ["mount", *self.__mount_options, self._device, self._mountpoint],
+                ["mount", *self.__mount_options, device, mountpoint],
                 dry_run=self.__dry_run,
             )
+            self.__mounted_here = True
         except subprocess.CalledProcessError as exc:
             raise FailedMountError(
-                f"Failed to mount {self._device!r} on {self._mountpoint!r}"
+                f"Failed to mount {device!r} on {mountpoint!r}"
             ) from exc
 
-    def _unmount(self) -> None:
-        """Remove a temporary mount from the manager using its MountInfo object"""
+    def unmount(self) -> None:
+        """Unmount the device"""
+        if not self.__mounted_here:
+            return
+
+        device = self._mount_info.device
+        mountpoint = self._mount_info.mountpoint
+
         if self.__verbose:
             print(
-                f"\033[34m({self._msg_unmounting} {self._device!r}"
-                f" from {self._mountpoint!r})\033[0m"
+                f"\033[34m({self._msg_unmounting} {device!r}"
+                f" from {mountpoint!r})\033[0m"
             )
         try:
             run_cmd(
-                ["umount", *self.__unmount_options, self._mountpoint],
+                ["umount", *self.__unmount_options, mountpoint],
                 dry_run=self.__dry_run,
             )
+            self.__mounted_here = False
         except subprocess.CalledProcessError as exc:
             raise FailedUnmountError(
-                f"Failed to unmount {self._device!r} from {self._mountpoint!r}"
+                f"Failed to unmount {device!r} from {mountpoint!r}"
             ) from exc
         finally:
             if self.__dir_created:
                 try:
-                    os.rmdir(self._mountpoint)
+                    os.rmdir(mountpoint)
                 except OSError:
                     pass
-
-
-# ------------------------------------------------------------
 
 
 class TemporaryBindMount(TemporaryMount):
@@ -273,30 +266,13 @@ class TemporaryBindMount(TemporaryMount):
     ):
         mount_options = mount_options or []
         super().__init__(
-            device=source_path,
-            mountpoint=mountpoint,
+            mount_info=MountInfo(device=source_path, mountpoint=mountpoint),
             msg_mounting="Bind-mounting directory",
             msg_unmounting="Unmounting bind-mounted directory",
             mount_options=["--bind", *mount_options],
             unmount_options=unmount_options,
             verbose=verbose,
             dry_run=dry_run,
-        )
-
-    source_path = MountInfo.device
-
-    @property
-    def device(self) -> str:
-        """Hidden - use source_path instead for bind mounts"""
-        raise AttributeError(
-            "Use 'source_path' instead of 'device' for TemporaryBindMount objects"
-        )
-
-    def __repr__(self) -> str:
-        return (
-            f"{self.__class__.__name__}("
-            f"source_path={self._device!r}, "
-            f"mountpoint={self._mountpoint!r})"
         )
 
 
@@ -308,280 +284,152 @@ class MissingMountError(ValueError):
     no device is mounted on a specified mountpoint"""
 
 
-class GenericMountManager:
-    """Manage mounted devices"""
+def get_mounted_devices(*, even_fake_devices: bool = False) -> list[MountInfo]:
+    """Read the list of mounted devices in the system"""
+    result = run_cmd(["mount"], capture_output=True, check=False)
+    devices: list[MountInfo] = []
 
-    @classmethod
-    def instance(cls) -> Self:
-        """Get the singleton instance of the manager"""
-        if not hasattr(cls, "_instance"):
-            cls._instance = cls()
-        assert cls._instance
-        return cls._instance
-
-    def __init__(self):
-        pass
-
-    @classmethod
-    def _select_mount_objects(
-        cls,
-        dev_objects: list[MountInfoT],
-        *,
-        device: str | None = None,
-        mountpoint: str | None = None,
-        ignore_missing: bool = False,
-    ) -> list[MountInfoT]:
-        """Get a list of device objects, possibly filtered by device or mountpoint"""
-
-        matched_dev_objects = list(dev_objects)
-
-        if device is not None:
-            try:
-                real_dev = os.path.realpath(device)
-            except OSError as exc:
-                if ignore_missing:
-                    return []
-                raise MissingMountError(f"Device {device!r} does not exist!") from exc
-
-            matched_dev_objects = [
-                dev for dev in matched_dev_objects if dev.device == real_dev
-            ]
-
-        if mountpoint is not None:
-            matched_dev_objects = [
-                dev for dev in matched_dev_objects if dev.mountpoint == mountpoint
-            ]
-
-        return matched_dev_objects
-
-    def _get_all_mount_objects(
-        self, *, device: str | None = None, mountpoint: str | None = None
-    ) -> list[MountInfo]:
-        """Get all mount objects known to this manager"""
-        _ = device, mountpoint  # suppress unused warnings
-        return []  # we are in the semi-abstract base class
-
-    def is_mounted(
-        self, *, device: str | None = None, mountpoint: str | None = None
-    ) -> bool:
-        """Check if a device is mounted on a mountpoint"""
-        if device is None and mountpoint is None:
-            raise ValueError("Must specify device or mountpoint or both")
-        try:
-            matched_dev_objects = self._get_all_mount_objects(
-                device=device, mountpoint=mountpoint
-            )
-            return len(matched_dev_objects) > 0
-        except MissingMountError:
-            return False
-
-    def get_mount_from_mountpoint(
-        self,
-        mountpoint: str,
-        ignore_filter: Callable[[MountInfo], bool] | None = None,
-    ) -> MountInfo:
-        """Given a mountpoint, find the MountInfo of the mounted device"""
-
-        matched_dev_objects = self._get_all_mount_objects(mountpoint=mountpoint)
-        if ignore_filter is None:
-            infos = matched_dev_objects
-            desc_mount = "mount"
-        else:
-            infos: list[MountInfo] = []
-            for dev in matched_dev_objects:
-                if ignore_filter(dev):
-                    print(
-                        f"\033[33mNotice: Ignoring {dev.device!r} for {mountpoint!r}...\033[0m",
-                        file=sys.stderr,
-                    )
-                else:
-                    infos.append(dev)
-            desc_mount = "relevant mount"
-        if len(infos) >= 1:
-            if len(infos) > 1:
-                ignored_devices = ", ".join([repr(dev.device) for dev in infos[1:]])
-                print(
-                    f"\033[93mWarning: Path {mountpoint!r} has more than one {desc_mount}?! "
-                    f"(will use {infos[0].device!r} and ignore {ignored_devices})\033[0m",
-                    file=sys.stderr,
-                )
-            return infos[0]
-        if len(matched_dev_objects) >= 1:
-            desc_device = "relevant device"  # some exist but are ignored
-        else:
-            desc_device = "device"  # none exist
-        raise MissingMountError(
-            f"No {desc_device} is mounted on mountpoint {mountpoint!r}."
-        )
-
-    def get_mount_from_device(
-        self,
-        device: str,
-        ignore_filter: Callable[[MountInfo], bool] | None = None,
-    ) -> MountInfo:
-        """Given a device, find its MountInfo"""
-
-        matched_dev_objects = self._get_all_mount_objects(device=device)
-        if ignore_filter is None:
-            infos = matched_dev_objects
-            desc_mount = "mount"
-        else:
-            infos: list[MountInfo] = []
-            for dev in matched_dev_objects:
-                if ignore_filter(dev):
-                    print(
-                        f"\033[33mNotice: Ignoring {dev.mountpoint!r} for {device!r}...\033[0m",
-                        file=sys.stderr,
-                    )
-                else:
-                    infos.append(dev)
-            desc_mount = "relevant mount"
-        if len(infos) >= 1:
-            if len(infos) > 1:
-                ignored_mountpoints = ", ".join(
-                    [repr(dev.mountpoint) for dev in infos[1:]]
-                )
-                print(
-                    f"\033[93mWarning: Device {device!r} has more than one {desc_mount}?! "
-                    f"(will use {infos[0].mountpoint!r} and ignore {ignored_mountpoints})\033[0m",
-                    file=sys.stderr,
-                )
-            return infos[0]
-        if len(matched_dev_objects) >= 1:
-            desc_mounts = "relevant mounts"  # some exist but are ignored
-        else:
-            desc_mounts = "mounts"  # none exist
-        raise MissingMountError(f"Device {device!r} has no {desc_mounts}.")
-
-
-# ------------------------------------------------------------
-
-
-class PreviouslyMountedManager(GenericMountManager):
-    """Manage previously mounted devices"""
-
-    def __init__(self):
-        super().__init__()
-        self._previous_mounts: list[MountInfo] = self._read_mounted_devices()
-
-    def _get_previous_mount_objects(
-        self,
-        *,
-        device: str | None = None,
-        mountpoint: str | None = None,
-        ignore_missing: bool = False,
-    ) -> list[MountInfo]:
-        return self._select_mount_objects(
-            self._previous_mounts,
-            device=device,
-            mountpoint=mountpoint,
-            ignore_missing=ignore_missing,
-        )
-
-    def _get_all_mount_objects(
-        self, *, device: str | None = None, mountpoint: str | None = None
-    ) -> list[MountInfo]:
-        """Get all mount objects known to this manager"""
-        result = super()._get_all_mount_objects(device=device, mountpoint=mountpoint)
-        result.extend(
-            self._get_previous_mount_objects(
-                device=device, mountpoint=mountpoint, ignore_missing=True
-            )
-        )
-        return result
-
-    def _read_mounted_devices(self) -> list[MountInfo]:
-        """Read the list of mounted devices in the system"""
-        result = run_cmd(["mount"], capture_output=True, check=False)
-        devices: list[MountInfo] = []
-
-        for line in result.stdout.splitlines():
-            parts = line.split()
-            if len(parts) >= 3 and parts[1] == "on":
-                dev = parts[0]
-                mount = parts[2]
+    for line in result.stdout.splitlines():
+        parts = line.split()
+        if len(parts) >= 3 and parts[1] == "on":
+            dev = parts[0]
+            mount = parts[2]
+            if dev.startswith("/"):
                 try:
-                    if dev.startswith("/"):
-                        real_dev = os.path.realpath(dev)
-                        devices.append(MountInfo(device=real_dev, mountpoint=mount))
+                    real_dev = os.path.realpath(dev)
+                    devices.append(MountInfo(device=real_dev, mountpoint=mount))
                 except OSError:
-                    continue
+                    continue  # do nothing if the device cannot be resolved
+            elif even_fake_devices:
+                devices.append(MountInfo(device=dev, mountpoint=mount))
 
-        return devices
+    return devices
+
+
+def get_matching_mounted_devices(
+    *,
+    device: str | None = None,
+    mountpoint: str | None = None,
+    ignore_missing: bool = False,
+) -> list[MountInfo]:
+    """Get a list of mounted devices, possibly filtered by device or mountpoint"""
+    all_mounts = get_mounted_devices()
+
+    if device is not None:
+        try:
+            real_dev = os.path.realpath(device)
+        except OSError as exc:
+            if ignore_missing:
+                return []
+            raise MissingMountError(f"Device {device!r} does not exist!") from exc
+
+        all_mounts = [dev for dev in all_mounts if dev.device == real_dev]
+
+    if mountpoint is not None:
+        all_mounts = [dev for dev in all_mounts if dev.mountpoint == mountpoint]
+
+    return all_mounts
+
+
+def is_mounted(*, device: str | None = None, mountpoint: str | None = None) -> bool:
+    """Check if a device is mounted on a mountpoint"""
+    if device is None and mountpoint is None:
+        raise ValueError("Must specify device or mountpoint or both")
+    try:
+        matched_dev_objects = get_matching_mounted_devices(
+            device=device, mountpoint=mountpoint, ignore_missing=False
+        )
+        return len(matched_dev_objects) > 0
+    except MissingMountError:
+        return False
+
+
+def get_mount_from_mountpoint(
+    mountpoint: str,
+    ignore_filter: Callable[[MountInfo], bool] | None = None,
+) -> MountInfo:
+    """Given a mountpoint, find the MountInfo of the mounted device"""
+
+    matched_dev_objects = get_matching_mounted_devices(
+        mountpoint=mountpoint, ignore_missing=False
+    )
+    if ignore_filter is None:
+        infos = matched_dev_objects
+        desc_mount = "mount"
+    else:
+        infos: list[MountInfo] = []
+        for dev in matched_dev_objects:
+            if ignore_filter(dev):
+                print(
+                    f"\033[33mNotice: Ignoring {dev.device!r} for {mountpoint!r}...\033[0m",
+                    file=sys.stderr,
+                )
+            else:
+                infos.append(dev)
+        desc_mount = "relevant mount"
+    if len(infos) >= 1:
+        if len(infos) > 1:
+            ignored_devices = ", ".join([repr(dev.device) for dev in infos[1:]])
+            print(
+                f"\033[93mWarning: Path {mountpoint!r} has more than one {desc_mount}?! "
+                f"(will use {infos[0].device!r} and ignore {ignored_devices})\033[0m",
+                file=sys.stderr,
+            )
+        return infos[0]
+    if len(matched_dev_objects) >= 1:
+        desc_device = "relevant device"  # some exist but are ignored
+    else:
+        desc_device = "device"  # none exist
+    raise MissingMountError(
+        f"No {desc_device} is mounted on mountpoint {mountpoint!r}."
+    )
+
+
+def get_mount_from_device(
+    device: str,
+    ignore_filter: Callable[[MountInfo], bool] | None = None,
+) -> MountInfo:
+    """Given a device, find its MountInfo"""
+
+    matched_dev_objects = get_matching_mounted_devices(
+        device=device, ignore_missing=False
+    )
+    if ignore_filter is None:
+        infos = matched_dev_objects
+        desc_mount = "mount"
+    else:
+        infos: list[MountInfo] = []
+        for dev in matched_dev_objects:
+            if ignore_filter(dev):
+                print(
+                    f"\033[33mNotice: Ignoring {dev.mountpoint!r} for {device!r}...\033[0m",
+                    file=sys.stderr,
+                )
+            else:
+                infos.append(dev)
+        desc_mount = "relevant mount"
+    if len(infos) >= 1:
+        if len(infos) > 1:
+            ignored_mountpoints = ", ".join([repr(dev.mountpoint) for dev in infos[1:]])
+            print(
+                f"\033[93mWarning: Device {device!r} has more than one {desc_mount}?! "
+                f"(will use {infos[0].mountpoint!r} and ignore {ignored_mountpoints})\033[0m",
+                file=sys.stderr,
+            )
+        return infos[0]
+    if len(matched_dev_objects) >= 1:
+        desc_mounts = "relevant mounts"  # some exist but are ignored
+    else:
+        desc_mounts = "mounts"  # none exist
+    raise MissingMountError(f"Device {device!r} has no {desc_mounts}.")
 
 
 # ------------------------------------------------------------
 
 
 class InvalidMountError(ValueError):
-    """Raised when the specified device is already mounted, or the
-    specified mountpoint is already in use"""
-
-
-class TemporaryMountManager(GenericMountManager):
-    """Manage temporarily mounted devices"""
-
-    def __init__(self):
-        super().__init__()
-        self._temporary_mounts: list[weakref.ref[TemporaryMount]] = []
-
-    def _get_temporary_mount_objects(
-        self,
-        *,
-        device: str | None = None,
-        mountpoint: str | None = None,
-        ignore_missing: bool = False,
-    ) -> list[TemporaryMount]:
-        object_snapshot: list[TemporaryMount] = [
-            obj for obj in [ref() for ref in self._temporary_mounts] if obj is not None
-        ]
-        return self._select_mount_objects(
-            object_snapshot,
-            device=device,
-            mountpoint=mountpoint,
-            ignore_missing=ignore_missing,
-        )
-
-    def _get_all_mount_objects(
-        self, *, device: str | None = None, mountpoint: str | None = None
-    ) -> list[MountInfo]:
-        """Get all mount objects known to this manager"""
-        result = super()._get_all_mount_objects(device=device, mountpoint=mountpoint)
-        result.extend(
-            self._get_temporary_mount_objects(
-                device=device, mountpoint=mountpoint, ignore_missing=True
-            )
-        )
-        return result
-
-    def mount(
-        self,
-        device: str,
-        mountpoint: str,
-        *,
-        verbose: bool = True,
-        dry_run: bool = False,
-    ) -> TemporaryMount:
-        """Add a temporary mount to the manager"""
-        if self.is_mounted(device=device):
-            raise InvalidMountError(f"Device {device!r} is already mounted")
-        if self.is_mounted(mountpoint=mountpoint):
-            raise InvalidMountError(f"Mountpoint {mountpoint!r} is already in use")
-        tm = TemporaryMount(
-            device=device, mountpoint=mountpoint, verbose=verbose, dry_run=dry_run
-        )
-        self._temporary_mounts.append(weakref.ref(tm))
-        return tm
-
-
-# ------------------------------------------------------------
-
-
-class MountManager(PreviouslyMountedManager, TemporaryMountManager):
-    """Manage both previously mounted and temporarily mounted devices"""
-
-
-# ------------------------------------------------------------
+    """Raised when the specified device doesn't exist or is already mounted, or the
+    specified mountpoint is already in use, or the device information is inconsistent"""
 
 
 class Device:
@@ -594,13 +442,16 @@ class Device:
         device: str | None = None,
         mountpoint: str | None = None,
         uuid: str | None = None,
+        fallback_name: str | None = None,
+        verbose: bool = True,
+        dry_run: bool = False,
     ):
         if spec is not None:
             spec_device = self._get_device_from_spec(spec)
             if device is None:
                 device = spec_device
             elif spec_device != device:
-                raise ValueError(
+                raise InvalidMountError(
                     f"Provided spec {spec!r} does not match"
                     f" provided device {device!r}"
                 )
@@ -610,7 +461,7 @@ class Device:
                 device = self._get_mount_from_mountpoint(mountpoint).device
             else:
                 if not self._is_mounted(device=device, mountpoint=mountpoint):
-                    raise ValueError(
+                    raise InvalidMountError(
                         f"Selected device {device!r} is not mounted on"
                         f" provided mountpoint {mountpoint!r}"
                     )
@@ -621,23 +472,51 @@ class Device:
             else:
                 device_uuid = self._get_named_value_from_device("UUID", device)
                 if device_uuid != uuid:
-                    raise ValueError(
+                    raise InvalidMountError(
                         f"Provided UUID {uuid!r} does not match UUID {device_uuid!r}"
                         f" of provided device {device!r}"
                     )
 
         if device is None:
-            raise ValueError("Could not determine device from provided information.")
+            raise InvalidMountError(
+                "Could not determine device from provided information."
+            )
         try:
             real_device = os.path.realpath(device)
             assert real_device is not None
         except OSError as exc:
-            raise ValueError(f"Device {device!r} does not exist.") from exc
+            raise InvalidMountError(f"Device {device!r} does not exist.") from exc
 
         self._device: str = real_device
         self._mountpoint: str | None = mountpoint
         self._uuid: str | None = uuid
-        self._mount: MountInfo | None = None
+        self._fallback_name: str | None = fallback_name
+        self._verbose: bool = verbose
+        self._dry_run: bool = dry_run
+        self._mount: TemporaryMount | None = None
+
+    def __enter__(self) -> Self:
+        """Enter context manager - mount the device if not already mounted"""
+        if self._prepare_temporary_mount():
+            assert self._mount is not None
+            self._mount.mount()
+            if self._mountpoint is None:
+                self._mountpoint = self._mount.mount_info.mountpoint
+            assert (
+                self._mountpoint == self._mount.mount_info.mountpoint
+            ), f"Mountpoint mismatch: {self._mountpoint!r} != {self._mount.mount_info.mountpoint!r}"
+        assert self._mountpoint is not None
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: object | None,
+    ) -> None:
+        """Exit context manager - unmount the device if it was mounted by us"""
+        if self._mount is not None:
+            self._mount.unmount()
 
     @property
     def device_path(self) -> str:
@@ -659,39 +538,35 @@ class Device:
             self._mountpoint = info.mountpoint if info else None
         return self._mountpoint
 
-    def prepare_mount(
-        self, default_name: str, *, verbose: bool = True, dry_run: bool = False
-    ) -> str | None:
+    def _prepare_temporary_mount(self) -> bool:
         """Find where a filesystem is mounted, or mount it ourselves"""
 
-        if self._mount is not None:
-            return self._mount.mountpoint
-        mount = self.mountpoint_path
-        if mount:
-            return mount
-
+        if self._mount is not None or self.mountpoint_path is not None:
+            return False
         label = self._get_named_value_from_device("LABEL", self._device)
-        name = label or default_name
+        name = (
+            label or self._fallback_name or f"device_{os.path.basename(self._device)}"
+        )
         name = re.sub(r"[^A-Za-z0-9]+", "_", name)
         if not name:
             raise RuntimeError(f"Bad mount name {name!r}")
 
         mount = f"{MOUNT_PREFIX}/{name}"
-        while MountManager.instance().is_mounted(mountpoint=mount) or os.path.exists(
-            mount
-        ):
+        while is_mounted(mountpoint=mount) or os.path.exists(mount):
             name = f"{name}.alt"
             mount = f"{MOUNT_PREFIX}/{name}"
 
-        self._mount = MountManager.instance().mount(
-            self._device, mount, dry_run=dry_run, verbose=verbose
+        if is_mounted(device=self._device):
+            raise InvalidMountError(f"Device {self._device!r} is already mounted")
+        if is_mounted(mountpoint=mount):
+            raise InvalidMountError(f"Mountpoint {mount!r} is already in use")
+
+        self._mount = TemporaryMount(
+            mount_info=MountInfo(device=self._device, mountpoint=mount),
+            verbose=self._verbose,
+            dry_run=self._dry_run,
         )
-        if self._mountpoint is None:
-            self._mountpoint = mount
-        assert (
-            self._mountpoint == self._mount.mountpoint
-        ), f"Mountpoint mismatch: {self._mountpoint!r} != {self._mount.mountpoint!r}"
-        return mount
+        return True
 
     @classmethod
     def _get_device_from_spec(cls, spec: str) -> str:
@@ -721,7 +596,7 @@ class Device:
         """Given a mountpoint, find the mounted device"""
 
         # MissingMountError will be passed through
-        return MountManager.instance().get_mount_from_mountpoint(mountpoint)
+        return get_mount_from_mountpoint(mountpoint)
 
     @classmethod
     def _look_for_mount_from_device(
@@ -743,9 +618,7 @@ class Device:
             ignore_filter = ignore_wrong_mountpoints
 
         try:
-            return MountManager.instance().get_mount_from_device(
-                device, ignore_filter=ignore_filter
-            )
+            return get_mount_from_device(device, ignore_filter=ignore_filter)
         except MissingMountError:
             pass
         return None
@@ -784,7 +657,7 @@ class Device:
     def _is_mounted(cls, device: str, mountpoint: str) -> bool:
         """Check if a device is mounted on a mountpoint"""
 
-        return MountManager.instance().is_mounted(device=device, mountpoint=mountpoint)
+        return is_mounted(device=device, mountpoint=mountpoint)
 
     def look_for_device_alias(
         self,
@@ -1091,96 +964,6 @@ def edit_fstab_contents(
         fout.write(line)
 
 
-class TemporaryBindMounts:
-    """Context manager for setting up bind mounts needed for chroot operations.
-
-    Example usage:
-        with ChrootBindMounts("/path/to/chroot") as mounts:
-            # Perform operations while mounts are active
-            subprocess.run(["chroot", "/path/to/chroot", "some-command"])
-    """
-
-    DEFAULT_MOUNT_POINTS = {p: p for p in ["/proc", "/dev", "/sys"]}
-
-    def __init__(
-        self,
-        *,
-        mountpoint_prefix: str = "",
-        mounts: dict[str, str] | None = None,
-        verbose: bool = True,
-        dry_run: bool = False,
-    ):
-        """Initialize the TemporaryBindMounts manager.
-
-        Args:
-            mountpoint_prefix: Prefix to add to mount points (but not to source paths)
-            mounts: List of mount points to bind mount (default: /proc, /dev, /sys)
-            dry_run: If True, only simulate mounting operations
-        """
-
-        def clean_path(path: str) -> str:
-            assert path == "" or path.startswith("/"), f"Bad path {path!r}"
-            return "/" + path.strip("/")
-
-        mountpoint_prefix = mountpoint_prefix.rstrip("/")
-        assert mountpoint_prefix == "" or mountpoint_prefix.startswith(
-            "/"
-        ), f"Bad mountpoint_prefix {mountpoint_prefix!r}"
-        self.mountpoints = {
-            mountpoint_prefix + clean_path(mountpoint): clean_path(source_path)
-            for mountpoint, source_path in (mounts or self.DEFAULT_MOUNT_POINTS).items()
-        }
-        for mountpoint, source_path in self.mountpoints.items():
-            assert mountpoint.startswith("/"), f"Bad bind mount point {mountpoint!r}"
-            assert source_path.startswith(
-                "/"
-            ), f"Bad bind mount source path {source_path!r}"
-            assert (
-                mountpoint != source_path
-            ), f"Bind mount point {mountpoint!r} is the same as source path"
-        self.verbose = verbose
-        self.dry_run = dry_run
-        self._bind_mounts: list[TemporaryBindMount] = []
-
-    def mount(self) -> None:
-        """Set up the bind mounts."""
-        if self._bind_mounts:
-            return  # Already mounted
-
-        self._bind_mounts = [
-            TemporaryBindMount(
-                source_path=source_path,
-                mountpoint=mountpoint,
-                verbose=self.verbose,
-                dry_run=self.dry_run,
-            )
-            for mountpoint, source_path in self.mountpoints.items()
-        ]
-
-    def unmount(self) -> None:
-        """Tear down the bind mounts."""
-        # The TemporaryBindMount destructor handles unmounting
-        self._bind_mounts.clear()
-
-    def __enter__(self) -> Self:
-        """Enter context manager - sets up bind mounts."""
-        self.mount()
-        return self
-
-    def __exit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc_val: BaseException | None,
-        exc_tb: object | None,
-    ) -> None:
-        """Exit context manager - clean up bind mounts."""
-        self.unmount()
-
-    def __del__(self):
-        """Ensure mounts are cleaned up on object destruction."""
-        self.unmount()
-
-
 def update_initrd(root_path: str, *, dry_run: bool = False) -> bool:
     """Update initrd files, optionally in a chroot environment with bind mounts."""
     root_path = root_path.rstrip("/")
@@ -1256,15 +1039,12 @@ class SyncFlags:
     exclude: list[str]
     verbosity: int
     dry_run: bool
-    keep_going: bool  # not meaningful for single partition sync
 
 
 def sync_partition(
     *,
     src_dev: Device,
     dst_dev: Device,
-    src_default_mount_name: str,
-    dst_default_mount_name: str,
     flags: SyncFlags,
 ) -> bool:
     """Sync one partition to another"""
@@ -1273,21 +1053,14 @@ def sync_partition(
             f"UUIDs are the same for {src_dev.device_path} and {dst_dev.device_path}."
         )
 
-    src_path = src_dev.prepare_mount(
-        src_default_mount_name, verbose=flags.verbosity > 0, dry_run=flags.dry_run
-    )
-    dst_path = dst_dev.prepare_mount(
-        dst_default_mount_name, verbose=flags.verbosity > 0, dry_run=flags.dry_run
-    )
-
-    assert src_path is not None
-    assert dst_path is not None
-    print(f"Copying {src_path} to {dst_path}...")
+    assert src_dev.mountpoint_path is not None
+    assert dst_dev.mountpoint_path is not None
+    print(f"Copying {src_dev.mountpoint_path} to {dst_dev.mountpoint_path}...")
     timer = ElapsedTimer()
 
     if not copy_files(
-        src_path,
-        dst_path,
+        src_dev.mountpoint_path,
+        dst_dev.mountpoint_path,
         exclude=flags.exclude,
         verbose=flags.verbosity > 0,
         dry_run=flags.dry_run,
@@ -1310,50 +1083,31 @@ def sync_efi_boot_root(
     flags: SyncFlags,
 ) -> bool:
     """Sync EFI, boot, and root partitions"""
-    success = True
-
     if src_efi_dev and dst_efi_dev:
-        result = sync_partition(
+        if not sync_partition(
             src_dev=src_efi_dev,
-            src_default_mount_name="backup-efi-src",
             dst_dev=dst_efi_dev,
-            dst_default_mount_name="backup-efi-dst",
             flags=flags,
-        )
-        success = success and result
-        if not success and not flags.keep_going:
-            return success
+        ):
+            return False
 
     if src_boot_dev and dst_boot_dev:
-        result = sync_partition(
+        if not sync_partition(
             src_dev=src_boot_dev,
-            src_default_mount_name="backup-boot-src",
             dst_dev=dst_boot_dev,
-            dst_default_mount_name="backup-boot-dst",
             flags=flags,
-        )
-        success = success and result
-        if not success and not flags.keep_going:
-            return success
+        ):
+            return False
 
     if src_root_dev and dst_root_dev:
-        dst_root_dev.prepare_mount(
-            default_name="backup-root-dst",
-            verbose=flags.verbosity > 0,
-            dry_run=flags.dry_run,
-        )
         assert dst_root_dev.mountpoint_path is not None
 
-        result = restore_fstab(dst_root_dev.mountpoint_path, dry_run=flags.dry_run)
-        success = success and result
-        if not success and not flags.keep_going:
-            return success
+        if not restore_fstab(dst_root_dev.mountpoint_path, dry_run=flags.dry_run):
+            return False
 
-        result = sync_partition(
+        if not sync_partition(
             src_dev=src_root_dev,
-            src_default_mount_name="backup-root-src",
             dst_dev=dst_root_dev,
-            dst_default_mount_name="backup-root-dst",
             flags=SyncFlags(
                 exclude=[
                     "/tmp/",
@@ -1364,78 +1118,74 @@ def sync_efi_boot_root(
                 ],
                 verbosity=flags.verbosity,
                 dry_run=flags.dry_run,
-                keep_going=flags.keep_going,
             ),
-        )
-        success = success and result
-        if not success and not flags.keep_going:
-            return success
+        ):
+            return False
 
         print("Updating destination OS...")
         dst_os_update_timer = ElapsedTimer()
 
-        fstab_result = edit_fstab(
-            dst_root_dev.mountpoint_path,
-            dst_efi_dev,
-            dst_boot_dev,
-            dst_root_dev,
-            dry_run=flags.dry_run,
-        )
-        if fstab_result:
-            result = propagate_fstab(
-                dst_root_dev.mountpoint_path, dry_run=flags.dry_run
+        if not (
+            edit_fstab(
+                dst_root_dev.mountpoint_path,
+                dst_efi_dev,
+                dst_boot_dev,
+                dst_root_dev,
+                dry_run=flags.dry_run,
             )
-            fstab_result = fstab_result and result
-        success = success and fstab_result
-        if not success and not flags.keep_going:
-            return success
+            and propagate_fstab(dst_root_dev.mountpoint_path, dry_run=flags.dry_run)
+        ):
+            return False
 
-        # Define bind mounts for chroot operations
         chroot_prefix = dst_root_dev.mountpoint_path.rstrip("/")
         assert chroot_prefix != ""
-        chroot_bind_mounts = dict(TemporaryBindMounts.DEFAULT_MOUNT_POINTS)
-        if src_boot_dev and dst_boot_dev:
-            assert src_boot_dev.mountpoint_path is not None
-            assert dst_boot_dev.mountpoint_path is not None
-            # The bind mount location inside the chroot should match the mountpoint
-            # of the system /boot. The bind mount source is wherever we have
-            # the destination /boot mounted now.
-            chroot_bind_mounts[src_boot_dev.mountpoint_path] = (
-                dst_boot_dev.mountpoint_path
-            )
-        if src_efi_dev and dst_efi_dev:
-            assert src_efi_dev.mountpoint_path is not None
-            assert dst_efi_dev.mountpoint_path is not None
-            # The bind mount location inside the chroot should match the mountpoint
-            # of the system /boot/efi. The bind mount source is wherever we have
-            # the destination /boot/efi mounted now.
-            chroot_bind_mounts[src_efi_dev.mountpoint_path] = (
-                dst_efi_dev.mountpoint_path
-            )
 
-        with TemporaryBindMounts(
-            mountpoint_prefix=chroot_prefix,
-            mounts=chroot_bind_mounts,
-            verbose=flags.verbosity > 0,
-            dry_run=flags.dry_run,
-        ):
+        with contextlib.ExitStack() as stack:
+            for p in ["/proc", "/dev", "/sys"]:
+                stack.enter_context(
+                    TemporaryBindMount(
+                        source_path=p,
+                        mountpoint=f"{chroot_prefix}{p}",
+                        verbose=flags.verbosity > 0,
+                        dry_run=flags.dry_run,
+                    )
+                )
+            if src_boot_dev and dst_boot_dev:
+                assert src_boot_dev.mountpoint_path is not None
+                assert dst_boot_dev.mountpoint_path is not None
+                stack.enter_context(
+                    TemporaryBindMount(
+                        source_path=dst_boot_dev.mountpoint_path,
+                        mountpoint=f"{chroot_prefix}{src_boot_dev.mountpoint_path}",
+                        verbose=flags.verbosity > 0,
+                        dry_run=flags.dry_run,
+                    )
+                )
+            if src_efi_dev and dst_efi_dev:
+                assert src_efi_dev.mountpoint_path is not None
+                assert dst_efi_dev.mountpoint_path is not None
+                stack.enter_context(
+                    TemporaryBindMount(
+                        source_path=dst_efi_dev.mountpoint_path,
+                        mountpoint=f"{chroot_prefix}{src_efi_dev.mountpoint_path}",
+                        verbose=flags.verbosity > 0,
+                        dry_run=flags.dry_run,
+                    )
+                )
+
             # Update initrd for the OS copy
-            result = update_initrd(
+            if not update_initrd(
                 dst_root_dev.mountpoint_path,
                 dry_run=flags.dry_run,
-            )
-            success = success and result
-            if not success and not flags.keep_going:
-                return success
+            ):
+                return False
 
             # Update GRUB for the OS copy
-            result = update_grub(
+            if not update_grub(
                 dst_root_dev.mountpoint_path,
                 dry_run=flags.dry_run,
-            )
-            success = success and result
-            if not success and not flags.keep_going:
-                return success
+            ):
+                return False
 
             # HACK: Debian may have mounted efivars
             maybe_efivars = f"{chroot_prefix}/sys/firmware/efi/efivars"
@@ -1452,17 +1202,11 @@ def sync_efi_boot_root(
     src_os_update_timer = ElapsedTimer()
 
     # Update GRUB for the currently booted OS
-    result = update_grub(
-        "/",
-        dry_run=flags.dry_run,
-    )
-    success = success and result
-    if not success and not flags.keep_going:
-        return success
+    if not update_grub("/", dry_run=flags.dry_run):
+        return False
 
     print(f"...done in {src_os_update_timer.elapsed()}.")
-
-    return success
+    return True
 
 
 def process_partition(
@@ -1474,15 +1218,22 @@ def process_partition(
 ) -> bool:
     """Sync one partition to another"""
     assert len(devs) == 2, repr(devs)
-    src_dev = Device(devs[0])
-    dst_dev = Device(devs[1])
-    return sync_partition(
-        src_dev=src_dev,
-        dst_dev=dst_dev,
-        src_default_mount_name=src_default_mount_name,
-        dst_default_mount_name=dst_default_mount_name,
-        flags=flags,
-    )
+    with Device(
+        devs[0],
+        fallback_name=src_default_mount_name,
+        verbose=flags.verbosity > 0,
+        dry_run=flags.dry_run,
+    ) as src_dev, Device(
+        devs[1],
+        fallback_name=dst_default_mount_name,
+        verbose=flags.verbosity > 0,
+        dry_run=flags.dry_run,
+    ) as dst_dev:
+        return sync_partition(
+            src_dev=src_dev,
+            dst_dev=dst_dev,
+            flags=flags,
+        )
 
 
 def process_efi_boot_root(
@@ -1492,24 +1243,73 @@ def process_efi_boot_root(
     *,
     flags: SyncFlags,
 ) -> bool:
-    """Sync one partition to another"""
+    """Sync a set of bootable partitions"""
     assert efi_devs is None or len(efi_devs) == 2, repr(efi_devs)
     assert boot_devs is None or len(boot_devs) == 2, repr(boot_devs)
-    src_efi_dev = Device(efi_devs[0]) if efi_devs else None
-    dst_efi_dev = Device(efi_devs[1]) if efi_devs else None
-    src_boot_dev = Device(boot_devs[0]) if boot_devs else None
-    dst_boot_dev = Device(boot_devs[1]) if boot_devs else None
-    src_root_dev = Device(root_devs[0])
-    dst_root_dev = Device(root_devs[1])
-    return sync_efi_boot_root(
-        src_efi_dev=src_efi_dev,
-        dst_efi_dev=dst_efi_dev,
-        src_boot_dev=src_boot_dev,
-        dst_boot_dev=dst_boot_dev,
-        src_root_dev=src_root_dev,
-        dst_root_dev=dst_root_dev,
-        flags=flags,
-    )
+    with contextlib.ExitStack() as stack:
+        if efi_devs:
+            src_efi_dev = stack.enter_context(
+                Device(
+                    efi_devs[0],
+                    fallback_name="backup-efi-src",
+                    verbose=flags.verbosity > 0,
+                    dry_run=flags.dry_run,
+                )
+            )
+            dst_efi_dev = stack.enter_context(
+                Device(
+                    efi_devs[1],
+                    fallback_name="backup-efi-dst",
+                    verbose=flags.verbosity > 0,
+                    dry_run=flags.dry_run,
+                )
+            )
+        else:
+            src_efi_dev, dst_efi_dev = None, None
+        if boot_devs:
+            src_boot_dev = stack.enter_context(
+                Device(
+                    boot_devs[0],
+                    fallback_name="backup-boot-src",
+                    verbose=flags.verbosity > 0,
+                    dry_run=flags.dry_run,
+                )
+            )
+            dst_boot_dev = stack.enter_context(
+                Device(
+                    boot_devs[1],
+                    fallback_name="backup-boot-dst",
+                    verbose=flags.verbosity > 0,
+                    dry_run=flags.dry_run,
+                )
+            )
+        else:
+            src_boot_dev, dst_boot_dev = None, None
+        src_root_dev = stack.enter_context(
+            Device(
+                root_devs[0],
+                fallback_name="backup-root-src",
+                verbose=flags.verbosity > 0,
+                dry_run=flags.dry_run,
+            )
+        )
+        dst_root_dev = stack.enter_context(
+            Device(
+                root_devs[1],
+                fallback_name="backup-root-dst",
+                verbose=flags.verbosity > 0,
+                dry_run=flags.dry_run,
+            )
+        )
+        return sync_efi_boot_root(
+            src_efi_dev=src_efi_dev,
+            dst_efi_dev=dst_efi_dev,
+            src_boot_dev=src_boot_dev,
+            dst_boot_dev=dst_boot_dev,
+            src_root_dev=src_root_dev,
+            dst_root_dev=dst_root_dev,
+            flags=flags,
+        )
 
 
 def validate_log_file(log_file: str) -> None:
@@ -1541,7 +1341,7 @@ def write_to_log_file(log_file: str, text: str, erase: bool = False) -> None:
         print(text, file=f)
 
 
-class ColoredArgumentParser(argparse.ArgumentParser):
+class ArgumentParserWithColor(argparse.ArgumentParser):
     """ArgumentParser that prints errors in red"""
 
     def error(self, message: str) -> NoReturn:
@@ -1551,7 +1351,7 @@ class ColoredArgumentParser(argparse.ArgumentParser):
 
 def parse_arguments() -> argparse.Namespace:
     """Parse command line arguments"""
-    parser = ColoredArgumentParser(
+    parser = ArgumentParserWithColor(
         description="Back up a partition to another partition with different UUID"
     )
     parser.add_argument(
@@ -1591,9 +1391,6 @@ def parse_arguments() -> argparse.Namespace:
     )
     parser.add_argument("-v", "--verbose", action="count", help="Verbose rsync output")
     parser.add_argument(
-        "-k", "--keep-going", action="store_true", help="Keep going after errors"
-    )
-    parser.add_argument(
         "--write-times",
         metavar="LOG_FILE",
         help="Write start and end times to log file",
@@ -1627,7 +1424,6 @@ def main() -> None:
         exclude=args.exclude or [],
         verbosity=args.verbose or 0,
         dry_run=args.dry_run,
-        keep_going=args.keep_going,
     )
 
     if args.write_times and not args.dry_run:
@@ -1644,7 +1440,7 @@ def main() -> None:
     for data_pair in args.data:
         result = process_partition(data_pair, flags=sync_flags)
         success = success and result
-        if not success and not args.keep_going:
+        if not success:
             print("\033[41m(stopping)\033[0m", file=sys.stderr)
             sys.exit(2)
 
@@ -1657,7 +1453,7 @@ def main() -> None:
             flags=sync_flags,
         )
         success = success and result
-        if not success and not args.keep_going:
+        if not success:
             print("\033[41m(stopping)\033[0m", file=sys.stderr)
             sys.exit(2)
 
