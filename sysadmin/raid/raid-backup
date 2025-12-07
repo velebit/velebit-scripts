@@ -552,6 +552,27 @@ dump_disk_setup () {
         fi
     done
 
+    echo "------------------ DETAILED DEVICE INFORMATION ------------------" \
+        | sed -ne 'x;p;p;x;s/-/*/g;h;s/./*/g;p;x;p;x;p;s/.*//;p'
+    for d in /dev/nvme[0-9]; do
+        if [ -e "$d" ]; then
+            echo "--------------------------- $d ---------------------------" \
+                | sed -ne 'h;s/./-/g;p;x;p'
+            echo "# nvme id-ctrl -H $d"
+            nvme id-ctrl -H "$d"
+            echo "# nvme id-ns -H $d"
+            nvme id-ns -H "$d"
+        fi
+    done
+    for d in /dev/[hs]d[a-z]; do
+        if [ -e "$d" ]; then
+            echo "--------------------------- $d ---------------------------" \
+                | sed -ne 'h;s/./-/g;p;x;p'
+            echo "# hdparm -I $d"
+            hdparm -I "$d"
+        fi
+    done
+
     return 0
 }
 
