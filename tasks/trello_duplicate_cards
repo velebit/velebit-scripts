@@ -7,8 +7,14 @@ from functools import cache
 import re
 import sys
 import trello.exceptions
-from bert_trello import (get_board, create_auth_token, read_auth_data,
-                         get_any_list_by_id, is_card_template, print_cards)
+from bert_trello import (
+    get_board,
+    create_auth_token,
+    read_auth_data,
+    get_any_list_by_id,
+    is_card_template,
+    print_cards,
+)
 
 
 def create_level_1():
@@ -24,8 +30,7 @@ def create_level_2():
 @cache
 def is_done_list(board, list_id):
     tlist = get_any_list_by_id(board, list_id)
-    return re.search(r'\b(?:done|gotovo)\b',
-                     tlist.name, re.IGNORECASE)
+    return re.search(r"\b(?:done|gotovo)\b", tlist.name, re.IGNORECASE)
 
 
 def ignore_done_lists(cards):
@@ -36,8 +41,12 @@ def process_cards(board_key, settings):
     try:
         board = get_board(board_key, board_key, verbosity=settings.verbosity)
     except trello.exceptions.Unauthorized:
-        board = get_board(board_key, board_key, verbosity=settings.verbosity,
-                          auth=create_auth_token(read_auth_data()))
+        board = get_board(
+            board_key,
+            board_key,
+            verbosity=settings.verbosity,
+            auth=create_auth_token(read_auth_data()),
+        )
     seen = create_level_2()
     cards_iter = board.open_cards()
     if settings.card_filter:
@@ -47,8 +56,7 @@ def process_cards(board_key, settings):
         cards.append(card)
         if settings.verbosity >= 0:
             # NOTE: does not follow the specified output settings
-            print("+" if len(cards) > 1 else ".", end="",
-                  file=sys.stderr, flush=True)
+            print("+" if len(cards) > 1 else ".", end="", file=sys.stderr, flush=True)
     if settings.verbosity >= 0:
         print(file=sys.stderr, flush=True)
     for name in sorted(seen.keys()):
@@ -56,19 +64,29 @@ def process_cards(board_key, settings):
         non_templates = name_dict.get(False, [])
         templates = name_dict.get(True, [])
         if settings.group_with_templates:
-            show = ((len(non_templates) + len(templates))
-                    >= settings.threshold)
+            show = (len(non_templates) + len(templates)) >= settings.threshold
             if show:
                 print(f"{name!r} (including templates):")
-                print_cards([*non_templates, *templates], print_template=True,
-                            show_start=True, show_due=True)
+                print_cards(
+                    [*non_templates, *templates],
+                    print_template=True,
+                    show_start=True,
+                    show_due=True,
+                    newline_before_start_due=not settings.one_line,
+                    newline_before_url=not settings.one_line,
+                )
         else:
-            show_cards = (len(non_templates) >= settings.threshold)
-            show_templates = (len(templates) >= settings.threshold)
+            show_cards = len(non_templates) >= settings.threshold
+            show_templates = len(templates) >= settings.threshold
             if show_cards:
                 print(f"{name!r} (cards):")
-                print_cards(non_templates,
-                            show_start=True, show_due=True)
+                print_cards(
+                    non_templates,
+                    show_start=True,
+                    show_due=True,
+                    newline_before_start_due=not settings.one_line,
+                    newline_before_url=not settings.one_line,
+                )
                 if settings.show_templates_with_cards:
                     if show_templates:
                         print("  matching templates:  see below")
@@ -77,66 +95,129 @@ def process_cards(board_key, settings):
                         # the threshold could have been modified so that
                         # there are multiple. So we use plural.
                         print("  matching templates:")
-                        print_cards(templates,
-                                    show_start=True, show_due=True)
+                        print_cards(
+                            templates,
+                            show_start=True,
+                            show_due=True,
+                            newline_before_start_due=not settings.one_line,
+                            newline_before_url=not settings.one_line,
+                        )
             if show_templates:
                 print(f"{name!r} (templates):")
-                print_cards(templates,
-                            show_start=True, show_due=True)
+                print_cards(
+                    templates,
+                    show_start=True,
+                    show_due=True,
+                    newline_before_start_due=not settings.one_line,
+                    newline_before_url=not settings.one_line,
+                )
                 if settings.show_cards_with_templates:
                     if show_cards:
                         print("  matching cards:  see above")
                     elif non_templates:
                         # See above; use plural.
                         print("  matching cards:")
-                        print_cards(non_templates,
-                                    show_start=True, show_due=True)
+                        print_cards(
+                            non_templates,
+                            show_start=True,
+                            show_due=True,
+                            newline_before_start_due=not settings.one_line,
+                            newline_before_url=not settings.one_line,
+                        )
 
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description=('Show duplicate cards and templates on a board.')
+        description=("Show duplicate cards and templates on a board.")
     )
-    parser.add_argument('-v', '--verbose', dest='verbosity',
-                        action='count', default=0,
-                        help='Be more verbose. Can be repeated.')
-    parser.add_argument('-q', '--quiet', dest='verbosity',
-                        action='store_const', const=-1,
-                        help='Be non-verbose.')
-    parser.add_argument('-t', '--show-templates-with-cards',
-                        '--show-templates', action='store_true',
-                        help=('When showing non-template cards, also'
-                              ' separately show the corresponding templates.'
-                              ' (Normally the cards and the templates are'
-                              ' shown independently.)'
-                              ' This is meaningless with'
-                              ' --group-with-templates.'))
-    parser.add_argument('-c', '--show-cards-with-templates',
-                        '--show-cards', action='store_true',
-                        help=('When showing templates, also separately show'
-                              ' the corresponding non-template cards.'
-                              ' (Normally the cards and the templates are'
-                              ' shown independently.)'
-                              ' This is meaningless with'
-                              ' --group-with-templates.'))
-    parser.add_argument('-T', '--group-with-templates',
-                        '--with-templates', action='store_true',
-                        help=('Group non-template cards and templates'
-                              ' together, and treat any 2 cards (including'
-                              ' templates *and* non-template cards) as a'
-                              ' duplicate.'))
-    parser.add_argument('-n', '--threshold', metavar='N',
-                        action='store', type=int, default=2,
-                        help=('Look for >= N cards of a given type, instead'
-                              ' of >= 2, when looking for duplicates.'))
-    parser.add_argument('-D', '--ignore-done', '--ignore_done',
-                        dest='card_filter',
-                        action='store_const', const=ignore_done_lists,
-                        help='Ignore "done" lists by name.')
-    parser.add_argument('board', nargs='?', default='bert active')
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        dest="verbosity",
+        action="count",
+        default=0,
+        help="Be more verbose. Can be repeated.",
+    )
+    parser.add_argument(
+        "-q",
+        "--quiet",
+        dest="verbosity",
+        action="store_const",
+        const=-1,
+        help="Be non-verbose.",
+    )
+    parser.add_argument(
+        "-t",
+        "--show-templates-with-cards",
+        "--show-templates",
+        action="store_true",
+        help=(
+            "When showing non-template cards, also"
+            " separately show the corresponding templates."
+            " (Normally the cards and the templates are"
+            " shown independently.)"
+            " This is meaningless with"
+            " --group-with-templates."
+        ),
+    )
+    parser.add_argument(
+        "-c",
+        "--show-cards-with-templates",
+        "--show-cards",
+        action="store_true",
+        help=(
+            "When showing templates, also separately show"
+            " the corresponding non-template cards."
+            " (Normally the cards and the templates are"
+            " shown independently.)"
+            " This is meaningless with"
+            " --group-with-templates."
+        ),
+    )
+    parser.add_argument(
+        "-T",
+        "--group-with-templates",
+        "--with-templates",
+        action="store_true",
+        help=(
+            "Group non-template cards and templates"
+            " together, and treat any 2 cards (including"
+            " templates *and* non-template cards) as a"
+            " duplicate."
+        ),
+    )
+    parser.add_argument(
+        "-1",
+        "--one-line",
+        "--one_line",
+        action="store_true",
+        help=("Show each card's info on a single line."),
+    )
+    parser.add_argument(
+        "-n",
+        "--threshold",
+        metavar="N",
+        action="store",
+        type=int,
+        default=2,
+        help=(
+            "Look for >= N cards of a given type, instead"
+            " of >= 2, when looking for duplicates."
+        ),
+    )
+    parser.add_argument(
+        "-D",
+        "--ignore-done",
+        "--ignore_done",
+        dest="card_filter",
+        action="store_const",
+        const=ignore_done_lists,
+        help='Ignore "done" lists by name.',
+    )
+    parser.add_argument("board", nargs="?", default="bert active")
     settings = parser.parse_args()
     if settings.threshold < 1:
-        parser.error('--threshold must specify a positive integer.')
+        parser.error("--threshold must specify a positive integer.")
     # TODO warn about combinations that don't make sense...
     return settings
 
