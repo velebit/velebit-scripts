@@ -667,7 +667,7 @@ split_1_2 () {
 cp_for_zip () {
     local name="$1"; shift
     if [ -n "$do_generate_zip" ]; then
-        cp "${DIR}/${name}.mp3.tmplist" "${name}.mp3.urllist"
+        cp "${DIR}/${name}.mp3.tmplist" "${name}.mp3zip.urllist"
     fi
 }
 

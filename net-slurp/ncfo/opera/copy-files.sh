@@ -1,8 +1,7 @@
 #!/bin/bash
 
 U2P_MP3_ARGS=()
-U2P_MP3ZIP_ARGS=(-d ../zip/pretty/)
-U2P_MP3PEEP_ARGS=(-d ../zip/people/)
+U2P_MP3ZIP_ARGS=(-d ../zip/staging/)
 U2P_VIDEO_ARGS=(-s video/ -d ../video/)
 
 ENUM_ARGS=(--keep-existing)
@@ -74,21 +73,12 @@ do_id3_zip=
 set -- *.mp3zip.urllist
 if [ "$#" -gt 0 -a -e "$1" ]; then
     do_id3_zip=yes
-    mkdir -p ../zip/pretty
+    mkdir -p ../zip/staging
     ./urllist2process.pl "${U2P_MP3ZIP_ARGS[@]}" "$@" | inspect Z1 \
+        | ./enumerate.pl "${ENUM_ARGS[@]}" | inspect Z2e \
         | ./omit-if-missing.pl | inspect Z3 \
         | ./globally-uniq.pl --sfdd | inspect Z5 \
         | ./playlists-from-process.pl -s '' | inspect Z6 \
-        | ./process-files.py "${PF_ARGS[@]}"
-fi
-set -- *.mp3people.urllist
-if [ "$#" -gt 0 -a -e "$1" ]; then
-    do_id3_zip=yes
-    mkdir -p ../zip/people
-    ./urllist2process.pl "${U2P_MP3PEEP_ARGS[@]}" "$@" | inspect P1 \
-        | ./omit-if-missing.pl | inspect P3 \
-        | ./globally-uniq.pl --sfdd | inspect P5 \
-        | ./playlists-from-process.pl -s '' | inspect P6 \
         | ./process-files.py "${PF_ARGS[@]}"
 fi
 
@@ -101,9 +91,12 @@ word_idx="`(./canonicalize-filenames.pl --print-short;echo and_add_1) | wc -w`"
 ./id3_tags.py -p "`./canonicalize-filenames.pl -ps` " -tn -xw"$word_idx" \
               "${ID3_WIPE_ARGS[@]}"
 if [ -n "$do_id3_zip" ]; then
-    ./id3_tags.py -d zip/pretty -p '' -xx -s '' "${ID3_WIPE_ARGS[@]}"
-    ./id3_tags.py -d zip/people \
-		  -p "`./canonicalize-filenames.pl --print-short` " \
-		  -xw"$word_idx" -s " practice" \
-		  "${ID3_WIPE_ARGS[@]}"
+    # Note: -xw{n} requires restoring the prefix with -p, but -xx does not
+    ./id3_tags.py -d zip/staging --2.4 \
+                  -p '' -tn -xx \
+                  "${ID3_WIPE_ARGS[@]}"
+    #./id3_tags.py -d zip/people \
+    #              -p "`./canonicalize-filenames.pl --print-short` " \
+    #              -xw"$word_idx" -s " practice" \
+    #              "${ID3_WIPE_ARGS[@]}"
 fi
