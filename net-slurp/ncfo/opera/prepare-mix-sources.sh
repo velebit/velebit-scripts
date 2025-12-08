@@ -19,28 +19,38 @@ done
 ./make-url-lists.sh "${mul_args[@]}"
 
 remove_number () {
-    echo "$1" | sed -e '/^[0-9]/s/^[^ ]* //'
+    echo "$1" | sed -e '/^[0-9]/s/^[^ ]*  *//'
 }
+
+try_remove_parens_and_after () {
+    local pat0="$1"; shift
+    local pat1="$(echo "$pat0" | sed -e 's/ *(.*//')"
+    if [[ -z "$pat1" ]]; then pat1="$pat0"; fi
+    echo "$pat1"
+}
+
+voice_regex='\(S\|A\|T\|B\|TB\|M\|AC\)\(\|[12]\|cc\)'
 
 tracks=()
 while read track; do
     ## echo "0> '$track'" >&2
-    nntrack="$(remove_number "$track")"
+    clean_track="$(try_remove_parens_and_after "$(remove_number "$track")")"
+    ## echo "c> '$clean_track'" >&2
     for t in "${tracks[@]}"; do
-        if [ "x$(remove_number "$t")" = "x$nntrack" ]; then
-            continue 2  # don't allow a duplicate even if the num is different
+        if [[ "$t" == "$clean_track" ]]; then
+            continue 2  # don't add duplicates
         fi
     done
-    tracks+=("$track")
-done < <(sed -e 's/.*	out_file://;s/^\(S\|A\|T\|B\|TB\|M\) //;s,/,_,g' \
+    ## echo "t> '$clean_track'" >&2
+    tracks+=("$clean_track")
+done < <(sed -e 's/.*	out_file://;s/^'"${voice_regex}"' //;s,/,_,g' \
              -e 's/,.*//' \
              tmplists/*-chorus.mp3.tmplist \
              | sort | uniq)
 
 make_pattern () {
     local track="$1"; shift
-    local pattern="$(remove_number "$track")"
-    pattern="/\([A-Z][A-Z]\? \)\?\([1-9]\.[1-9][0-9]\? \)\?$pattern"
+    local pattern="[/:]\(${voice_regex} \)\?\([1-9]\.[1-9][0-9]\? \)\?$track"
     echo "$pattern"
 }
 
