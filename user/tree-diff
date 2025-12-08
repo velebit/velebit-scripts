@@ -35,12 +35,17 @@ Flags:
   --block-size SIZE   Use the specified block size.  (Default: 1M)
                       Can be specified as <NUM> (bytes), <NUM>K or <NUM>M.
 
+  --command CMD (-c)  Run "CMD [ARGS] file1 file2..." for each of set of files.
+                      The number of arguments will be at least 2 and at most
+                      equal to the number of directory arguments to tree-diff.
+  --arg ARG     (-a)  Add ARG to the arguments passed to --command.
+
   --debug       (-d)  Enable debugging output.
 EndOfUsage
   exit 0;
 }
 
-use vars qw( $DEBUG $LIST $IDENT @EXCLUDE $ONE_DEVICE );
+use vars qw( $DEBUG $LIST $IDENT @EXCLUDE $ONE_DEVICE $CMD @CMD_ARGS );
 our $CHECK_FOR_DEVICES = 1 unless $^O eq 'MSWin32' or $^O eq 'cygwin';
 our $CHECK_SIZE_BEFORE_CONTENTS = 1;
 our $CHECK_MODE = 1;
@@ -64,9 +69,12 @@ GetOptions('help|h|?'           => \&Usage,
            'check-data|check-contents|data|contents!'
                                 => \$CHECK_CONTENTS,
 	   'block-size|bs=s'    => \$FILE_READ_LEN,
+	   'command|c=s'        => \$CMD,
+	   'arguments|args|a=s' => \@CMD_ARGS,
           ) or Usage;
 
 @ARGV >= 2 or Usage;
+@CMD_ARGS and !defined $CMD and Usage;
 
 SIZE_FORMAT:
 {
@@ -330,6 +338,11 @@ sub tdiff_symlinks ( $$@ ) {
 sub tdiff_files ( $$@ ) {
   my ($flags, $rpath, @info) = @_;
   dbg_comparing 3, 'plain files', $rpath, @info;
+
+  if (defined $CMD) {
+    system($CMD, @CMD_ARGS, map($_->{root} . $rpath, @info));
+    return;
+  }
 
   $info[$_]->{index} = 1+$_ for 0..$#info;
   $_->{handle} = IO::File->new($_->{root} . $rpath, '<'),
