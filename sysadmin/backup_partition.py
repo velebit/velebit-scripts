@@ -10,15 +10,16 @@ import argparse
 import contextlib
 from dataclasses import dataclass
 from datetime import datetime
+import io
 import os
 from pathlib import Path
 import re
+import select
 import shutil
 import subprocess
 import sys
 import threading
 import time
-import io
 from typing import Callable, NoReturn
 
 try:
@@ -54,39 +55,62 @@ def run_cmd(
         text=False,  # to preserve '\r' where needed
     )
 
-    def colorize_and_indent(stream: io.BufferedIOBase, color: str) -> None:
-        indent = "    "
-        reset = "\033[0m"
-        buffer = b""
-        keep_going = True
-        while keep_going:
-            chunk = stream.read(4096)
-            if chunk:
-                buffer += chunk
-            else:
-                keep_going = False
-            lines = re.split(rb"(?<=[\n\r])", buffer)
-            buffer = lines.pop()  # last line isn't complete
-            for line in lines:
-                text = line.decode("utf-8", errors="replace")
-                print(
-                    f"{indent}{color}{text}{reset}", end="", file=sys.stdout, flush=True
-                )
-        if buffer:
-            text = buffer.decode("utf-8", errors="replace")
-            print(f"{indent}{color}{text}{reset}", end="", file=sys.stdout)
+    def read_available(
+        fds: list[int | None], size: int = 4096, timeout: float = 3600.0
+    ) -> tuple[list[bytes], list[int | None]]:
+        """Read data from fd when available, blocking until data arrives or EOF."""
+        assert not all(fd is None for fd in fds)
+        ready, _, _ = select.select(
+            [fd for fd in fds if fd is not None], [], [], timeout
+        )
+        # in `reads`, None means read not attempted, b"" means EOF
+        # `fd is not None` is included just to make the type checker happy
+        reads = [
+            os.read(fd, size) if fd is not None and fd in ready else None for fd in fds
+        ]
+        for i, chunk in enumerate(reads):
+            if chunk == b"":
+                fds[i] = None  # mark EOF
+        return [chunk if chunk else b"" for chunk in reads], fds
 
-    stdout_thread = threading.Thread(
-        target=colorize_and_indent, args=(process.stdout, "\033[33m")
+    def colorize_and_indent(
+        streams: list[io.BufferedIOBase], colors: list[str]
+    ) -> None:
+        assert len(streams) == len(colors)
+        fds: list[int | None] = [stream.fileno() for stream in streams]
+        indent = "    "
+        indented = False
+        reset = "\033[0m"
+
+        while True:
+            chunks, fds = read_available(fds)
+            if all(fd is None for fd in fds):
+                break  # EOF on all descriptors
+
+            for i, chunk in enumerate(chunks):
+                lines = re.split(rb"(?<=[\n\r])", chunk)
+                for line in lines:
+                    if not line:
+                        continue
+                    text = line.decode("utf-8", errors="replace")
+                    print(
+                        f"{'' if indented else indent}{colors[i]}{text}{reset}",
+                        end="",
+                        file=sys.stdout,
+                        flush=True,
+                    )
+                    indented = not (text.endswith("\n") or text.endswith("\r"))
+
+        if indented:
+            print("", file=sys.stdout)
+
+    out_thread = threading.Thread(
+        target=colorize_and_indent,
+        args=([process.stdout, process.stderr], ["\033[33m", "\033[31m"]),
     )
-    stderr_thread = threading.Thread(
-        target=colorize_and_indent, args=(process.stderr, "\033[31m")
-    )
-    stdout_thread.start()
-    stderr_thread.start()
+    out_thread.start()
     exit_code = process.wait()
-    stdout_thread.join()
-    stderr_thread.join()
+    out_thread.join()
 
     if check and exit_code != 0:
         raise subprocess.CalledProcessError(exit_code, cmd)
