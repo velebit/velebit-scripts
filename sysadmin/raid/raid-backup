@@ -24,17 +24,17 @@ arg_fail () {
 }
 
 status () {
-    local date="`date +'%Y-%m-%d %H:%M:%S'`"
+    local date="$(date +'%Y-%m-%d %H:%M:%S')"
     echo "-- ${COLOR_DATE}[$date]${COLOR_NONE} -- ${COLOR_STAT}$*${COLOR_NONE}"
 }
 
 status_ok () {
-    local date="`date +'%Y-%m-%d %H:%M:%S'`"
+    local date="$(date +'%Y-%m-%d %H:%M:%S')"
     echo "-- ${COLOR_DATE}[$date]${COLOR_NONE} -- ${COLOR_GOOD}$*${COLOR_NONE}"
 }
 
 status_fail () {
-    local date="`date +'%Y-%m-%d %H:%M:%S'`"
+    local date="$(date +'%Y-%m-%d %H:%M:%S')"
     echo "-- ${COLOR_DATE}[$date]${COLOR_NONE} -- ${COLOR_FAIL}$*${COLOR_NONE}"
 }
 
@@ -43,10 +43,11 @@ fail () {
     exit 1
 }
 
-backup_tlds=(/media/bert /media/root)
-backup_name_ext=backup
-backup_name_int=int_backup
-backup_name=
+backup_dirs_ext=(/media/root/backup /media/bert/backup)
+backup_dirs_int=(/media/root/backup_storage/internal_backup
+                 /media/bert/backup_storage/internal_backup)
+backup_dirs=()
+backup_desc="<unknown backup>"
 backup=
 
 full_backup="common/users common/shared common/scratch home"
@@ -65,22 +66,33 @@ done
 
 dryrun=
 
+set_backup_ext () {
+    backup_dirs=("${backup_dirs_ext[@]}")
+    backup_desc="external backup"
+}
+set_backup_int () {
+    backup_dirs=("${backup_dirs_int[@]}")
+    backup_desc="internal traditional backup"
+}
+
 while [ "$#" -gt 0 ]; do
     case "$1" in
        -n)  dryrun=yes ;;
        -c)  partition_check=yes ;;
        -d)  show_disk_setup=yes ;;
        -e|--external)
-            [ -n "$backup_name" -a "$backup_name" != "$backup_name_ext" ] \
-                && arg_fail "You may only specify one of -e and -i."
-            backup_name="$backup_name_ext" ;;
+           [[ "${#backup_dirs[@]}" -gt 0 ]] \
+               && [[ "${backup_dirs[*]}" != "${backup_dirs_ext[*]}" ]] \
+               && arg_fail "You may only specify one of -e and -i."
+           set_backup_ext ;;
        -i|--internal)
-            [ -n "$backup_name" -a "$backup_name" != "$backup_name_int" ] \
-                && arg_fail "You may only specify one of -e and -i."
-            backup_name="$backup_name_int" ;;
+           [[ "${#backup_dirs[@]}" -gt 0 ]] \
+               && [[ "${backup_dirs[*]}" != "${backup_dirs_int[*]}" ]] \
+               && arg_fail "You may only specify one of -e and -i."
+           set_backup_int ;;
        --colors)
             with_colors ;;
-       -?|-h)
+       -\?|-h)
             cat <<EOF
 Usage: $(basename "$0") [-n] [-c] [-d] [-e|-i]
 Options:
@@ -97,7 +109,7 @@ EOF
     esac
     shift
 done
-[ -z "$backup_name" ] && backup_name="$backup_name_ext"
+[[ "${#backup_dirs[@]}" -eq 0 ]] && set_backup_ext
 
 Run () {
     if [ -n "$dryrun" ]; then
@@ -123,20 +135,30 @@ TestGood () {
     if [ -n "$dryrun" ]; then true;   else test "$@";  fi
 }
 
+backup_mount_dir='<unknown mount directory>'
 CheckMounted () {
     local msg_not_mounted="$1"; shift
     local msg_not_writable="$1"; shift
     if [ -n "$dryrun" ]; then return 0; fi
-    local mount_line="`mount | awk '($3 == "'"$backup"'")'`"
+    local mount_line="$(mount | awk '($3 == "'"$backup_mount_dir"'")')"
     case "$mount_line" in
-        "")             fail "$backup $msg_not_mounted" ;;
-        *'(ro'[,\)]*)   fail "$backup $msg_not_writable" ;;
+        "")             fail "$backup_mount_dir $msg_not_mounted" ;;
+        *'(ro'[,\)]*)   fail "$backup_mount_dir $msg_not_writable" ;;
         *'(rw'[,\)]*)   ;;
         *)              status_fail "Can't tell if partition is writable," \
                                     "continuing anyway." ;;
     esac
 }
 InitialCheckMounted () {
+    backup_mount_dir="$backup"
+    # Assume $backup is a mountpoint unless it's a subdir of /media/*/*
+    while [[ "$backup_mount_dir" == /media/root/*/* ]] \
+              || [[ "$backup_mount_dir" == /media/bert/*/* ]]; do
+        if [[ -n "$(mount | awk '($3 == "'"$backup_mount_dir"'")')" ]]; then
+            break  # found a mountpoint
+        fi
+        backup_mount_dir="$(dirname "$backup_mount_dir")"
+    done
     CheckMounted "isn't mounted" "isn't writable"
 }
 ReCheckMounted () {
@@ -172,7 +194,7 @@ kb_to_units () {
 
 max_backup_size=0
 # If /backup isn't mounted, this will be incorrect but we can live with that.
-min_disk_free="`disk_free_kb`"
+min_disk_free="$(disk_free_kb)"
 
 list_excludes () {
     local dir="$1"
@@ -183,10 +205,10 @@ list_excludes () {
     local i path relative
 
     for i in $full_backup $tar_backup $ignore; do
-        path="`partition_path $i`"
+        path="$(partition_path "$i")"
         case "$path" in
             "$dir_slash"?*)
-                relative="${path#$dir_slash}"
+                relative="${path#"$dir_slash"}"
                 echo "$prefix$relative$suffix"
                 ;;
         esac
@@ -215,7 +237,7 @@ run_backup () {
     for ext in '' '.tar' '.tar.gz' '.tar.bz2'; do
         ReCheckMounted
         local xdst="$dst_base$ext"
-        if [ -e "$xdst.old" -a -e "$xdst" ]; then
+        if [[ -e "$xdst.old" ]] && [[ -e "$xdst" ]]; then
             status "Cleaning up previous $xdst..."
             Run rm -rf "$xdst.old" || fail "couldn't remove $xdst.old"
             TestBad -e "$xdst.old" && fail "didn't actually remove $xdst.old"
@@ -233,7 +255,7 @@ run_backup () {
     done
 
     # If /backup isn't mounted, this will be incorrect
-    local free_before="`disk_free_kb`"
+    local free_before="$(disk_free_kb)"
 
     status "Backing up $src to $dst..."
     case "$dst" in
@@ -323,7 +345,7 @@ run_backup () {
                     # to grow by that much during sync.  (Note this is not
                     # true for tarballing, just syncing!)  Guesstimate the
                     # growth as 0, for now.
-                    free_before="`disk_free_kb`"
+                    free_before="$(disk_free_kb)"
                 fi
             done
             ;;
@@ -333,8 +355,8 @@ run_backup () {
     ShowSpace
 
     # If /backup isn't mounted, all of this will be incorrect; we can live
-    local free_after="`disk_free_kb`"
-    local space_used="`expr "$free_before" - "$free_after"`"
+    local free_after="$(disk_free_kb)"
+    local space_used="$(("$free_before"-"$free_after"))"
     if [ "$min_disk_free" -gt "$free_after" ]; then
         min_disk_free="$free_after"
     fi
@@ -357,7 +379,7 @@ partition_path () {
 }
 backup_path () {
     #echo "$backup/`echo "$1" | sed -e 's,/,_,g'`"
-    echo "$backup/`basename "$1"`"
+    echo "$backup/$(basename "$1")"
 }
 partition_name () {
     echo "$1" | sed -e 's,^/,,' -e 's/^$/root/'
@@ -368,26 +390,26 @@ run_all_backups () {
 
     local i
     for i in $full_backup; do
-        run_backup "`partition_path $i`" "`backup_path $i`" ""
+        run_backup "$(partition_path "$i")" "$(backup_path "$i")" ""
     done
 
     for i in $tar_backup; do
-        run_backup "`partition_path $i`" "`backup_path $i`" "$tar_type"
+        run_backup "$(partition_path "$i")" "$(backup_path "$i")" "$tar_type"
     done
 
-    status "Min. observed disk margin:  `echo "$min_disk_free" | kb_to_units`"
+    status "Min. observed disk margin:  $(echo "$min_disk_free" | kb_to_units)"
     if [ -z "$dryrun" ]; then
-        local free="`disk_free_kb`"
-        local margin="`expr "$free" - "$max_backup_size"`"
-        status "Min. projected disk margin: `echo "$margin" | kb_to_units`"
+        local free="$(disk_free_kb)"
+        local margin="$(("$free"-"$max_backup_size"))"
+        status "Min. projected disk margin: $(echo "$margin" | kb_to_units)"
     fi
 }
 
-backup_start="`date +'%Y-%m-%d %H:%M:%S'`"
+backup_start="$(date +'%Y-%m-%d %H:%M:%S')"
 
 generate_last_backup () {
     local backup_file="$1"
-    local backup_end="`date +'%Y-%m-%d %H:%M:%S'`"
+    local backup_end="$(date +'%Y-%m-%d %H:%M:%S')"
     echo "$backup_file" && \
         echo "# Started: $backup_start" && \
         echo "# Ended:   $backup_end" && \
@@ -397,8 +419,8 @@ generate_last_backup () {
 mark_last_backup () {
     local backup_file="$1"
     local last_backup_file
-    set -- `cd "$backup"; echo DISK_*`
-    if [ "$#" -ne 1 -o "$1" = "DISK_*" ]; then
+    set -- $(if cd "$backup"; then echo DISK_*; fi)
+    if [[ "$#" -ne 1 ]] || [[ "$1" == "DISK_*" ]]; then
         status "Could not determine disk ID, last not updated!"
     else
         last_backup_file="$last_backup"/last_backup."$1".txt
@@ -446,10 +468,10 @@ check_partition_list () {
 
 check_partition_coverage () {
     local header='Mounted partitions/subdirs NOT configured for full backups:'
-    local mountpoints="`mount | awk '{print $3}'`"
+    local mountpoints="$(mount | awk '{print $3}')"
     local path name i
     for path in $mountpoints; do
-        name="`partition_name "$path"`"
+        name="$(partition_name "$path")"
         for i in $full_backup $tar_backup $ignore; do
             case "$name" in
                 "$i")    continue 2 ;;
@@ -519,7 +541,7 @@ dump_disk_setup () {
     cat /proc/mdstat
     for d in /dev/md[0-9]* /dev/md/*; do
         if [ -e "$d" ]; then
-            case "`readlink "$d"`" in
+            case "$(readlink "$d")" in
                 */md[0-9]*|*/md/*) continue ;;
             esac
             echo "--------------------------- $d ---------------------------" \
@@ -547,8 +569,8 @@ dump_disk_setup () {
         if [ -e "$d" ]; then
             echo "--------------------------- $d ---------------------------" \
                 | sed -ne 'h;s/./-/g;p;x;p'
-            echo "# smartctl -x $d"
-            smartctl -x "$d"
+            echo "# smartctl -x -l farm $d"
+            smartctl -x -l farm "$d"
         fi
     done
 
@@ -560,8 +582,10 @@ dump_disk_setup () {
                 | sed -ne 'h;s/./-/g;p;x;p'
             echo "# nvme id-ctrl -H $d"
             nvme id-ctrl -H "$d"
-            echo "# nvme id-ns -H $d"
-            nvme id-ns -H "$d"
+            for n in "$d"n[0-9]; do
+                echo "# nvme id-ns -H $n"
+                nvme id-ns -H "$n"
+            done
         fi
     done
     for d in /dev/[hs]d[a-z]; do
@@ -610,30 +634,28 @@ if [ -n "$show_disk_setup" ]; then
 fi
 
 # set $backup
-while read mountpoint; do
-    for b in "${backup_tlds[@]/%/\/${backup_name}}"; do
-        if [ "($mountpoint)" = "($b)" ]; then
-            if [ -z "$backup" ]; then
-                backup="$b"
-            else
-                arg_fail "Multiple $backup_name directories are mounted."
-            fi
+for b in "${backup_dirs[@]}"; do
+    if [[ -d "$b" ]]; then
+        if [[ -z "$backup" ]]; then
+            backup="$b"
+        else
+            arg_fail "Multiple directories found for $backup_desc: '$backup', '$b'!"
         fi
-    done
-done < <(mount | awk '{print $3}')
-[ -z "$backup" ] && arg_fail "No $backup_name directory is mounted."
+    fi
+done
+[[ -z "$backup" ]] && arg_fail "No directory was found for $backup_desc! Maybe the backup disk is not mounted?"
 
 InitialCheckMounted
 
 if [ -t 1 ]; then
     # Only create a log file if the output is being sent to a terminal,
     # and if this isn't a dry run.
-    log="log.`date +'%Y-%m-%d'`.txt"
+    log="log.$(date +'%Y-%m-%d').txt"
     if [ -e "$backup/$log" ]; then
-        log="log.`date +'%Y-%m-%d.%H-%M'`.txt"
+        log="log.$(date +'%Y-%m-%d.%H-%M').txt"
         if [ -e "$backup/$log" ]; then
             for x in a b c d e f g h i j k l m n o p q r s t u v w x y z; do
-                log="log.`date +'%Y-%m-%d.%H-%M'`.$x.txt"
+                log="log.$(date +'%Y-%m-%d.%H-%M').$x.txt"
                 if [ ! -e "$backup/$log" ]; then break; fi
             done
         fi
