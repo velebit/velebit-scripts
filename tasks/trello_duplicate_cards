@@ -214,7 +214,9 @@ def parse_args():
         const=ignore_done_lists,
         help='Ignore "done" lists by name.',
     )
-    parser.add_argument("board", nargs="?", default="bert active")
+    parser.add_argument(
+        "board", nargs="?", default="6531ac71f384b1da10602fce"  # "bert active"
+    )
     settings = parser.parse_args()
     if settings.threshold < 1:
         parser.error("--threshold must specify a positive integer.")
