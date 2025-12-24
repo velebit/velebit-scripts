@@ -2,4 +2,4 @@
 
 source "$(dirname "$(realpath -e "$0")")"/../mount-umount.sh || exit 9
 
-do_umount int_backup ''
+do_umount backup_storage ''
