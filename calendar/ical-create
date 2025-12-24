@@ -1,0 +1,159 @@
+#!/home/bert/.local/lib/python/venv/default/bin/python
+
+import argparse
+import arrow
+import collections
+from datetime import timedelta
+import icalendar  # icalendar is better maintained than ics
+import re
+import sys
+from typing import Dict, Tuple, BinaryIO
+
+
+def write_ical_to_fh(
+    cal: icalendar.cal.Calendar, fh: BinaryIO, *, sorted: bool = True
+) -> None:
+    fh.write(cal.to_ical(sorted=sorted))
+
+
+def write_ical(cal: icalendar.cal.Calendar, filename: str) -> None:
+    if filename == "-":
+        write_ical_to_fh(cal, sys.stdout.buffer)
+    else:
+        with open(filename, "wb") as fh:
+            write_ical_to_fh(cal, fh)
+
+
+def get_start_end(
+    settings: argparse.Namespace,
+) -> Tuple[icalendar.prop.vDate, icalendar.prop.vDate]:
+    if settings.day:
+        date_in = arrow.get(settings.day)
+        date = date_in.replace(hour=0, minute=0, second=0, microsecond=0)
+        if date_in != date:
+            print(f"Warning: {settings.day!r} specifies a time, ignored.", file=sys.stderr)
+        start = icalendar.vDate(date.date())
+        # end is the next day
+        end = icalendar.vDate(date.shift(days=1).date())
+        return start, end
+    print("Error: must specify a time/interval.", file=sys.stderr)
+    sys.exit(2)
+
+
+def get_repeat(settings: argparse.Namespace) -> Dict[str, icalendar.vRecur]:
+    if settings.yearly:
+        return {"rrule": icalendar.vRecur({"FREQ": "YEARLY"})}
+    return {}
+
+
+def parse_interval(interval_str: str) -> timedelta:
+    """Parse an interval string like '12h', '2 days', '3h 30m', etc."""
+    interval_str = interval_str.strip().lower()
+
+    # Pattern to match number + unit pairs
+    pattern = r"(\d+(?:\.\d+)?)\s*([a-z]+)"
+    matches = re.findall(pattern, interval_str)
+    if not matches:
+        raise ValueError(f"Invalid interval format: {interval_str}")
+
+    # Verify that all matched content accounts for the entire input string
+    # by reconstructing what was matched and comparing with the original
+    left_over = re.sub(pattern, "", interval_str).strip()
+    if left_over:
+        raise ValueError(f"Invalid interval format: {interval_str}")
+
+    # Mapping of unit names to timedelta kwargs
+    units = (
+        ("d", "day", "days"),
+        ("h", "hr", "hour", "hours"),
+        ("m", "min", "minute", "minutes"),
+        ("s", "sec", "second", "seconds"),
+    )
+    unit_mapping = {k: group[-1] for group in units for k in group}
+
+    delta_kwargs: dict[str, float] = collections.defaultdict(float)
+    for value_str, unit_str in matches:
+        value = float(value_str)
+        unit = unit_mapping.get(unit_str)
+        if not unit:
+            raise ValueError(f"Unknown unit: {unit_str}")
+        delta_kwargs[unit] += value
+    return timedelta(**delta_kwargs)
+
+
+def get_alarms(settings: argparse.Namespace) -> list[icalendar.Alarm]:
+    alarms = []
+    for alarm in settings.alarm:
+        interval = parse_interval(alarm)
+        alarm = icalendar.Alarm()
+        alarm.add("action", "DISPLAY")
+        # alarm.add("description", "Reminder")
+        alarm.add("trigger", -interval)
+        alarms.append(alarm)
+    return alarms
+
+
+def create_event(settings: argparse.Namespace) -> icalendar.cal.Calendar:
+    cal = icalendar.Calendar(prodid="ical-create - bert at mit dot edu", version="2.0")
+    start, end = get_start_end(settings)
+    repeat = get_repeat(settings)
+    event = icalendar.Event(
+        summary=settings.event_name,
+        dtstart=start,
+        dtend=end,
+        **repeat,
+        transp="TRANSPARENT",
+    )
+    # Note: `event` doesn't currently contain a UID
+    for alarm in get_alarms(settings):
+        event.add_component(alarm)
+    cal.add_component(event)
+    return cal
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="count",
+        default=0,
+        help="Increase verbosity (which may not do anything).",
+    )
+    parser.add_argument(
+        "-o",
+        "--output",
+        default="-",
+        help="Output file name (default: stdout).",
+    )
+    parser.add_argument(
+        "--day",
+        help=(
+            "The day for an all-day event (as 'YYYY-MM-DD', 'YYYYMMDD',"
+            " or any other format recognized by `arrow`)."
+        ),
+    )
+    parser.add_argument(
+        "--yearly",
+        action="store_true",
+        help="Make this a yearly recurring event.",
+    )
+    parser.add_argument(
+        "--alarm",
+        metavar="INTERVAL",
+        action="append",
+        default=[],
+        help="Add an alarm INTERVAL before the event.",
+    )
+    parser.add_argument(
+        "event_name",
+        metavar="EVENT_NAME",
+        help="Name of the event to appear in the calendar. iCal calls this a 'summary'.",
+    )
+    settings = parser.parse_args()
+    return settings
+
+
+if __name__ == "__main__":
+    settings = parse_args()
+    write_ical(create_event(settings), settings.output)
