@@ -166,6 +166,7 @@ add_if always               strace
 add_if always               libhtml-element-extended-perl \
                             libhtml-tableextract-perl
 add_if always               libtext-unidecode-perl libtext-unaccent-perl
+add_if always               python3-unidecode
 add_if "$is_primary_os"     sonic-pi
 add_if "$is_primary_os"     sloccount
 # These may be useful for bootstraping node.js / typescript development:
@@ -251,6 +252,7 @@ add_if "!$is_headless"      xournal
 ### other document tools
 add_if "$is_media"          pandoc
 add_if "$is_primary_os"     librecad
+add_if "$is_bert_desktop"   tesseract-ocr-hrv tesseract-ocr-eng tesseract-ocr
 
 #### 32-bit compat (for e.g. Brother binaries)
 #if is_selected "$is_server"; then
