@@ -506,6 +506,7 @@ def update_orphan_labeled_tasks(board, label_rules, tasks, verbosity=0):
 # ===== formatting and printing card information in a uniform way =====
 
 def format_cards(cards, *, key=None,
+                 show_index: bool = False,
                  show_template=False, show_created=True, show_updated=True,
                  show_list=True, show_id=False, show_start=False,
                  show_due=False, newline_before_start_due=True,
@@ -515,7 +516,7 @@ def format_cards(cards, *, key=None,
         def key(c):
             return c.created_date
     card_info = list()
-    for c in cards:
+    for i, c in enumerate(cards):
         info_bits = []
         if show_template and is_card_template(c):
             info_bits.append("template")
@@ -556,13 +557,18 @@ def format_cards(cards, *, key=None,
             if newline_before_url:
                 info = "\n      " + info  # note: extra indent!
             info_bits.append(info)
-        info = "    " + ", ".join(info_bits)
-        card_info.append((key(c), c.name, len(card_info), info))
+        info = ", ".join(info_bits)
+        card_info.append([key(c), c.name, len(card_info), info, c])
     # `card_info` tuples are already ordered for comparability.
     card_info.sort()
-    return [info for _, _, _, info in card_info]
+    if show_index:
+        for i in range(len(card_info)):
+            card_info[i][3] = f"[{i+1}/{len(card_info)}] " + card_info[i][3]
+    return ["    " + info for _, _, _, info, _ in card_info],  [card for _, _, _, _, card in card_info]
 
 
 def print_cards(cards, **kwargs):
-    for cf in format_cards(cards, **kwargs):
+    formatted, cards = format_cards(cards, **kwargs)
+    for cf in formatted:
         print(cf)
+    return cards

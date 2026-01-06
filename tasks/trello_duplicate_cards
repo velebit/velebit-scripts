@@ -7,6 +7,7 @@ from functools import cache
 import re
 import sys
 import trello.exceptions
+from typing import Callable
 from bert_trello import (
     get_board,
     create_auth_token,
@@ -27,14 +28,87 @@ def create_level_2():
     return defaultdict(create_level_1)
 
 
+def name_is_done_list(list_name: str) -> bool:
+    return re.search(r"\b(?:done|gotovo)\b", list_name, re.IGNORECASE)
+
+
 @cache
 def is_done_list(board, list_id):
     tlist = get_any_list_by_id(board, list_id)
-    return re.search(r"\b(?:done|gotovo)\b", tlist.name, re.IGNORECASE)
+    return name_is_done_list(tlist.name)
 
 
 def ignore_done_lists(cards):
     return (c for c in cards if not is_done_list(c.board, c.list_id))
+
+
+def find_list(board: trello.Board, *, name_check: Callable[[str], bool]) -> trello.List:
+    done_lists = [
+        tlist
+        for tlist in board.list_lists()
+        if not tlist.closed and name_check(tlist.name)
+    ]
+    if not done_lists:
+        raise ValueError(f"No 'done' list found on board {board.name!r}.")
+    if len(done_lists) > 1:
+        print(
+            f"Warning: Multiple 'done' lists found on board {board.name!r}: "
+            f" using {done_lists[0].name!r} and ignoring"
+            + ", ".join(repr(tlist.name) for tlist in done_lists[1:])
+        )
+    return done_lists[0]
+
+
+def handle_cards(cards, settings, *, show_template=False):
+    pcards = print_cards(
+        cards,
+        show_index=True if settings.ask else False,
+        show_template=show_template,
+        show_start=True,
+        show_due=True,
+        newline_before_start_due=not (settings.one_line or settings.ask),
+        newline_before_url=not (settings.one_line or settings.ask),
+    )
+    if settings.ask:
+        done_list: trello.List | None = None
+        for i, card in enumerate(pcards):
+            while True:
+                response = (
+                    input(
+                        f"  What to do with card [{i+1}] {card.short_url}? "
+                        "(r)emove, (a)rchive, move to (d)one, (s)kip: "
+                    )
+                    .strip()
+                    .lower()
+                )
+                if response == "r":
+                    card.delete()
+                    print(f"Removed card {card.id!r}.")
+                    break
+                elif response == "a":
+                    card.set_closed(True)
+                    print(f"Archived card {card.id!r}.")
+                    break
+                elif response == "d":
+                    if done_list is None:
+                        try:
+                            done_list = find_list(
+                                card.board, name_check=name_is_done_list
+                            )
+                        except ValueError:
+                            print(
+                                f"No 'done' list found on board {card.board.name!r};"
+                                " cannot move card."
+                            )
+                            continue
+                    card.change_list(done_list.id)
+                    print(f"Moved card {card.id!r} to list {done_list.name!r}.")
+                    break
+                elif response == "s":
+                    print(f"Skipped card {card.id!r}.")
+                    break
+                else:
+                    print("  Please answer 'r', 'a', 'd', or 's'.")
 
 
 def process_cards(board_key, settings):
@@ -67,26 +141,13 @@ def process_cards(board_key, settings):
             show = (len(non_templates) + len(templates)) >= settings.threshold
             if show:
                 print(f"{name!r} (including templates):")
-                print_cards(
-                    [*non_templates, *templates],
-                    print_template=True,
-                    show_start=True,
-                    show_due=True,
-                    newline_before_start_due=not settings.one_line,
-                    newline_before_url=not settings.one_line,
-                )
+                handle_cards([*non_templates, *templates], settings, show_template=True)
         else:
             show_cards = len(non_templates) >= settings.threshold
             show_templates = len(templates) >= settings.threshold
             if show_cards:
                 print(f"{name!r} (cards):")
-                print_cards(
-                    non_templates,
-                    show_start=True,
-                    show_due=True,
-                    newline_before_start_due=not settings.one_line,
-                    newline_before_url=not settings.one_line,
-                )
+                handle_cards(non_templates, settings)
                 if settings.show_templates_with_cards:
                     if show_templates:
                         print("  matching templates:  see below")
@@ -95,35 +156,17 @@ def process_cards(board_key, settings):
                         # the threshold could have been modified so that
                         # there are multiple. So we use plural.
                         print("  matching templates:")
-                        print_cards(
-                            templates,
-                            show_start=True,
-                            show_due=True,
-                            newline_before_start_due=not settings.one_line,
-                            newline_before_url=not settings.one_line,
-                        )
+                        handle_cards(templates, settings)
             if show_templates:
                 print(f"{name!r} (templates):")
-                print_cards(
-                    templates,
-                    show_start=True,
-                    show_due=True,
-                    newline_before_start_due=not settings.one_line,
-                    newline_before_url=not settings.one_line,
-                )
+                handle_cards(templates, settings)
                 if settings.show_cards_with_templates:
                     if show_cards:
                         print("  matching cards:  see above")
                     elif non_templates:
                         # See above; use plural.
                         print("  matching cards:")
-                        print_cards(
-                            non_templates,
-                            show_start=True,
-                            show_due=True,
-                            newline_before_start_due=not settings.one_line,
-                            newline_before_url=not settings.one_line,
-                        )
+                        handle_cards(non_templates, settings)
 
 
 def parse_args():
@@ -213,6 +256,11 @@ def parse_args():
         action="store_const",
         const=ignore_done_lists,
         help='Ignore "done" lists by name.',
+    )
+    parser.add_argument(
+        "--ask",
+        action="store_true",
+        help="Ask the user what to do with each duplicate card.",
     )
     parser.add_argument(
         "board", nargs="?", default="6531ac71f384b1da10602fce"  # "bert active"
