@@ -779,16 +779,18 @@ fi
 if [ -n "$INDEX_CHORUS" ]; then
     cat "$DIR"/tenor.mp3.tmplist | sed \
         -e 's/out_file:TB /out_file:T /' \
-        > Abbe+bert.mp3.urllist
+        -e '/The\ Talent\ Show\ Camper/d' \
+        > bert.mp3.urllist
 fi
 
-### Abbe (Alto)
+### Abbe (Tenor)
 # MP3s
-#if [ -n "$INDEX_CHORUS" ]; then
-#    cat "$DIR"/tenor.mp3.tmplist | sed \
-#        -e '' \
-#        > Abbe.mp3.urllist
-#fi
+if [ -n "$INDEX_CHORUS" ]; then
+    cat "$DIR"/tenor.mp3.tmplist | sed \
+        -e 's/out_file:TB /out_file:T /' \
+        -e '/The\ Talent\ Show\ Townie/d' \
+        > Abbe.mp3.urllist
+fi
 
 #####  video
 if [ -n "$INDEX_VIDEO" ]; then
