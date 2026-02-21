@@ -6,19 +6,19 @@ import requests
 import sys
 import urllib.parse
 import warnings
-
+from typing import Any, Callable, Type, TypeVar
 
 # ===== general helpers =====
 
-def html2text(html):
+
+def html2text(html: str) -> str:
     with warnings.catch_warnings():
-        warnings.filterwarnings('ignore',
-                                category=bs4.MarkupResemblesLocatorWarning)
-        return bs4.BeautifulSoup(html, features="lxml").get_text(
-            "\n\n", strip=True)
+        warnings.filterwarnings("ignore", category=bs4.MarkupResemblesLocatorWarning)
+        return bs4.BeautifulSoup(html, features="lxml").get_text("\n\n", strip=True)
 
 
 # ===== HTTP request error classes =====
+
 
 class UnexpectedHTTPResponseError(requests.exceptions.HTTPError):
     """The HTTP response code which was received was unexpected."""
@@ -38,33 +38,50 @@ class MissingAuthorizationError(ClientStateError):
 
 # ===== Miro client authentication data =====
 
+
 class Auth(object):
 
-    def __init__(self, *, client_id=None, client_secret=None,
-                 refresh_token=None, access_token=None):
+    def __init__(
+        self,
+        *,
+        client_id: str | None = None,
+        client_secret: str | None = None,
+        refresh_token: str | None = None,
+        access_token: str | None = None,
+    ):
         self.client_id = client_id
         self.client_secret = client_secret
         self.refresh_token = refresh_token
         self.access_token = access_token
 
-    def __eq__(self, other):
-        return (isinstance(self, Auth) and isinstance(other, Auth) and
-                self.client_id == other.client_id and
-                self.client_secret == other.client_secret and
-                self.refresh_token == other.refresh_token and
-                self.access_token == other.access_token)
+    def __eq__(self, other: Any) -> bool:
+        return (
+            isinstance(other, Auth)
+            and self.client_id == other.client_id
+            and self.client_secret == other.client_secret
+            and self.refresh_token == other.refresh_token
+            and self.access_token == other.access_token
+        )
 
-    def clone(self):
+    def clone(self) -> "Auth":
         return self.__class__(**self.__dict__)
 
 
 # ===== Miro client =====
 
+
 class Client(object):
     """Client for access to Miro."""
 
-    def __init__(self, *, auth=Auth(), client_id=None, client_secret=None,
-                 refresh_token=None, access_token=None):
+    def __init__(
+        self,
+        *,
+        auth: Auth = Auth(),
+        client_id: str | None = None,
+        client_secret: str | None = None,
+        refresh_token: str | None = None,
+        access_token: str | None = None,
+    ):
         self.__auth = auth
         if client_id is not None:
             self.__auth.client_id = client_id
@@ -75,23 +92,25 @@ class Client(object):
         if access_token is not None:
             self.__auth.access_token = access_token
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"{type(self).__name__}(...)"
 
-    def __eq__(self, other):
-        return (isinstance(self, Client) and isinstance(other, Client) and
-                self.__auth == other.__auth)
+    def __eq__(self, other: Any) -> bool:
+        return isinstance(other, Client) and self.__auth == other.__auth
 
     # HTTP request helpers
 
     @classmethod
-    def _make_basic_request(cls, *, request=requests.post, url,
-                            accept_codes={requests.codes.ok},
-                            extra_headers={}, **kwargs):
-        headers = {
-            "accept": "application/json",
-            **extra_headers
-        }
+    def _make_basic_request(
+        cls,
+        *,
+        request: Callable[..., requests.Response] = requests.post,
+        url: str,
+        accept_codes: set[int] = {requests.codes.ok},
+        extra_headers: dict[str, str] = {},
+        **kwargs: Any,
+    ) -> requests.Response:
+        headers = {"accept": "application/json", **extra_headers}
         response = request(url, headers=headers, **kwargs)
         if response.status_code not in accept_codes:
             # try normal response error mechanism...
@@ -99,96 +118,105 @@ class Client(object):
             # ...otherwise generate our own exception
             raise UnexpectedHTTPResponseError(
                 "Unexpected status: {code} {reason} for url: {url}".format(
-                    code=response.status_code, reason=response.reason,
-                    url=url),
-                response=response)
+                    code=response.status_code, reason=response.reason, url=url
+                ),
+                response=response,
+            )
         return response
 
-    def _make_auth_request(self, *, extra_headers={}, **kwargs):
+    def _make_auth_request(
+        self, *, extra_headers: dict[str, str] = {}, **kwargs: Any
+    ) -> requests.Response:
         if self.__auth.access_token is None:
             raise MissingAuthorizationError("Access token not present.")
         headers = {
             "authorization": "Bearer " + self.__auth.access_token,
-            **extra_headers
+            **extra_headers,
         }
         return self._make_basic_request(extra_headers=headers, **kwargs)
 
     # authentication-related functionality
 
     @property
-    def auth(self):
+    def auth(self) -> Auth:
         return self.__auth.clone()
 
-    def is_access_token_valid(self):
+    def is_access_token_valid(self) -> bool:
         if self.__auth.access_token is None:
             return False
         url = "https://api.miro.com/v1/oauth-token"
         response = self._make_auth_request(
-            request=requests.get, url=url,
-            accept_codes={requests.codes.ok,
-                          requests.codes.unauthorized})
+            request=requests.get,
+            url=url,
+            accept_codes={requests.codes.ok, requests.codes.unauthorized},
+        )
         return response.status_code == requests.codes.ok
 
-    def create_access_token_via_settings(self):
+    def create_access_token_via_settings(self) -> Auth:
         if self.__auth.client_id is not None:
             print(f"Your app's Client ID:     {self.__auth.client_id}\n")
         while self.__auth.client_id is None:
-            print("Enter your app's Client ID.\n"
-                  "  You can find this in the App Credentials section of the\n"
-                  "  app's page, accessible from your Dev Team > Profile\n"
-                  "  settings > Your apps > Created apps > (select the app).")
+            print(
+                "Enter your app's Client ID.\n"
+                "  You can find this in the App Credentials section of the\n"
+                "  app's page, accessible from your Dev Team > Profile\n"
+                "  settings > Your apps > Created apps > (select the app)."
+            )
             value = input("> ").strip()
             if value != "":
                 self.__auth.client_id = value
-        if self.__auth.client_id is not None:
-            print(f"Your app's Client secret: {self.__auth.client_secret}\n")
+        print(f"Your app's Client secret: {self.__auth.client_secret}\n")
         while self.__auth.client_secret is None:
-            print("Enter your app's Client secret.\n"
-                  "  You can find this in the App Credentials section of the\n"
-                  "  app's page, accessible from your Dev Team > Profile\n"
-                  "  settings > Your apps > Created apps > (select the app).")
+            print(
+                "Enter your app's Client secret.\n"
+                "  You can find this in the App Credentials section of the\n"
+                "  app's page, accessible from your Dev Team > Profile\n"
+                "  settings > Your apps > Created apps > (select the app)."
+            )
             value = input("> ").strip()
             if value != "":
                 self.__auth.client_secret = value
         self.__auth.access_token = None
         self.__auth.refresh_token = None
-        while (self.__auth.access_token is None
-                and self.__auth.refresh_token is None):
-            print("Enter your Miro app's Access token.\n"
-                  "  You can generate this from the app's page, accessible\n"
-                  "  from your Dev Team > Profile settings > Your apps >\n"
-                  "  Created apps > (select the app). On the app's page,\n"
-                  "  scroll down to find the 'Install app and get OAuth\n"
-                  "  token' button, click it, and install the app to the\n"
-                  "  desired workspace. This will show you the tokens.\n"
-                  "  You can leave this blank to use the refresh token to\n"
-                  "  immediately refresh.")
+        while self.__auth.access_token is None and self.__auth.refresh_token is None:
+            print(
+                "Enter your Miro app's Access token.\n"
+                "  You can generate this from the app's page, accessible\n"
+                "  from your Dev Team > Profile settings > Your apps >\n"
+                "  Created apps > (select the app). On the app's page,\n"
+                "  scroll down to find the 'Install app and get OAuth\n"
+                "  token' button, click it, and install the app to the\n"
+                "  desired workspace. This will show you the tokens.\n"
+                "  You can leave this blank to use the refresh token to\n"
+                "  immediately refresh."
+            )
             value = input("> ").strip()
             if value != "":
                 self.__auth.access_token = value
-            print("Enter your Miro app's Refresh token.\n"
-                  "  You can generate this from the app's page, accessible\n"
-                  "  from your Dev Team > Profile settings > Your apps >\n"
-                  "  Created apps > (select the app). On the app's page,\n"
-                  "  scroll down to find the 'Install app and get OAuth\n"
-                  "  token' button, click it, and install the app to the\n"
-                  "  desired workspace. This will show you the tokens.\n"
-                  "  You can leave this blank to disable refresh.")
+            print(
+                "Enter your Miro app's Refresh token.\n"
+                "  You can generate this from the app's page, accessible\n"
+                "  from your Dev Team > Profile settings > Your apps >\n"
+                "  Created apps > (select the app). On the app's page,\n"
+                "  scroll down to find the 'Install app and get OAuth\n"
+                "  token' button, click it, and install the app to the\n"
+                "  desired workspace. This will show you the tokens.\n"
+                "  You can leave this blank to disable refresh."
+            )
             value = input("> ").strip()
             if value != "":
                 self.__auth.refresh_token = value
-        if (self.__auth.access_token is None
-                and self.__auth.refresh_token is not None):
+        if self.__auth.access_token is None and self.__auth.refresh_token is not None:
             return self.refresh_access_token()
         return self.auth
 
-    def create_access_token(self):
+    def create_access_token(self) -> Auth:
         # TODO: Consider implementing creating the access token by using (and
         # possibly intercepting) the redirect mechanism. But we don't have that
         # yet.
         return self.create_access_token_via_settings()
 
-    def refresh_access_token(self):
+    def refresh_access_token(self) -> Auth:
         if self.__auth.client_id is None:
             raise MissingAuthorizationError("Client ID not known.")
         if self.__auth.client_secret is None:
@@ -200,15 +228,16 @@ class Client(object):
             "grant_type": "refresh_token",
             "client_id": self.__auth.client_id,
             "client_secret": self.__auth.client_secret,
-            "refresh_token": self.__auth.refresh_token
+            "refresh_token": self.__auth.refresh_token,
         }
         data = self._make_basic_request(
-            request=requests.post, url=url, params=params).json()
-        self.__auth.access_token = data['access_token']
-        self.__auth.refresh_token = data['refresh_token']
+            request=requests.post, url=url, params=params
+        ).json()
+        self.__auth.access_token = data["access_token"]
+        self.__auth.refresh_token = data["refresh_token"]
         return self.auth
 
-    def authenticate(self, *, allow_user_input=True):
+    def authenticate(self, *, allow_user_input: bool = True) -> Auth | None:
         if self.is_access_token_valid():
             return None
         try:
@@ -220,8 +249,10 @@ class Client(object):
         except requests.exceptions.HTTPError:
             pass
         if not allow_user_input:
-            raise RuntimeError("Could not refresh auth token, and could not"
-                               " get a new one without user input.")
+            raise RuntimeError(
+                "Could not refresh auth token, and could not"
+                " get a new one without user input."
+            )
         auth = self.create_access_token()
         if self.is_access_token_valid():  # is the check even needed?
             return auth
@@ -229,26 +260,32 @@ class Client(object):
 
     # accessing objects
 
-    def boards(self):
+    def boards(self) -> list["Board"]:
         url = "https://api.miro.com/v2/boards"
-        params = {
+        params: dict[str, Any] = {
+            # TODO?
             "sort": "alphabetically",
             "offset": 0,
-            "limit": 20
+            "limit": 20,
         }
-        boards = []
+        boards: list["Board"] = []
         while True:
-            response = self._make_auth_request(request=requests.get, url=url,
-                                               params=params)
+            response = self._make_auth_request(
+                request=requests.get, url=url, params=params
+            )
             json = response.json()
-            for board_data in json['data']:
-                boards.append(Board._from_json(board_data, client=self))
-            if json['offset'] + json['size'] >= json['total']:
+            for board_data in json["data"]:
+                boards.append(
+                    Board._from_json(  # pyright: ignore[reportPrivateUsage]
+                        board_data, client=self
+                    )
+                )
+            if json["offset"] + json["size"] >= json["total"]:
                 break
-            params['offset'] = json['offset'] + json['size']
+            params["offset"] = json["offset"] + json["size"]
         return boards
 
-    def board_by_id(self, id):
+    def board_by_id(self, id: str) -> "Board | None":
         url = "https://api.miro.com/v2/boards/" + urllib.parse.quote(id)
         try:
             response = self._make_auth_request(request=requests.get, url=url)
@@ -257,9 +294,11 @@ class Client(object):
                 return None
             else:
                 raise
-        return Board._from_json(response.json(), client=self)
+        return Board._from_json(  # pyright: ignore[reportPrivateUsage]
+            response.json(), client=self
+        )
 
-    def board_by_name(self, name):
+    def board_by_name(self, name: str) -> "Board | None":
         for b in self.boards():
             if b.name == name:
                 return b
@@ -268,51 +307,60 @@ class Client(object):
 
 # ===== Miro board =====
 
+
+ItemT = TypeVar("ItemT", bound="Item")
+
+
 class Board(object):
     """A board in Miro."""
 
-    def __init__(self, *, id, name, client=None):
+    def __init__(self, *, id: str, name: str, client: Client | None = None):
         self.__id = id
         self.__name = name
         self.__client = client
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"{type(self).__name__}(id={self.id!r}, name={self.name!r})"
 
-    def __eq__(self, other):
-        return (isinstance(self, Board) and isinstance(other, Board) and
-                self.__id is not None and
-                self.__id == other.__id)
+    def __eq__(self, other: Any) -> bool:
+        return isinstance(other, Board) and self.__id == other.__id
 
     @classmethod
-    def _from_json(cls, json, client=None):
-        assert json['type'] == 'board'
-        return cls(id=json['id'], name=json['name'], client=client)
+    def _from_json(cls, json: dict[str, Any], client: Client | None = None) -> "Board":
+        assert json["type"] == "board"
+        return cls(id=json["id"], name=json["name"], client=client)
 
     @property
-    def id(self):
+    def id(self) -> str:
         return self.__id
 
     @property
-    def name(self):
+    def name(self) -> str:
         return self.__name
 
     @property
-    def client(self):
+    def client(self) -> Client | None:
         return self.__client
 
-    def items(self, item_type=None, parent_item_id=None):
-        url = ("https://api.miro.com/v2/boards/" + urllib.parse.quote(self.id)
-               + "/items")
-        params = {
-            "limit": 20
-        }
+    def items(
+        self,
+        item_class: type[ItemT],
+        *,
+        parent_item_id: str | None = None,
+    ) -> list[ItemT]:
+        if item_class is Item:
+            item_type = None
+        else:
+            item_type = item_class.json_type()
+
+        url = "https://api.miro.com/v2/boards/" + urllib.parse.quote(self.id) + "/items"
+        params: dict[str, Any] = {"limit": 20}
         if item_type is not None:
-            params['type'] = item_type
+            params["type"] = item_type
         if parent_item_id is not None:
-            params['parent_item_id'] = parent_item_id
-        items = []
-        item_ids = set()
+            params["parent_item_id"] = parent_item_id
+        items: list[ItemT] = []
+        item_ids: set[str] = set()
         # In late May and early June 2025, the 'data' element in the JSON item
         # list sometimes contained garbage (e.g. wrong colors). I added this
         # code to see whether getting it via the item ID would help... which it
@@ -320,160 +368,220 @@ class Board(object):
         # it works correctly again.
         force_item_fetch = False
         while True:
-            response = self.client._make_auth_request(request=requests.get,
-                                                      url=url,
-                                                      params=params)
+            assert self.client is not None
+            response = (
+                self.client._make_auth_request(  # pyright: ignore[reportPrivateUsage]
+                    request=requests.get, url=url, params=params
+                )
+            )
             json = response.json()
-            for item_data in json['data']:
-                assert item_type is None or item_data['type'] == item_type
-                if item_data['id'] not in item_ids:
+            for item_data in json["data"]:
+                assert item_type is None or item_data["type"] == item_type
+                if item_data["id"] not in item_ids:
                     if force_item_fetch:
-                        item = self.item_by_type_and_id(
-                            item_data['type'], item_data['id'],
-                            compare_with_json=item_data)
+                        item = item_class.by_id(
+                            id=item_data["id"],
+                            board=self,
+                            compare_with_json=item_data,
+                        )
                     else:
-                        item = Item._from_json(item_data, board=self)
-                    assert item_type is None or item.type == item_type
+                        item = item_class(json=item_data, board=self)
+                    assert isinstance(item, item_class)
+                    assert item.type == item_type
+                    assert item.id is not None
                     items.append(item)
                     item_ids.add(item.id)
-            if 'cursor' not in json:
+            if "cursor" not in json:
                 break
-            params['cursor'] = json['cursor']
+            params["cursor"] = json["cursor"]
         return items
 
-    def frames(self, parent_item_id=None):
-        return self.items(item_type='frame',
-                          parent_item_id=parent_item_id)
+    def frames(self, parent_item_id: str | None = None) -> list["Frame"]:
+        return self.items(Frame, parent_item_id=parent_item_id)
 
-    def sticky_notes(self, parent_item_id=None):
-        return self.items(item_type='sticky_note',
-                          parent_item_id=parent_item_id)
+    def sticky_notes(self, parent_item_id: str | None = None) -> list["StickyNote"]:
+        return self.items(StickyNote, parent_item_id=parent_item_id)
 
-    def item_by_id(self, item_id, *, subdir="items", expected_type=None,
-                   compare_with_json=None):
-        url = ("https://api.miro.com/v2/boards/" + urllib.parse.quote(self.id)
-               + "/" + subdir + "/" + urllib.parse.quote(item_id))
-        response = self.client._make_auth_request(request=requests.get,
-                                                  url=url)
+    def item_by_id(
+        self,
+        item_id: str,
+        *,
+        subdir: str = "items",
+        expected_type: str | None = None,
+        compare_with_json: dict[str, Any] | None = None,
+    ) -> "Item":
+        url = (
+            "https://api.miro.com/v2/boards/"
+            + urllib.parse.quote(self.id)
+            + "/"
+            + subdir
+            + "/"
+            + urllib.parse.quote(item_id)
+        )
+        assert self.client is not None
+        try:
+            response = (
+                self.client._make_auth_request(  # pyright: ignore[reportPrivateUsage]
+                    request=requests.get, url=url
+                )
+            )
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == requests.codes.not_found:
+                raise KeyError(
+                    f"No item found with id '{item_id}' on board '{self.id}'"
+                )
+            else:
+                raise
         json = response.json()
-        if expected_type is not None and json['type'] != expected_type:
-            ext_id = subdir + '/' + urllib.parse.quote(item_id)
-            raise ValueError(f"Expected type '{expected_type}', got"
-                             f" '{json['type']}' for item .../{ext_id}")
+        if expected_type is not None and json["type"] != expected_type:
+            ext_id = subdir + "/" + urllib.parse.quote(item_id)
+            raise ValueError(
+                f"Expected type '{expected_type}', got"
+                f" '{json['type']}' for item .../{ext_id}"
+            )
         if compare_with_json is not None:
             if json == compare_with_json:
-                print(f"(M) New JSON for {item_id} matches old",
-                      file=sys.stderr)
+                print(f"(M) New JSON for {item_id} matches old", file=sys.stderr)
             else:
-                print(f"(M) New JSON for {item_id} DOESN'T match old:\n"
-                      f"--- old ---\n{compare_with_json}\n"
-                      f"--- new ---\n{json}\n--- --- ---",
-                      file=sys.stderr)
-        return Item._from_json(json, board=self)
+                print(
+                    f"(M) New JSON for {item_id} DOESN'T match old:\n"
+                    f"--- old ---\n{compare_with_json}\n"
+                    f"--- new ---\n{json}\n--- --- ---",
+                    file=sys.stderr,
+                )
+        return Item._from_json(json, board=self)  # pyright: ignore[reportPrivateUsage]
 
-    def item_by_type_and_id(self, item_type, item_id,
-                            *, compare_with_json=None):
-        subclass = Item._get_subclass(item_type)
-        item = subclass.by_id(id=item_id, board=self,
-                              compare_with_json=compare_with_json)
+    def item_by_type_and_id(
+        self,
+        item_type: str,
+        item_id: str,
+        *,
+        compare_with_json: dict[str, Any] | None = None,
+    ) -> "Item":
+        subclass = Item._get_subclass(item_type)  # pyright: ignore[reportPrivateUsage]
+        assert subclass is not None
+        item = subclass.by_id(
+            id=item_id, board=self, compare_with_json=compare_with_json
+        )
         assert item.type == item_type
         return item
 
-    def groups(self):
-        url = ("https://api.miro.com/v2/boards/" + urllib.parse.quote(self.id)
-               + "/groups")
-        params = {
-            "limit": 20
-        }
-        items = []
-        item_ids = set()
+    def groups(self) -> list["Group"]:
+        url = (
+            "https://api.miro.com/v2/boards/" + urllib.parse.quote(self.id) + "/groups"
+        )
+        params: dict[str, Any] = {"limit": 20}
+        items: list["Group"] = []
+        item_ids: set[str] = set()
         # The 'data' element in the JSON returned by the groups query is
         # suspect; for example, the items list may be incomplete. (Last checked
         # 2025-06-15.) We force re-fetching each group by ID, instead.
         force_group_fetch = True
         while True:
-            response = self.client._make_auth_request(request=requests.get,
-                                                      url=url,
-                                                      params=params)
+            assert self.client is not None
+            response = (
+                self.client._make_auth_request(  # pyright: ignore[reportPrivateUsage]
+                    request=requests.get, url=url, params=params
+                )
+            )
             json = response.json()
-            for group_data in json['data']:
-                if group_data['id'] not in item_ids:
+            for group_data in json["data"]:
+                if group_data["id"] not in item_ids:
                     if force_group_fetch:
-                        items.append(Group.by_id(group_data['id'], board=self))
+                        item = Group.by_id(group_data["id"], board=self)
                         # To check whether the groups query is still bad, add:
                         #             compare_with_json=group_data))
                     else:
-                        items.append(Item._from_json(group_data, board=self))
-                    item_ids.add(items[-1].id)
-            if 'cursor' not in json:
+                        item = Group._from_json(  # pyright: ignore[reportPrivateUsage]
+                            group_data, board=self
+                        )
+                    assert item.id is not None
+                    items.append(item)
+                    item_ids.add(item.id)
+            if "cursor" not in json:
                 break
-            params['cursor'] = json['cursor']
+            params["cursor"] = json["cursor"]
         return items
 
 
 # ===== Items on a Miro board =====
 
+
 class Item(object):
     """An item from a Miro board."""
 
-    __classes = dict()
+    __classes: dict[str, Type["Item"]] = dict()
 
-    def __init__(self, *, json, board=None):
+    def __init__(self, *, json: dict[str, Any], board: Board | None = None):
         self.__json = json
         self.__board = board
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         cln = type(self).__name__
         if cln == "Item":
             return f"{cln}(type={self.type!r}, id={self.id!r}, ...)"
         else:
             return f"{cln}(id={self.id!r}, ...)"
 
-    def __eq__(self, other):
-        return (isinstance(self, Item) and isinstance(other, Item) and
-                self.type is not None and
-                self.type == other.type and
-                self.board is not None and
-                self.board == other.board and
-                self.id is not None and
-                self.id == other.id)
+    def __eq__(self, other: Any) -> bool:
+        return (
+            isinstance(other, Item)
+            and self.type == other.type
+            and self.board is not None
+            and self.board == other.board
+            and self.id == other.id
+        )
 
     @classmethod
-    def _from_json(cls, json, board=None):
-        assert 'type' in json
-        subclass = cls._get_subclass(json['type'],
-                                     fallback=Item)
+    def _from_json(
+        cls: type[ItemT], json: dict[str, Any], board: Board | None = None
+    ) -> ItemT:
+        assert "type" in json
+        subclass = cls._get_subclass(json["type"], fallback=Item)
+        assert subclass is not None
+        assert issubclass(subclass, cls)
         return subclass(json=json, board=board)
 
     @classmethod
-    def _register_subclass(cls):
+    def _register_subclass(cls) -> dict[str, Type["Item"]]:
         assert cls.json_type() not in cls.__classes
         cls.__classes[cls.json_type()] = cls
         return cls.__classes
 
     @classmethod
-    def _get_subclass(cls, item_type, fallback=None):
+    def _get_subclass(
+        cls, item_type: str, fallback: Type["Item"] | None = None
+    ) -> Type["Item"] | None:
         return cls.__classes.get(item_type, fallback)
 
     @classmethod
-    def by_id(cls, id, *, board, compare_with_json=None):
-        item = board.item_by_id(id, subdir=cls.request_subdir(),
-                                expected_type=cls.json_type(),
-                                compare_with_json=compare_with_json)
+    def by_id(
+        cls: type[ItemT],
+        id: str,
+        *,
+        board: Board,
+        compare_with_json: dict[str, Any] | None = None,
+    ) -> ItemT:
+        item = board.item_by_id(
+            id,
+            subdir=cls.request_subdir(),
+            expected_type=cls.json_type(),
+            compare_with_json=compare_with_json,
+        )
         assert type(item) is cls, f"Expected {cls}, got {type(item)}"
         return item
 
     @property
-    def _json(self):
+    def json(self) -> dict[str, Any]:
         return self.__json
 
     @property
-    def board(self):
+    def board(self) -> Board | None:
         return self.__board
 
-    def _get_property(self, *keys):
+    def _get_property(self, *keys: str) -> Any:
         try:
-            node = self._json
+            node: Any = self.json
             for key in keys:
                 node = node[key]
             return node
@@ -485,198 +593,228 @@ class Item(object):
             return None
 
     @property
-    def id(self):
-        return self._get_property('id')
+    def id(self) -> str:
+        id = self._get_property("id")
+        assert id is not None, f"Item {self!r} has no id"
+        return id
 
     @property
-    def type(self):
-        return self._get_property('type')
+    def type(self) -> str:
+        type = self._get_property("type")
+        assert type is not None, f"Item {self!r} has no type"
+        return type
 
     @property
-    def link(self):
-        return self._get_property('links', 'self')
+    def link(self) -> str | None:
+        return self._get_property("links", "self")
 
     @property
-    def parent_id(self):
-        return self._get_property('parent', 'id')
+    def parent_id(self) -> str | None:
+        return self._get_property("parent", "id")
 
     @property
-    def parent(self):
+    def parent(self) -> "Item | None":
         parent_id = self.parent_id
         if parent_id is None:
             return None
         else:
+            assert self.board is not None
             return self.board.item_by_id(parent_id)
 
     @property
-    def fill_color(self):
-        return self._get_property('style', 'fillColor')
+    def fill_color(self) -> str | None:
+        return self._get_property("style", "fillColor")
 
     @property
-    def size(self):
-        geometry = self._get_property('geometry')
+    def size(self) -> tuple[float, float] | None:
+        geometry = self._get_property("geometry")
         if geometry is None:
             return None
-        return (geometry['width'], geometry['height'])
+        return (geometry["width"], geometry["height"])
 
     @property
-    def relative_position(self):
+    def relative_position(self) -> tuple[str | None, float, float] | None:
         # TODO: Add absolute_position too?
-        position = self._get_property('position')
+        position = self._get_property("position")
         if position is None:
             return None
-        if (position['relativeTo'] == 'parent_top_left'
-                and position['origin'] == 'center'):
-            return (self.parent_id, position['x'], position['y'])
-        if (position['relativeTo'] == 'canvas_center'
-                and position['origin'] == 'center'):
-            return (None, position['x'], position['y'])  # allow global as rel.
+        if (
+            position["relativeTo"] == "parent_top_left"
+            and position["origin"] == "center"
+        ):
+            return (self.parent_id, position["x"], position["y"])
+        if position["relativeTo"] == "canvas_center" and position["origin"] == "center":
+            return (None, position["x"], position["y"])  # allow global as rel.
         return None
+
+    @staticmethod  # there's no @staticproperty!
+    def json_type() -> str:
+        raise NotImplementedError(
+            "json_type() needs to be implemented by subclasses of Item"
+        )
+
+    @staticmethod  # there's no @staticproperty!
+    def request_subdir() -> str:
+        raise NotImplementedError(
+            "request_subdir() needs to be implemented by subclasses of Item"
+        )
 
 
 class Frame(Item):
     """A frame item from a Miro board."""
 
     @staticmethod  # there's no @staticproperty!
-    def json_type():
-        return 'frame'
+    def json_type() -> str:
+        return "frame"
 
     @staticmethod  # there's no @staticproperty!
-    def request_subdir():
-        return 'frames'
+    def request_subdir() -> str:
+        return "frames"
 
     @property
-    def text(self):
-        return self._get_property('data', 'title')
+    def text(self) -> str | None:
+        return self._get_property("data", "title")
 
-    def items(self, item_type=None):
-        return self.board.items(item_type=item_type, parent_item_id=self.id)
+    def items(self, item_class: type[ItemT]) -> list[ItemT]:
+        assert self.board is not None
+        return self.board.items(item_class, parent_item_id=self.id)
 
-    def sticky_notes(self):
-        return self.items(item_type='sticky_note')
+    def sticky_notes(self) -> list["StickyNote"]:
+        return self.items(StickyNote)
 
 
-Frame._register_subclass()
+Frame._register_subclass()  # pyright: ignore[reportPrivateUsage]
 
 
 class StickyNote(Item):
     """A sticky_note item from a Miro board."""
 
     @staticmethod  # there's no @staticproperty!
-    def json_type():
-        return 'sticky_note'
+    def json_type() -> str:
+        return "sticky_note"
 
     @staticmethod  # there's no @staticproperty!
-    def request_subdir():
-        return 'sticky_notes'
+    def request_subdir() -> str:
+        return "sticky_notes"
 
     @property
-    def text(self):
-        return html2text(self._get_property('data', 'content'))
+    def text(self) -> str:
+        return html2text(self._get_property("data", "content"))
 
 
-StickyNote._register_subclass()
+StickyNote._register_subclass()  # pyright: ignore[reportPrivateUsage]
 
 
 class Shape(Item):
     """A shape item from a Miro board."""
 
     @staticmethod  # there's no @staticproperty!
-    def json_type():
-        return 'shape'
+    def json_type() -> str:
+        return "shape"
 
     @staticmethod  # there's no @staticproperty!
-    def request_subdir():
-        return 'shapes'
+    def request_subdir() -> str:
+        return "shapes"
 
     @property
-    def text(self):
-        return html2text(self._get_property('data', 'content'))
+    def text(self) -> str:
+        return html2text(self._get_property("data", "content"))
 
     @property
-    def shape(self):
-        return self._get_property('data', 'shape')
+    def shape(self) -> str | None:
+        return self._get_property("data", "shape")
 
 
-Shape._register_subclass()
+Shape._register_subclass()  # pyright: ignore[reportPrivateUsage]
 
 
 class Text(Item):
     """A text item from a Miro board."""
 
     @staticmethod  # there's no @staticproperty!
-    def json_type():
-        return 'text'
+    def json_type() -> str:
+        return "text"
 
     @staticmethod  # there's no @staticproperty!
-    def request_subdir():
-        return 'texts'
+    def request_subdir() -> str:
+        return "texts"
 
     @property
-    def text(self):
-        return html2text(self._get_property('data', 'content'))
+    def text(self) -> str:
+        return html2text(self._get_property("data", "content"))
 
 
-Text._register_subclass()
+Text._register_subclass()  # pyright: ignore[reportPrivateUsage]
 
 
 class Group(Item):
     """A group from a Miro board."""
 
     @staticmethod  # there's no @staticproperty!
-    def json_type():
-        return 'group'
+    def json_type() -> str:
+        return "group"
 
     @staticmethod  # there's no @staticproperty!
-    def request_subdir():
-        return 'groups'
+    def request_subdir() -> str:
+        return "groups"
 
     @property
-    def item_ids(self):
-        return self._get_property('data', 'items')
+    def item_ids(self) -> list[str] | None:
+        return self._get_property("data", "items")
 
     @property
-    def items(self):
+    def items(self) -> list[Item]:
+        assert self.board is not None
+        assert self.item_ids is not None
         return [self.board.item_by_id(str(i)) for i in self.item_ids]
 
 
-Group._register_subclass()
+Group._register_subclass()  # pyright: ignore[reportPrivateUsage]
 
 
 # ===== managing saved authentication and the client object =====
 
-def get_auth_file_name():
+
+def get_auth_file_name() -> str:
     home_dir = os.getenv("HOME")
     assert home_dir is not None, "HOME needs to be set"
     return home_dir + "/.config/bert_miro/auth.json"
 
 
-def read_auth_data():
+def read_auth_data() -> dict[str, Any]:
     with open(get_auth_file_name(), "r", encoding="utf-8") as f:
         auth = json.load(f)
-    assert 'app_name' in auth
-    assert 'client_id' in auth
-    assert 'client_secret' in auth
+    assert "app_name" in auth
+    assert "client_id" in auth
+    assert "client_secret" in auth
     return auth
 
 
-def _update_auth(old_auth, client_auth, save=True):
+def _update_auth(
+    old_auth: dict[str, Any], client_auth: Auth, save: bool = True
+) -> dict[str, Any]:
     new_auth = dict(old_auth)
-    new_auth['access_token'] = client_auth.access_token
-    new_auth['refresh_token'] = client_auth.refresh_token
+    new_auth["access_token"] = client_auth.access_token
+    new_auth["refresh_token"] = client_auth.refresh_token
     if save and new_auth != old_auth:
         with open(get_auth_file_name(), "w", encoding="utf-8") as f:
             json.dump(new_auth, f)
     return new_auth
 
 
-def create_client(auth=None, allow_user_input=True, reauth_and_save=True):
+def create_client(
+    auth: dict[str, Any] | None = None,
+    allow_user_input: bool = True,
+    reauth_and_save: bool = True,
+) -> Client:
     if auth is None:
         auth = read_auth_data()
-    client = Client(client_id=auth.get('client_id', None),
-                    client_secret=auth.get('client_secret', None),
-                    refresh_token=auth.get('refresh_token', None),
-                    access_token=auth.get('access_token', None))
+    client = Client(
+        client_id=auth.get("client_id", None),
+        client_secret=auth.get("client_secret", None),
+        refresh_token=auth.get("refresh_token", None),
+        access_token=auth.get("access_token", None),
+    )
     if reauth_and_save:
         updated = client.authenticate(allow_user_input=allow_user_input)
         if updated is not None:
@@ -686,8 +824,14 @@ def create_client(auth=None, allow_user_input=True, reauth_and_save=True):
 
 # ===== getting a board/frame handle, with auth setup and logging =====
 
-def get_board(board_id, board_name, auth=None, verbosity=0):
-    verbosity_threshold, extra_msg = 2, ''
+
+def get_board(
+    board_id: str,
+    board_name: str,
+    auth: dict[str, Any] | None = None,
+    verbosity: int = 0,
+) -> Board:
+    verbosity_threshold, extra_msg = 2, ""
     client = create_client(auth=auth, reauth_and_save=False)
     try:
         board = client.board_by_id(board_id)
@@ -700,25 +844,31 @@ def get_board(board_id, board_name, auth=None, verbosity=0):
     if board is None:
         board = client.board_by_name(board_name)
         if board_name != board_id:
-            verbosity_threshold, extra_msg = 1, '*by name*, fix the ID!'
+            verbosity_threshold, extra_msg = 1, "*by name*, fix the ID!"
     assert board is not None, "No open board found"
     if verbosity >= verbosity_threshold:
-        print(f"(M) Selected board '{board.name}' ({board.id}){extra_msg}",
-              file=sys.stderr)
+        print(
+            f"(M) Selected board '{board.name}' ({board.id}){extra_msg}",
+            file=sys.stderr,
+        )
     return board
 
 
-def get_frame(board, frame_id, frame_name, verbosity=0):
-    verbosity_threshold, extra_msg = 1, ''
-    frame = Frame.by_id(frame_id, board=board)
-    if frame is None:
-        pass  # getting by name is unimplemented
+def get_frame(
+    board: Board, frame_id: str, frame_name: str, verbosity: int = 0
+) -> Frame:
+    verbosity_threshold, extra_msg = 1, ""
+    try:
+        frame = Frame.by_id(frame_id, board=board)
+    except KeyError:
+        raise  # getting by name is unimplemented
         # ... verbosity_threshold, extra_msg = 0, '*by name*, fix the ID!'
-    assert frame is not None, "No frame found"
     assert type(frame) is Frame, f"Bad type for frame: {type(frame)}"
     if verbosity >= verbosity_threshold:
-        print(f"(M) Selected frame '{frame.text}' ({frame.id}){extra_msg}",
-              file=sys.stderr)
+        print(
+            f"(M) Selected frame '{frame.text}' ({frame.id}){extra_msg}",
+            file=sys.stderr,
+        )
     return frame
 
 
@@ -732,11 +882,11 @@ def get_frame(board, frame_id, frame_name, verbosity=0):
 # print(client.board_by_name("Dvorniki tasks"))
 # print(client.board_by_name("ajshjaljs"))
 # board = client.board_by_id("uXjVPdpN6Vw=")
-# print(board.items())
+# print(board.items(Item))
 # print(board.frames())
-# print(board.sticky_notes()[0]._json)
-# print(board.items(item_type='shape')[0]._json)
-# print(board.items(item_type='text')[0]._json)
+# print(board.sticky_notes()[0].json)
+# print(board.items(Shape)[0].json)
+# print(board.items(Text)[0].json)
 
 # import regex
 # for s in board.sticky_notes():

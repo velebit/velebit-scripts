@@ -1,111 +1,129 @@
 #!/home/bert/.local/lib/python/venv/tasks/bin/python3
 # List all sticky notes, by frame, for the specified board.
 import argparse
-from bert_miro import get_board
+from bert_miro import get_board, Item, Frame
 
 
-def get_parent_with_id(item, parents_by_id=None):
+def get_parent_with_id(
+    item: Item, parents_by_id: dict[str, Item] | None = None
+) -> tuple[Item, str] | tuple[None, None]:
     parent_id = item.parent_id
     if parent_id is None:
         return (None, None)
-    try:
-        parent = parents_by_id[parent_id]
-    except (KeyError, TypeError):
-        parent = item.parent
-        try:
-            parents_by_id[parent_id] = parent
-        except Exception:
-            pass
+    if parents_by_id is not None and parent_id in parents_by_id:
+        return (parents_by_id[parent_id], parent_id)
+    parent = item.parent
+    assert parent is not None, f"Item {item.id} has parent_id {parent_id} but no parent"
+    if parents_by_id is not None:
+        parents_by_id[parent_id] = parent
     return (parent, parent_id)
 
 
-def get_enclosing_frame_name_and_id(item, parents_by_id=None):
+def get_enclosing_frame_name_and_id(
+    item: Item, parents_by_id: dict[str, Item] | None = None
+) -> tuple[str | None, str] | tuple[None, None]:
     while True:
-        item, item_id = get_parent_with_id(item, parents_by_id)
-        if item is None:
-            return (None, item_id)
-        if item.type == 'frame':
-            return (item.text, item_id)
-        # keep looking at ancestors
+        p_item, p_item_id = get_parent_with_id(item, parents_by_id)
+        if p_item is None or p_item_id is None:
+            assert p_item is None and p_item_id is None
+            return (None, None)
+        if type(p_item) is Frame:
+            return (p_item.text, p_item_id)
+        item = p_item
 
 
-def print_sticky_notes(board_key, verbosity=0,
-                       print_note_id=False, print_note_url=False,
-                       print_color=True,
-                       print_frame=True, print_frame_id=False,
-                       print_geometry=False, print_times=False):
+def print_sticky_notes(
+    board_key: str,
+    verbosity: int = 0,
+    print_note_id: bool = False,
+    print_note_url: bool = False,
+    print_color: bool = True,
+    print_frame: bool = True,
+    print_frame_id: bool = False,
+    print_geometry: bool = False,
+    print_times: bool = False,
+) -> None:
     board = get_board(board_key, board_key, verbosity=verbosity)
-    parents_by_id = {}
-    notes_by_frame_id = {}
+    parents_by_id: dict[str, Item] = {}
+    notes_by_frame_id: dict[str, list[dict[str, str]]] = {}
 
     for note in board.sticky_notes():
         note_name = note.text
         note_id = note.id
-        frame_name, frame_id = get_enclosing_frame_name_and_id(
-            note, parents_by_id)
+        frame_name, frame_id = get_enclosing_frame_name_and_id(note, parents_by_id)
+        if frame_id is None:
+            assert frame_name is None
+            continue
 
         if frame_id not in notes_by_frame_id:
             notes_by_frame_id[frame_id] = []
-        notes_by_frame_id[frame_id].append({
-            'id': note_id,
-            'name': note_name,
-            # Note: note.link is API-oriented, can't be used from e.g.
-            #   a browser! But we can construct a browser-compatible URI.
-            'link': ('https://miro.com/app/board/' +
-                     board_key + '/?moveToWidget=' +
-                     note_id),
-            'fill_color': note.fill_color,
-            'frame_id':  frame_id,
-            'frame_name': frame_name,
-            'size': note.size,
-            'relative_position': note.relative_position,
-            'time_created': note._json['createdAt'],
-            'time_modified': note._json['modifiedAt'],
-        })
+        notes_by_frame_id[frame_id].append(
+            {
+                "id": repr(note_id),
+                "name": repr(note_name),
+                # Note: note.link is API-oriented, can't be used from e.g.
+                #   a browser! But we can construct a browser-compatible URI.
+                "link": repr(
+                    "https://miro.com/app/board/"
+                    + board_key
+                    + "/?moveToWidget="
+                    + note_id
+                ),
+                "fill_color": repr(note.fill_color),
+                "frame_id": repr(frame_id),
+                "frame_name": repr(frame_name),
+                "size": repr(note.size),
+                "relative_position": repr(note.relative_position),
+                "time_created": repr(note.json["createdAt"]),
+                "time_modified": repr(note.json["modifiedAt"]),
+            }
+        )
 
     for note_list in notes_by_frame_id.values():
         for note_info in note_list:
-            to_print = []
+            to_print: list[str] = []
             if print_note_id:
-                to_print.append(note_info['id'])
+                to_print.append(note_info["id"])
             if print_note_url:
-                to_print.append(note_info['link'])
+                to_print.append(note_info["link"])
             if print_times:
-                to_print.append(note_info['time_created'])
-                to_print.append(note_info['time_modified'])
-            to_print.append(note_info['name'])
+                to_print.append(note_info["time_created"])
+                to_print.append(note_info["time_modified"])
+            to_print.append(note_info["name"])
             if print_color:
-                to_print.append(note_info['fill_color'])
+                to_print.append(note_info["fill_color"])
             if print_frame_id:
-                to_print.append(note_info['frame_id'])
+                to_print.append(note_info["frame_id"])
             if print_frame:
-                to_print.append(note_info['frame_name'])
+                to_print.append(note_info["frame_name"])
             if print_geometry:
-                to_print.append(note_info['relative_position'])
-                to_print.append(note_info['size'])
-            print("    " + ", ".join([repr(p) for p in to_print]))
+                to_print.append(note_info["relative_position"])
+                to_print.append(note_info["size"])
+            print("    " + ", ".join(to_print))
 
 
-def parse_args():
+def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument('-v', '--verbose', action='count', default=0)
-    parser.add_argument('-i', '--id', action='store_true')
-    parser.add_argument('-u', '--url', action='store_true')
-    parser.add_argument('board')
+    parser.add_argument("-v", "--verbose", action="count", default=0)
+    parser.add_argument("-i", "--id", action="store_true")
+    parser.add_argument("-u", "--url", action="store_true")
+    parser.add_argument("board")
     settings = parser.parse_args()
     return settings
 
 
-def main():
+def main() -> None:
     settings = parse_args()
-    print_sticky_notes(settings.board, verbosity=settings.verbose,
-                       print_color=(settings.verbose >= 2),
-                       print_note_id=settings.id,
-                       print_note_url=settings.url,
-                       print_frame_id=settings.id,
-                       print_geometry=(settings.verbose >= 3),
-                       print_times=(settings.verbose >= 4),
-                       )
+    print_sticky_notes(
+        settings.board,
+        verbosity=settings.verbose,
+        print_color=(settings.verbose >= 2),
+        print_note_id=settings.id,
+        print_note_url=settings.url,
+        print_frame_id=settings.id,
+        print_geometry=(settings.verbose >= 3),
+        print_times=(settings.verbose >= 4),
+    )
 
 
 if __name__ == "__main__":

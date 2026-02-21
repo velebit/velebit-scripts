@@ -4,13 +4,13 @@
 from bert_miro import create_client
 
 
-def print_boards():
+def print_boards() -> None:
     client = create_client()
     for board in client.boards():
         print("    {}, {}".format(repr(board.id), repr(board.name)))
 
 
-def main():
+def main() -> None:
     print_boards()
 
 

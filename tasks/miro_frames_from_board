@@ -4,46 +4,54 @@ import argparse
 from bert_miro import get_board
 
 
-def print_frames(board_key, verbosity=0,
-                 print_frame_id=True, print_frame_url=False,
-                 print_color=False,
-                 print_geometry=False):
+def print_frames(
+    board_key: str,
+    verbosity: int = 0,
+    print_frame_id: bool = True,
+    print_frame_url: bool = False,
+    print_color: bool = False,
+    print_geometry: bool = False,
+) -> None:
     board = get_board(board_key, board_key, verbosity=verbosity)
     for frame in board.frames():
-        to_print = []
+        to_print: list[str] = []
         frame_name = frame.text
         frame_id = frame.id
         if print_frame_id:
-            to_print.append(frame_id)
+            to_print.append(repr(frame_id))
         if print_frame_url:
             # Note: frame.link is API-oriented, can't be used from e.g.
             # a browser!
-            to_print.append('https://miro.com/app/board/' +
-                            board_key + '/?moveToWidget=' + frame_id)
-        to_print.append(frame_name)
+            to_print.append(
+                "https://miro.com/app/board/" + board_key + "/?moveToWidget=" + frame_id
+            )
+        to_print.append(repr(frame_name))
         if print_color:
-            to_print.append(frame.fill_color)
+            to_print.append(repr(frame.fill_color))
         if print_geometry:
-            to_print.append(frame.relative_position)
-            to_print.append(frame.size)
-        print("    " + ", ".join([repr(p) for p in to_print]))
+            to_print.append(repr(frame.relative_position))
+            to_print.append(repr(frame.size))
+        print("    " + ", ".join(to_print))
 
 
-def parse_args():
+def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument('-v', '--verbose', action='count', default=0)
-    parser.add_argument('board')
+    parser.add_argument("-v", "--verbose", action="count", default=0)
+    parser.add_argument("board")
     settings = parser.parse_args()
     return settings
 
 
-def main():
+def main() -> None:
     settings = parse_args()
-    print_frames(settings.board, verbosity=settings.verbose,
-                 print_frame_id=True,
-                 print_frame_url=(settings.verbose >= 2),
-                 print_color=(settings.verbose >= 1),
-                 print_geometry=(settings.verbose >= 3))
+    print_frames(
+        settings.board,
+        verbosity=settings.verbose,
+        print_frame_id=True,
+        print_frame_url=(settings.verbose >= 2),
+        print_color=(settings.verbose >= 1),
+        print_geometry=(settings.verbose >= 3),
+    )
 
 
 if __name__ == "__main__":
