@@ -1,6 +1,6 @@
 #!/not-executable/python3
 from collections.abc import Callable, Collection, Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import dateutil
 import dateutil.parser
 import json
@@ -22,7 +22,7 @@ class CardInfo:
 
     name: str
     desc: str | None = None
-    cards: list[Card] = []
+    cards: list[Card] = field(default_factory=list)  # pyright: ignore[reportUnknownVariableType]
 
 
 # A label-rule dict mapping rule-key constants to sets of label objects

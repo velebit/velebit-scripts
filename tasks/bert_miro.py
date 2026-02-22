@@ -385,9 +385,10 @@ class Board(object):
                             compare_with_json=item_data,
                         )
                     else:
-                        item = item_class(json=item_data, board=self)
+                        item = item_class._from_json(json=item_data, board=self)  # pyright: ignore[reportPrivateUsage]
                     assert isinstance(item, item_class)
-                    assert item.type == item_type
+                    if item_type is not None:
+                        assert item.type == item_type, f"type mismatch: expected {item_type}, got {item.type}"
                     assert item.id is not None
                     items.append(item)
                     item_ids.add(item.id)
@@ -663,6 +664,10 @@ class Item(object):
 class Frame(Item):
     """A frame item from a Miro board."""
 
+    def __repr__(self) -> str:
+        cln = type(self).__name__
+        return f"{cln}(id={self.id!r}, text={self.text!r}, ...)"
+
     @staticmethod  # there's no @staticproperty!
     def json_type() -> str:
         return "frame"
@@ -689,6 +694,10 @@ Frame._register_subclass()  # pyright: ignore[reportPrivateUsage]
 class StickyNote(Item):
     """A sticky_note item from a Miro board."""
 
+    def __repr__(self) -> str:
+        cln = type(self).__name__
+        return f"{cln}(id={self.id!r}, text={self.text!r}, ...)"
+
     @staticmethod  # there's no @staticproperty!
     def json_type() -> str:
         return "sticky_note"
@@ -707,6 +716,10 @@ StickyNote._register_subclass()  # pyright: ignore[reportPrivateUsage]
 
 class Shape(Item):
     """A shape item from a Miro board."""
+
+    def __repr__(self) -> str:
+        cln = type(self).__name__
+        return f"{cln}(id={self.id!r}, shape={self.shape!r}, text={self.text!r}, ...)"
 
     @staticmethod  # there's no @staticproperty!
     def json_type() -> str:
@@ -730,6 +743,10 @@ Shape._register_subclass()  # pyright: ignore[reportPrivateUsage]
 
 class Text(Item):
     """A text item from a Miro board."""
+
+    def __repr__(self) -> str:
+        cln = type(self).__name__
+        return f"{cln}(id={self.id!r}, text={self.text!r}, ...)"
 
     @staticmethod  # there's no @staticproperty!
     def json_type() -> str:
