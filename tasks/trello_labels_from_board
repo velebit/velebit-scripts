@@ -4,48 +4,78 @@ import argparse
 from collections import defaultdict
 from frozendict import frozendict
 import itertools
-import trello
-from bert_trello import get_board, create_auth_token, read_auth_data
+from typing import Any, Mapping, Protocol, Sequence, cast
+import trello  # type: ignore[import-untyped]
+import trello.exceptions  # type: ignore[import-untyped]
+from bert_trello import get_board, create_auth_token, read_auth_data, Board, Label
+
+
+class _LabelLike(Protocol):
+    id: str
+    name: str
+    color: str
 
 
 # Colors documented in the Trello API, in order shown in Trello GUI.
-base_color_gui_order = ('green', 'yellow', 'orange', 'red', 'purple', 'blue',
-                        'sky', 'lime', 'pink', 'black')
+base_color_gui_order: tuple[str, ...] = (
+    "green",
+    "yellow",
+    "orange",
+    "red",
+    "purple",
+    "blue",
+    "sky",
+    "lime",
+    "pink",
+    "black",
+)
 
 # Color variations: *undocumented* in the API, but shown and set by the GUI.
 # The GUI hover popups calls these "subtle X", "X", and "bold X", respectively.
-all_color_gui_order = tuple((b+s for b in base_color_gui_order
-                             for s in ('_light', '', '_dark')))
+all_color_gui_order: tuple[str, ...] = tuple(
+    (b + s for b in base_color_gui_order for s in ("_light", "", "_dark"))
+)
 
 # Mapping from colors to ascending integers
-color_key = frozendict(zip(all_color_gui_order, itertools.count(1)))
+color_key: Mapping[str, int] = dict(zip(all_color_gui_order, itertools.count(1)))
 
 
-def get_label_uses(board):
-    label_uses = defaultdict(int)
-    filters = {'filter': 'visible', 'fields': 'idLabels'}
-    board_info = board.client.fetch_json('/boards/' + board.id + '/cards/',
-                                         query_params=filters)
+def get_label_uses(board: Board) -> Mapping[str, int]:
+    label_uses: dict[str, int] = defaultdict(int)
+    filters = {"filter": "visible", "fields": "idLabels"}
+    board_info = cast(
+        Sequence[Mapping[str, Any]],
+        board.client.fetch_json(  # type: ignore[attr-defined]
+            "/boards/" + board.id + "/cards/",  # type: ignore[attr-defined]
+            query_params=filters,
+        ),
+    )
     for card_info in board_info:
-        for label_id in card_info['idLabels']:
+        label_ids = cast(Sequence[str], card_info.get("idLabels", []))
+        for label_id in label_ids:
             label_uses[label_id] += 1
-    return frozendict(label_uses)
+    return cast(Mapping[str, int], frozendict(label_uses))
 
 
-def print_labels(board_key, settings):
-    label_uses = None
+def print_labels(board_key: str, settings: argparse.Namespace) -> None:
+    label_uses: Mapping[str, int] | None = None
 
-    def sort_by_color(label):
-        return color_key.get(label.color, 9999)
+    def sort_by_color(label: Label) -> int:
+        return color_key.get(cast(str, label.color), 9999)  # type: ignore[attr-defined]
 
-    def sort_by_uses(label):
-        return label_uses.get(label.id, 0)
+    def sort_by_uses(label: Label) -> int:
+        assert label_uses is not None
+        return label_uses.get(cast(str, label.id), 0)  # type: ignore[attr-defined]
 
     try:
         board = get_board(board_key, board_key, verbosity=settings.verbose)
     except trello.exceptions.Unauthorized:
-        board = get_board(board_key, board_key, verbosity=settings.verbose,
-                          auth=create_auth_token(read_auth_data()))
+        board = get_board(
+            board_key,
+            board_key,
+            verbosity=settings.verbose,
+            auth=create_auth_token(read_auth_data()),
+        )
     # The GUI orders labels by color, then alphabetically within each color.
     # We match that unless --count was specified, then it's numeric.
     label_sort_func = sort_by_color
@@ -55,30 +85,34 @@ def print_labels(board_key, settings):
             label_sort_func = sort_by_uses
     # Use a Schwartzian transform. Tuples are ordered for comparability.
     # https://docs.python.org/3/howto/sorting.html#decorate-sort-undecorate
-    labels = [(label_sort_func(label), label.name, i, label)
-              for i, label in enumerate(board.get_labels())]
+    labels_iter = cast(Sequence[Label], board.get_labels())
+    labels: list[tuple[int, str, int, Label]] = [
+        (label_sort_func(label), label.name, i, label)  # type: ignore[attr-defined]
+        for i, label in enumerate(labels_iter)
+    ]
     labels.sort()
     for _, _, _, label in labels:
-        fields = []
+        label = cast(_LabelLike, label)
+        fields: list[str] = []
         if settings.verbose > 0:
-            fields.append(label.id)
-        fields.append(label.name)
-        fields.append(label.color)
+            fields.append(repr(label.id))
+        fields.append(repr(label.name))
+        fields.append(repr(label.color))
         if label_uses is not None:
-            fields.append(label_uses.get(label.id, 0))
-        print(f"  {', '.join([repr(f) for f in fields])}")
+            fields.append(repr(label_uses.get(label.id, 0)))
+        print(f"  {', '.join(fields)}")
 
 
-def parse_args():
+def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument('-v', '--verbose', action='count', default=0)
-    parser.add_argument('-c', '--count', action='store_true')
-    parser.add_argument('board')
+    parser.add_argument("-v", "--verbose", action="count", default=0)
+    parser.add_argument("-c", "--count", action="store_true")
+    parser.add_argument("board")
     settings = parser.parse_args()
     return settings
 
 
-def main():
+def main() -> None:
     settings = parse_args()
     print_labels(settings.board, settings)
 

@@ -1,11 +1,11 @@
 #!/home/bert/.local/lib/python/venv/tasks/bin/python3
 # List all boards (name and ID) for the current user.
 import argparse
-import trello
+import trello.exceptions  # type: ignore[import-untyped]
 from bert_trello import create_client, create_auth_token, read_auth_data
 
 
-def print_boards(verbosity=0):
+def print_boards(verbosity: int = 0) -> None:
     client = create_client()
     try:
         boards = client.list_boards()
@@ -13,14 +13,21 @@ def print_boards(verbosity=0):
         client = create_client(create_auth_token(read_auth_data()))
         boards = client.list_boards()
     for board in boards:
-        if not board.closed or verbosity >= 1:
-            print("{}   {}, {}".format(('#' if board.closed else ' '),
-                                       repr(board.id), repr(board.name)))
+        board_closed = board.closed  # type: ignore[attr-defined]
+        if not board_closed or verbosity >= 1:
+            board_id: str = board.id  # type: ignore[attr-defined]
+            board_name: str = board.name  # type: ignore[attr-defined]
+            assert isinstance(board_id, str) and isinstance(board_name, str)
+            print(
+                "{}   {}, {}".format(
+                    ("#" if board_closed else " "), repr(board_id), repr(board_name)
+                )
+            )
 
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-v', '--verbose', action='count', default=0)
+    parser.add_argument("-v", "--verbose", action="count", default=0)
     settings = parser.parse_args()
     return settings
 

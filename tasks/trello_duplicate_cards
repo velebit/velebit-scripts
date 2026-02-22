@@ -6,8 +6,9 @@ from collections import defaultdict
 from functools import cache
 import re
 import sys
-import trello.exceptions
-from typing import Callable
+import trello  # type: ignore[import-untyped]
+import trello.exceptions  # type: ignore[import-untyped]
+from typing import Callable, Iterator
 from bert_trello import (
     get_board,
     create_auth_token,
@@ -15,51 +16,57 @@ from bert_trello import (
     get_any_list_by_id,
     is_card_template,
     print_cards,
+    Card,
 )
 
 
-def create_level_1():
+def create_level_1() -> defaultdict[bool, list[Card]]:
     # Note: specifying the factory argument by name (default_factory=...)
     # as documented on docs.python.org fails with Python 3.11
     return defaultdict(list)
 
 
-def create_level_2():
+def create_level_2() -> defaultdict[str, defaultdict[bool, list[Card]]]:
     return defaultdict(create_level_1)
 
 
 def name_is_done_list(list_name: str) -> bool:
-    return re.search(r"\b(?:done|gotovo)\b", list_name, re.IGNORECASE)
+    return bool(re.search(r"\b(?:done|gotovo)\b", list_name, re.IGNORECASE))
 
 
 @cache
-def is_done_list(board, list_id):
+def is_done_list(board: trello.Board, list_id: str) -> bool:
     tlist = get_any_list_by_id(board, list_id)
-    return name_is_done_list(tlist.name)
+    return name_is_done_list(tlist.name)  # type: ignore[attr-defined]
 
 
-def ignore_done_lists(cards):
-    return (c for c in cards if not is_done_list(c.board, c.list_id))
+def ignore_done_lists(cards: Iterator[trello.Card]) -> Iterator[trello.Card]:
+    return (c for c in cards if not is_done_list(c.board, c.list_id))  # type: ignore[attr-defined]
 
 
 def find_list(board: trello.Board, *, name_check: Callable[[str], bool]) -> trello.List:
     done_lists = [
         tlist
         for tlist in board.list_lists()
-        if not tlist.closed and name_check(tlist.name)
+        if not tlist.closed and name_check(tlist.name)  # type: ignore[attr-defined]
     ]
     if not done_lists:
-        raise ValueError(f"No 'done' list found on board {board.name!r}.")
+        raise ValueError(f"No 'done' list found on board {board.name!r}.")  # type: ignore[attr-defined]
     if len(done_lists) > 1:
         print(
-            f"Warning: Multiple 'done' lists found on board {board.name!r}: "
-            f" using {done_lists[0].name!r} and ignoring"
-            + ", ".join(repr(tlist.name) for tlist in done_lists[1:])
+            f"Warning: Multiple 'done' lists found on board {board.name!r}: "  # type: ignore[attr-defined]
+            f" using {done_lists[0].name!r} and ignoring"  # type: ignore[attr-defined]
+            + ", ".join(repr(tlist.name) for tlist in done_lists[1:])  # type: ignore[attr-defined]
         )
     return done_lists[0]
 
 
-def handle_cards(cards, settings, *, show_template=False):
+def handle_cards(
+    cards: list[trello.Card],
+    settings: argparse.Namespace,
+    *,
+    show_template: bool = False,
+) -> None:
     pcards = print_cards(
         cards,
         show_index=True if settings.ask else False,
@@ -75,7 +82,7 @@ def handle_cards(cards, settings, *, show_template=False):
             while True:
                 response = (
                     input(
-                        f"  What to do with card [{i+1}] {card.short_url}? "
+                        f"  What to do with card [{i+1}] {card.short_url}? "  # type: ignore[attr-defined]
                         "(r)emove, (a)rchive, move to (d)one, (s)kip: "
                     )
                     .strip()
@@ -83,35 +90,36 @@ def handle_cards(cards, settings, *, show_template=False):
                 )
                 if response == "r":
                     card.delete()
-                    print(f"Removed card {card.id!r}.")
+                    print(f"Removed card {card.id!r}.")  # type: ignore[attr-defined]
                     break
                 elif response == "a":
-                    card.set_closed(True)
-                    print(f"Archived card {card.id!r}.")
+                    card.set_closed(True)  # type: ignore[attr-defined]
+                    print(f"Archived card {card.id!r}.")  # type: ignore[attr-defined]
                     break
                 elif response == "d":
                     if done_list is None:
                         try:
                             done_list = find_list(
-                                card.board, name_check=name_is_done_list
+                                card.board,  # type: ignore[attr-defined]
+                                name_check=name_is_done_list,
                             )
                         except ValueError:
                             print(
-                                f"No 'done' list found on board {card.board.name!r};"
+                                f"No 'done' list found on board {card.board.name!r};"  # type: ignore[attr-defined]
                                 " cannot move card."
                             )
                             continue
-                    card.change_list(done_list.id)
-                    print(f"Moved card {card.id!r} to list {done_list.name!r}.")
+                    card.change_list(done_list.id)  # type: ignore[attr-defined]
+                    print(f"Moved card {card.id!r} to list {done_list.name!r}.")  # type: ignore[attr-defined]
                     break
                 elif response == "s":
-                    print(f"Skipped card {card.id!r}.")
+                    print(f"Skipped card {card.id!r}.")  # type: ignore[attr-defined]
                     break
                 else:
                     print("  Please answer 'r', 'a', 'd', or 's'.")
 
 
-def process_cards(board_key, settings):
+def process_cards(board_key: str, settings: argparse.Namespace) -> None:
     try:
         board = get_board(board_key, board_key, verbosity=settings.verbosity)
     except trello.exceptions.Unauthorized:
@@ -126,7 +134,8 @@ def process_cards(board_key, settings):
     if settings.card_filter:
         cards_iter = settings.card_filter(cards_iter)
     for card in cards_iter:
-        cards = seen[str(card.name)][is_card_template(card)]
+        card_name = card.name  # type: ignore[attr-defined]
+        cards = seen[card_name][is_card_template(card)]
         cards.append(card)
         if settings.verbosity >= 0:
             # NOTE: does not follow the specified output settings
@@ -169,7 +178,7 @@ def process_cards(board_key, settings):
                         handle_cards(non_templates, settings)
 
 
-def parse_args():
+def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=("Show duplicate cards and templates on a board.")
     )
@@ -272,7 +281,7 @@ def parse_args():
     return settings
 
 
-def main():
+def main() -> None:
     settings = parse_args()
     process_cards(settings.board, settings)
 

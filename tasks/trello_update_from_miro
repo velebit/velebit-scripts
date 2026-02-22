@@ -2,31 +2,34 @@
 # Create tasks based on a list of Miro tasks read from files or API.
 # See also: ~/scripts/user/trello_add_card
 import argparse
+from dataclasses import dataclass
 import enum
 import regex
 import sys
-import trello.exceptions
+from typing import Collection, Sequence
+import trello.exceptions  # type: ignore[import-untyped]
 import bert_miro as bm
 import bert_task_utilities as bu
 import bert_trello as bt
 
-MIRO_BOARD_ID, MIRO_BOARD_NAME = \
-    'uXjVPR8tBqw=', 'All the chores'
-MIRO_TRIAGE_FRAME_ID, MIRO_TRIAGE_FRAME_NAME = \
-    '3458764534889282821', 'A&#43;b short term tasks that need eval'
-MIRO_ACTIVE_FRAME_ID, MIRO_ACTIVE_FRAME_NAME = \
-    '3458764558974521944', 'Eisenhowered A&#43;b short term list'
-MIRO_PERIODIC_FRAME_ID, MIRO_PERIODIC_FRAME_NAME = \
-    '3458764632524709740', 'Periodic tasks'
-MIRO_DONE_FRAME_ID, MIRO_DONE_FRAME_NAME = \
-    '3458764534889282822', 'Done'
+MIRO_BOARD_ID, MIRO_BOARD_NAME = "uXjVPR8tBqw=", "All the chores"
+MIRO_TRIAGE_FRAME_ID, MIRO_TRIAGE_FRAME_NAME = (
+    "3458764534889282821",
+    "A&#43;b short term tasks that need eval",
+)
+MIRO_ACTIVE_FRAME_ID, MIRO_ACTIVE_FRAME_NAME = (
+    "3458764558974521944",
+    "Eisenhowered A&#43;b short term list",
+)
+MIRO_PERIODIC_FRAME_ID, MIRO_PERIODIC_FRAME_NAME = (
+    "3458764632524709740",
+    "Periodic tasks",
+)
+MIRO_DONE_FRAME_ID, MIRO_DONE_FRAME_NAME = "3458764534889282822", "Done"
 
-TRELLO_BOARD_ID, TRELLO_BOARD_NAME = \
-    '6531ac71f384b1da10602fce', 'bert active'
-TRELLO_INBOX_LIST_ID, TRELLO_INBOX_LIST_NAME = \
-    '6531ac71f384b1da10602fcf', 'Inbox 📥'
-TRELLO_DONE_LIST_ID, TRELLO_DONE_LIST_NAME = \
-    '6531ac71f384b1da10602fd7', 'Done ✅'
+TRELLO_BOARD_ID, TRELLO_BOARD_NAME = "6531ac71f384b1da10602fce", "bert active"
+TRELLO_INBOX_LIST_ID, TRELLO_INBOX_LIST_NAME = "6531ac71f384b1da10602fcf", "Inbox 📥"
+TRELLO_DONE_LIST_ID, TRELLO_DONE_LIST_NAME = "6531ac71f384b1da10602fd7", "Done ✅"
 
 
 class Src(enum.Enum):
@@ -43,33 +46,42 @@ class Who(enum.Enum):
     INACTIVE = enum.auto()
 
 
-sticky_colors_me_regular = frozenset(['blue'])
-sticky_colors_me_repeating = frozenset(['light_blue'])
-sticky_colors_joint_regular = frozenset(['light_yellow'])
-sticky_colors_joint_discussion = frozenset(['violet'])
-sticky_colors_joint_repeating = frozenset(['orange'])
-sticky_colors_other_regular = frozenset(['light_green'])
-sticky_colors_other_repeating = frozenset(['green', 'dark_green'])  # which?
-sticky_colors_inactive_repeating = frozenset(['gray'])  # actually white ;)
+sticky_colors_me_regular = frozenset(["blue"])
+sticky_colors_me_repeating = frozenset(["light_blue"])
+sticky_colors_joint_regular = frozenset(["light_yellow"])
+sticky_colors_joint_discussion = frozenset(["violet"])
+sticky_colors_joint_repeating = frozenset(["orange"])
+sticky_colors_other_regular = frozenset(["light_green"])
+sticky_colors_other_repeating = frozenset(["green", "dark_green"])  # which?
+sticky_colors_inactive_repeating = frozenset(["gray"])  # actually white ;)
 
-who_sticky_colors = {
-    Who.ME: frozenset([*sticky_colors_me_regular,
-                       *sticky_colors_me_repeating]),
-    Who.JOINT: frozenset([*sticky_colors_joint_regular,
-                          *sticky_colors_joint_repeating]),
+who_sticky_colors: dict[Who, frozenset[str]] = {
+    Who.ME: frozenset([*sticky_colors_me_regular, *sticky_colors_me_repeating]),
+    Who.JOINT: frozenset(
+        [*sticky_colors_joint_regular, *sticky_colors_joint_repeating]
+    ),
     Who.TALK: frozenset([*sticky_colors_joint_discussion]),
-    Who.OTHER: frozenset([*sticky_colors_other_regular,
-                          *sticky_colors_other_repeating]),
+    Who.OTHER: frozenset(
+        [*sticky_colors_other_regular, *sticky_colors_other_repeating]
+    ),
     Who.INACTIVE: frozenset([*sticky_colors_inactive_repeating]),
 }
 
 
-def get_clean_text_from_sticky(sticky):
-    text = regex.sub(r'\s+', ' ', sticky.text.strip())
+@dataclass
+class TaskInfo(bt.CardInfo):
+    src: Src = Src.ACTIVE
+    who: Who = Who.ME
+    size: tuple[float, float] | None = None
+    relative_position: tuple[str | None, float, float] | None = None
+
+
+def get_clean_text_from_sticky(sticky: bm.StickyNote) -> str:
+    text = regex.sub(r"\s+", " ", sticky.text.strip())
     return text
 
 
-def get_who_from_sticky(sticky):
+def get_who_from_sticky(sticky: bm.StickyNote) -> Who:
     color = sticky.fill_color
     for k in who_sticky_colors:
         if color in who_sticky_colors[k]:
@@ -84,51 +96,56 @@ def get_who_from_sticky(sticky):
     return Who.INACTIVE
 
 
-def read_miro_board_frames(verbosity=0):
-    board = bm.get_board(board_id=MIRO_BOARD_ID, board_name=MIRO_BOARD_NAME,
-                         verbosity=verbosity)
-    tasks_active = []
+def read_miro_board_frames(verbosity: int = 0) -> list[TaskInfo]:
+    board = bm.get_board(
+        board_id=MIRO_BOARD_ID, board_name=MIRO_BOARD_NAME, verbosity=verbosity
+    )
+    tasks_active: list[TaskInfo] = []
     for frame_id, frame_name, frame_tag in (
-            (MIRO_ACTIVE_FRAME_ID, MIRO_ACTIVE_FRAME_NAME, Src.ACTIVE),
-            (MIRO_PERIODIC_FRAME_ID, MIRO_PERIODIC_FRAME_NAME, Src.ACTIVE),
-            (MIRO_TRIAGE_FRAME_ID, MIRO_TRIAGE_FRAME_NAME, Src.TRIAGE),
-            (MIRO_DONE_FRAME_ID, MIRO_DONE_FRAME_NAME, Src.DONE),
-            ):
-        for sn in bm.get_frame(board=board,
-                               frame_id=frame_id,
-                               frame_name=frame_name,
-                               verbosity=verbosity).sticky_notes():
+        (MIRO_ACTIVE_FRAME_ID, MIRO_ACTIVE_FRAME_NAME, Src.ACTIVE),
+        (MIRO_PERIODIC_FRAME_ID, MIRO_PERIODIC_FRAME_NAME, Src.ACTIVE),
+        (MIRO_TRIAGE_FRAME_ID, MIRO_TRIAGE_FRAME_NAME, Src.TRIAGE),
+        (MIRO_DONE_FRAME_ID, MIRO_DONE_FRAME_NAME, Src.DONE),
+    ):
+        for sn in bm.get_frame(
+            board=board, frame_id=frame_id, frame_name=frame_name, verbosity=verbosity
+        ).sticky_notes():
             tasks_active.append(
-                {'name': get_clean_text_from_sticky(sn),
-                 'desc': None, 'tags': None,
-                 'src': frame_tag, 'who': get_who_from_sticky(sn),
-                 'size': sn.size, 'relative_position': sn.relative_position,
-                 })
+                TaskInfo(
+                    name=get_clean_text_from_sticky(sn),
+                    desc=None,
+                    src=frame_tag,
+                    who=get_who_from_sticky(sn),
+                    size=sn.size,
+                    relative_position=sn.relative_position,
+                )
+            )
     return tasks_active
 
 
-def deduplicate_tasks(tasks):
+def deduplicate_tasks(tasks: Sequence[TaskInfo]) -> list[TaskInfo]:
     # Use a Schwartzian transform. Tuples are ordered for comparability.
     # https://docs.python.org/3/howto/sorting.html#decorate-sort-undecorate
-    tasks = [(t['src'].value, t['who'].value, i, t)
-             for i, t in enumerate(tasks)]
-    tasks.sort()
-    tasks = [t for src, who, i, t in tasks]
-    result_tasks = []
-    skip_names = set()
-    for info in tasks:
-        if info['name'] not in skip_names:
+    decorated = [(t.src.value, t.who.value, i, t) for i, t in enumerate(tasks)]
+    decorated.sort()
+    tasks_sorted = [t for _, _, _, t in decorated]
+    result_tasks: list[TaskInfo] = []
+    skip_names: set[str] = set()
+    for info in tasks_sorted:
+        if info.name not in skip_names:
             result_tasks.append(info)
-            skip_names.add(info['name'])
+            skip_names.add(info.name)
     return result_tasks
 
 
-def sanitize_tasks(tasks, verbosity=0):
-    def is_sane(task, verbosity=0):
-        if not regex.match(r'\S', task['name']):
+def sanitize_tasks(tasks: Sequence[TaskInfo], verbosity: int = 0) -> list[TaskInfo]:
+    def is_sane(task: TaskInfo, verbosity: int = 0) -> bool:
+        if not regex.match(r"\S", task.name):
             if verbosity >= 0:
-                print(f"Refusing to create card '{task['name']}'"
-                      " (name is empty)", file=sys.stderr)
+                print(
+                    f"Refusing to create card '{task.name}'" " (name is empty)",
+                    file=sys.stderr,
+                )
             return False
         else:
             return True
@@ -136,72 +153,103 @@ def sanitize_tasks(tasks, verbosity=0):
     return [t for t in tasks if is_sane(t, verbosity)]
 
 
-def update_trello(settings, tasks):
-    common_label_rules = [{bt.REMOVE_LABELS: ["Miro: triage", "Miro: done"]},
-                          {bt.REMOVE_LABELS: ["ex-Miro"]}]
-    orphan_label_rules = [{bt.REMOVE_LABELS: ["Miro: me", "Miro: joint",
-                                              "Miro: talk", "Miro: other"],
-                           bt.RETIRE_LABELS: ["ex-Miro"]}]
-    src_label_rules = {
+def update_trello(settings: argparse.Namespace, tasks: Sequence[TaskInfo]) -> None:
+    common_label_rule_input = [
+        {bt.REMOVE_LABELS: ["Miro: triage", "Miro: done"]},
+        {bt.REMOVE_LABELS: ["ex-Miro"]},
+    ]
+    orphan_label_rule_input = [
+        {
+            bt.REMOVE_LABELS: ["Miro: me", "Miro: joint", "Miro: talk", "Miro: other"],
+            bt.RETIRE_LABELS: ["ex-Miro"],
+        }
+    ]
+    src_label_rule_input: dict[Src, list[dict[str, list[str]]]] = {
         Src.ACTIVE: [],
         Src.TRIAGE: [{bt.ADD_LABELS: ["Miro: triage"]}],
         Src.DONE: [{bt.ADD_LABELS: ["Miro: done"]}],
     }
-    who_label_rules = {
+    who_label_rule_input: dict[Who, list[dict[str, list[str]]]] = {
         Who.ME: [
-            {bt.ADD_LABELS: ["Miro: me"],
-             bt.REMOVE_LABELS: ["Miro: joint", "Miro: talk", "Miro: other"],
-             bt.RETIRE_LABELS: ["ex-Miro"]}],
+            {
+                bt.ADD_LABELS: ["Miro: me"],
+                bt.REMOVE_LABELS: ["Miro: joint", "Miro: talk", "Miro: other"],
+                bt.RETIRE_LABELS: ["ex-Miro"],
+            }
+        ],
         Who.JOINT: [
-            {bt.ADD_LABELS: ["Miro: joint"],
-             bt.REMOVE_LABELS: ["Miro: me", "Miro: talk", "Miro: other"],
-             bt.RETIRE_LABELS: ["ex-Miro"]}],
+            {
+                bt.ADD_LABELS: ["Miro: joint"],
+                bt.REMOVE_LABELS: ["Miro: me", "Miro: talk", "Miro: other"],
+                bt.RETIRE_LABELS: ["ex-Miro"],
+            }
+        ],
         Who.TALK: [
-            {bt.ADD_LABELS: ["Miro: talk"],
-             bt.REMOVE_LABELS: ["Miro: me", "Miro: joint", "Miro: other"],
-             bt.RETIRE_LABELS: ["ex-Miro"]}],
+            {
+                bt.ADD_LABELS: ["Miro: talk"],
+                bt.REMOVE_LABELS: ["Miro: me", "Miro: joint", "Miro: other"],
+                bt.RETIRE_LABELS: ["ex-Miro"],
+            }
+        ],
         Who.OTHER: [
-            {bt.ADD_LABELS: ["Miro: other"],
-             bt.REMOVE_LABELS: ["Miro: me", "Miro: joint", "Miro: talk"],
-             bt.RETIRE_LABELS: ["ex-Miro"]}],
+            {
+                bt.ADD_LABELS: ["Miro: other"],
+                bt.REMOVE_LABELS: ["Miro: me", "Miro: joint", "Miro: talk"],
+                bt.RETIRE_LABELS: ["ex-Miro"],
+            }
+        ],
         Who.INACTIVE: [
-            {bt.IF_MISSING_ALL_LABELS: ["Miro: me", "Miro: joint",
-                                        "Miro: other"],
-             bt.ADD_LABELS: ["Miro: joint"],
-             bt.REMOVE_LABELS: ["Miro: me", "Miro: talk", "Miro: other"],
-             bt.RETIRE_LABELS: ["ex-Miro"]}],
+            {
+                bt.IF_MISSING_ALL_LABELS: ["Miro: me", "Miro: joint", "Miro: other"],
+                bt.ADD_LABELS: ["Miro: joint"],
+                bt.REMOVE_LABELS: ["Miro: me", "Miro: talk", "Miro: other"],
+                bt.RETIRE_LABELS: ["ex-Miro"],
+            }
+        ],
     }
 
     try:
-        board = bt.get_board(board_id=TRELLO_BOARD_ID,
-                             board_name=TRELLO_BOARD_NAME,
-                             verbosity=settings.verbose)
+        board = bt.get_board(
+            board_id=TRELLO_BOARD_ID,
+            board_name=TRELLO_BOARD_NAME,
+            verbosity=settings.verbose,
+        )
     except trello.exceptions.Unauthorized:
-        board = bt.get_board(board_id=TRELLO_BOARD_ID,
-                             board_name=TRELLO_BOARD_NAME,
-                             verbosity=settings.verbose,
-                             auth=bt.create_auth_token(bt.read_auth_data()))
+        board = bt.get_board(
+            board_id=TRELLO_BOARD_ID,
+            board_name=TRELLO_BOARD_NAME,
+            verbosity=settings.verbose,
+            auth=bt.create_auth_token(bt.read_auth_data()),
+        )
     inbox_list = bt.get_or_create_list(
-        board, list_id=TRELLO_INBOX_LIST_ID,
-        list_name=TRELLO_INBOX_LIST_NAME, verbosity=settings.verbose)
+        board,
+        list_id=TRELLO_INBOX_LIST_ID,
+        list_name=TRELLO_INBOX_LIST_NAME,
+        verbosity=settings.verbose,
+    )
     done_list = bt.get_or_create_list(
-        board, list_id=TRELLO_DONE_LIST_ID,
-        list_name=TRELLO_DONE_LIST_NAME, verbosity=settings.verbose)
+        board,
+        list_id=TRELLO_DONE_LIST_ID,
+        list_name=TRELLO_DONE_LIST_NAME,
+        verbosity=settings.verbose,
+    )
 
-    common_label_rules = \
-        bt.look_up_label_objects_in_label_rules(board, common_label_rules,
-                                                verbosity=settings.verbose)
-    orphan_label_rules = \
-        bt.look_up_label_objects_in_label_rules(board, orphan_label_rules,
-                                                verbosity=settings.verbose)
-    for k in Src:
-        src_label_rules[k] = \
-            bt.look_up_label_objects_in_label_rules(board, src_label_rules[k],
-                                                    verbosity=settings.verbose)
-    for k in Who:
-        who_label_rules[k] = \
-            bt.look_up_label_objects_in_label_rules(board, who_label_rules[k],
-                                                    verbosity=settings.verbose)
+    common_label_rules = bt.look_up_label_objects_in_label_rules(
+        board, common_label_rule_input, verbosity=settings.verbose
+    )
+    orphan_label_rules = bt.look_up_label_objects_in_label_rules(
+        board, orphan_label_rule_input, verbosity=settings.verbose
+    )
+    src_label_rules: dict[Src, Collection[dict[str, Collection[bt.Label]]]] = {}
+    for ks in Src:
+        src_label_rules[ks] = bt.look_up_label_objects_in_label_rules(
+            board, src_label_rule_input[ks], verbosity=settings.verbose
+        )
+    who_label_rules: dict[Who, Collection[dict[str, Collection[bt.Label]]]] = {}
+    for kw in Who:
+        who_label_rules[kw] = bt.look_up_label_objects_in_label_rules(
+            board, who_label_rule_input[kw], verbosity=settings.verbose
+        )
 
     # Moving between lists (assumes lists are already deduplicated):
     # - if Miro done, move to Trello done
@@ -214,16 +262,14 @@ def update_trello(settings, tasks):
     # this to True:
     move_template_clones = False
 
-    all_tasks = []
+    all_tasks: list[TaskInfo] = []
     for s in Src:
         for w in Who:
-            working = [t for t in tasks if t['src'] is s and t['who'] is w]
+            working = [t for t in tasks if t.src is s and t.who is w]
             tasks = [t for t in tasks if t not in working]
-            rules = (*common_label_rules,
-                     *src_label_rules[s],
-                     *who_label_rules[w])
+            rules = (*common_label_rules, *src_label_rules[s], *who_label_rules[w])
             default_labels = bt.get_default_labels_from_rules(rules)
-            create = (s is not Src.DONE)
+            create = s is not Src.DONE
             if create:
                 card_info = bt.get_or_create_cards_with_info(
                     inbox_list,
@@ -236,7 +282,7 @@ def update_trello(settings, tasks):
                 card_info = bt.get_cards_with_info(board, working)
                 # will not produce output about existing/multiple cards
             card_groups = bt.grouped_cards_from_info(card_info)
-            cards_to_move = []
+            cards_to_move: list[bt.Card] = []
             for group in card_groups:
                 templates = [c for c in group if bt.is_card_template(c)]
                 if len(templates) == 0 or move_template_clones:
@@ -245,31 +291,42 @@ def update_trello(settings, tasks):
                     cards_to_move.extend(templates)
             if s is Src.DONE:
                 bt.move_cards_not_in_lists_to_list(
-                    cards_to_move, [done_list], done_list,
-                    verbosity=settings.verbose, dry_run=not settings.move)
+                    cards_to_move,
+                    [done_list],
+                    done_list,
+                    verbosity=settings.verbose,
+                    dry_run=not settings.move,
+                )
             else:
                 bt.move_cards_from_lists_to_list(
-                    cards_to_move, [done_list], inbox_list,
-                    verbosity=settings.verbose, dry_run=not settings.move)
-            bt.update_card_labels(bu.flatten(card_groups), rules,
-                                  verbosity=settings.verbose)
+                    cards_to_move,
+                    [done_list],
+                    inbox_list,
+                    verbosity=settings.verbose,
+                    dry_run=not settings.move,
+                )
+            bt.update_card_labels(
+                bu.flatten(card_groups), rules, verbosity=settings.verbose
+            )
             all_tasks.extend(working)
     assert len(tasks) == 0
-    bt.update_orphan_labeled_tasks(board,
-                                   (*common_label_rules, *orphan_label_rules),
-                                   all_tasks,
-                                   verbosity=settings.verbose)
+    bt.update_orphan_labeled_tasks(
+        board,
+        (*common_label_rules, *orphan_label_rules),
+        all_tasks,
+        verbosity=settings.verbose,
+    )
 
 
-def parse_args():
+def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument('-m', '--move', action='store_true')
-    parser.add_argument('-v', '--verbose', action='count', default=0)
+    parser.add_argument("-m", "--move", action="store_true")
+    parser.add_argument("-v", "--verbose", action="count", default=0)
     settings = parser.parse_args()
     return settings
 
 
-def main():
+def main() -> None:
     settings = parse_args()
     tasks = read_miro_board_frames(verbosity=settings.verbose)
     tasks = deduplicate_tasks(tasks)

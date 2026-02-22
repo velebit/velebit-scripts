@@ -5,14 +5,34 @@ import calendar
 import datetime
 import json
 import sys
-import trello.card
-import trello.exceptions
+import trello.exceptions  # type: ignore[import-untyped]
+from typing import (
+    Callable,
+    Generic,
+    Literal,
+    Optional,
+    Protocol,
+    Sequence,
+    TextIO,
+    TypeVar,
+    TypedDict,
+    cast,
+    overload,
+)
 import zoneinfo
-from bert_trello import (get_board, create_auth_token, read_auth_data,
-                         get_open_board_by_id)
+
+from bert_trello import (
+    get_board,
+    create_auth_token,
+    read_auth_data,
+    get_open_board_by_id,
+    Board,
+    List,
+    Card,
+)
 
 # The ID(s) used by the repeater Trello plug-in
-IDS_PLUGIN_REPEAT = ('57b47fb862d25a30298459b1',)
+IDS_PLUGIN_REPEAT = ("57b47fb862d25a30298459b1",)
 
 
 class Outputter:
@@ -21,7 +41,13 @@ class Outputter:
     marks with regular output.
     """
 
-    def __init__(self, verbosity, *, out=None, progress_out=None):
+    def __init__(
+        self,
+        verbosity: int,
+        *,
+        out: Optional[TextIO] = None,
+        progress_out: Optional[TextIO] = None,
+    ) -> None:
         """
         Initialize the object.
 
@@ -34,39 +60,37 @@ class Outputter:
         self.__progress_out = progress_out
         self.__progress_newline = False
 
-    def __del__(self):
+    def __del__(self) -> None:
         "Clean up the output (by emitting a newline if needed) on destruction."
         self.flush_progress()
 
     @property
-    def verbosity(self):
+    def verbosity(self) -> int:
         "The object's current verbosity."
         return self.__verbosity
 
     @verbosity.setter
-    def verbosity(self, value):
+    def verbosity(self, value: int) -> None:
         self.__verbosity = value
 
-    def progress(self, mark, *, level=0):
+    def progress(self, mark: str, *, level: int = 0) -> None:
         """
         Print a progress mark if the object's verbosity is at least
         `level`. A newline will not be added.
         """
         if self.__verbosity >= level:
-            out = self.__progress_out if self.__progress_out is not None \
-                else sys.stderr
+            out = self.__progress_out if self.__progress_out is not None else sys.stderr
             print(mark, end="", file=out, flush=True)
             self.__progress_newline = True
 
-    def flush_progress(self):
+    def flush_progress(self) -> None:
         "Add a newline to the progress output if any marks were printed."
         if self.__progress_newline:
-            out = self.__progress_out if self.__progress_out is not None \
-                else sys.stderr
+            out = self.__progress_out if self.__progress_out is not None else sys.stderr
             print(file=out, flush=True)
             self.__progress_newline = False
 
-    def message(self, message, *, level=-1):
+    def message(self, message: str, *, level: int = -1) -> None:
         """
         Print a regular message if the object's verbosity is at least
         `level`. A newline will be added.
@@ -77,12 +101,16 @@ class Outputter:
             print(message, file=out)
 
 
-class Lookup:
-    def __init__(self, lookup_function):
-        self.__cache = {}
+K = TypeVar("K")
+V = TypeVar("V")
+
+
+class Lookup(Generic[K, V]):
+    def __init__(self, lookup_function: Callable[[K], V]) -> None:
+        self.__cache: dict[K, V] = {}
         self.__lookup = lookup_function
 
-    def get(self, key):
+    def get(self, key: K) -> V:
         try:
             return self.__cache[key]
         except KeyError:  # not cached
@@ -90,147 +118,235 @@ class Lookup:
             self.__cache[key] = answer
             return answer
 
-    def put(self, key, value):
+    def put(self, key: K, value: V) -> None:
         self.__cache[key] = value
 
 
-main_board_id = None
-board_lookup = None
-list_lookup = None
+main_board_id: str | None = None
+board_lookup: Lookup[str, Board] | None = None
+list_lookup: Lookup[tuple[str | None, str], List] | None = None
 
 
-def format_day_ordinal(num):
+class RepeatDate(Protocol):
+    @overload
+    def __getitem__(self, key: Literal["m"]) -> int: ...
+
+    @overload
+    def __getitem__(self, key: Literal["d"]) -> int: ...
+
+
+class RepeatTime(Protocol):
+    @overload
+    def __getitem__(self, key: Literal["h"]) -> int: ...
+
+    @overload
+    def __getitem__(self, key: Literal["m"]) -> int: ...
+
+
+class RepeatData(Protocol):
+    @overload
+    def __getitem__(self, key: Literal["period"]) -> str: ...
+
+    @overload
+    def __getitem__(self, key: Literal["interval"]) -> int: ...
+
+    @overload
+    def __getitem__(self, key: Literal["weekdays"]) -> Sequence[int]: ...
+
+    @overload
+    def __getitem__(self, key: Literal["days"]) -> Sequence[int]: ...
+
+    @overload
+    def __getitem__(self, key: Literal["dates"]) -> Sequence[RepeatDate]: ...
+
+    @overload
+    def __getitem__(self, key: Literal["time"]) -> RepeatTime: ...
+
+    @overload
+    def __getitem__(self, key: Literal["nextRecurrence"]) -> int: ...
+
+    @overload
+    def __getitem__(self, key: Literal["tz"]) -> str: ...
+
+    @overload
+    def __getitem__(self, key: Literal["idTargetBoard"]) -> str: ...
+
+    @overload
+    def __getitem__(self, key: Literal["idTargetList"]) -> str: ...
+
+    @overload
+    def __getitem__(self, key: Literal["position"]) -> str: ...
+
+
+class PluginData(TypedDict):
+    idPlugin: str
+    value: str
+
+
+def format_day_ordinal(num: int) -> str:
     if 1 <= num <= 31:
         if 11 <= num <= 13:
             return f"{num}th"
         else:
-            suffix = {1: 'st', 2: 'nd', 3: 'rd'}
+            suffix = {1: "st", 2: "nd", 3: "rd"}
             return f"{num}{suffix.get(num % 10, 'th')}"
     elif num == -1:
         return "last"
-    raise NotImplementedError(
-        f"Day index {num!r} is not supported")
+    raise NotImplementedError(f"Day index {num!r} is not supported")
 
 
-def format_period(repeat):
-    if repeat['period'] == "weekly":
+def format_period(repeat: RepeatData) -> str:
+    if repeat["period"] == "weekly":
         # Repeater's day 0 is Sunday; calendar's is Monday...
-        wdays = ", ".join([calendar.day_abbr[(i + 6) % 7]
-                           for i in repeat['weekdays']])
-        if repeat['interval'] == 1:
+        wdays = ", ".join([calendar.day_abbr[(i + 6) % 7] for i in repeat["weekdays"]])
+        if repeat["interval"] == 1:
             return f"every week on {wdays}"
         return f"every {repeat['interval']} weeks on {wdays}"
-    elif repeat['period'] == "monthly":
-        days = ' and '.join([format_day_ordinal(d) for d in repeat['days']])
-        if repeat['interval'] == 1:
+    elif repeat["period"] == "monthly":
+        days = " and ".join([format_day_ordinal(d) for d in repeat["days"]])
+        if repeat["interval"] == 1:
             return f"every month on {days} day"
         return f"every {repeat['interval']} months on {days} day"
-    elif repeat['period'] == "yearly":
+    elif repeat["period"] == "yearly":
         # Repeater's month 1 is February; calendar's is January...
-        dates = ' and '.join([
-            f"{calendar.month_abbr[int(d['m']) + 1]} {d['d']}"
-            for d in repeat['dates']])
-        if repeat['interval'] == 1:
+        dates = " and ".join(
+            [
+                f"{calendar.month_abbr[int(d['m']) + 1]} {d['d']}"
+                for d in repeat["dates"]
+            ]
+        )
+        if repeat["interval"] == 1:
             return f"every year on {dates}"
         return f"every {repeat['interval']} years on {dates}"
     raise NotImplementedError(
-        f"Period {repeat['period']!r} is not yet supported for {repeat!r}")
+        f"Period {repeat['period']!r} is not yet supported for {repeat!r}"
+    )
 
 
-def format_repeat(card, repeat, *, one_line=False, show_src_list=True,
-                  show_src_id=False, show_url=True):
-    card_list = list_lookup.get((main_board_id, card.list_id))
-    info_bits = []
+def format_repeat(
+    card: Card,
+    repeat: RepeatData,
+    *,
+    one_line: bool = False,
+    show_src_list: bool = True,
+    show_src_id: bool = False,
+    show_url: bool = True,
+) -> str:
+    assert list_lookup is not None
+    global main_board_id
+    assert main_board_id is not None
+    list_id = cast(str, card.list_id)  # type: ignore[attr-exists]
+    assert isinstance(list_id, str)
+    card_list = list_lookup.get((main_board_id, list_id))
+    info_bits: list[str] = []
 
-    card_info = f"{card.name!r}"
+    card_info = f"{card.name!r}"  # type: ignore[attr-exists]
     if show_src_list:
-        card_info += f" in list {card_list.name!r}"
+        card_info += f" in list {card_list.name!r}"  # type: ignore[attr-exists]
     if show_src_id:
-        card_info += f", id {card.id}"
+        card_info += f", id {card.id}"  # type: ignore[attr-exists]
     card_info += ":"
 
     period = format_period(repeat)
     time = f"{repeat['time']['h']:02d}:{repeat['time']['m']:02d}"
     # Repeater apparently uses UNIX time times 1000 (milliseconds since epoch)
     next_datetime = datetime.datetime.fromtimestamp(
-        repeat['nextRecurrence'] / 1000, tz=zoneinfo.ZoneInfo(repeat['tz']))
-    next_time = next_datetime.strftime('%Y-%m-%d %H:%M')
+        repeat["nextRecurrence"] / 1000, tz=zoneinfo.ZoneInfo(repeat["tz"])
+    )
+    next_time = next_datetime.strftime("%Y-%m-%d %H:%M")
     info_bits.append(f"{period} at {time}, next is {next_time}")
 
-    target_list = list_lookup.get(
-        (repeat['idTargetBoard'], repeat['idTargetList']))
-    list_info = f"list {target_list.name!r}"
-    if repeat['idTargetBoard'] != main_board_id:
-        list_info += f" of board {target_list.board.name!r}"
-    target_location = repeat['position']
+    target_list = list_lookup.get((repeat["idTargetBoard"], repeat["idTargetList"]))
+    list_info = f"list {target_list.name!r}"  # type: ignore[attr-exists]
+    if repeat["idTargetBoard"] != main_board_id:
+        list_info += f" of board {target_list.board.name!r}"  # type: ignore[attr-exists]
+    target_location = repeat["position"]
     info_bits.append(f"to the {target_location} of {list_info}")
 
     if show_url:
         prefix = "" if one_line else "  "
-        info_bits.append(f"{prefix}url {card.short_url}")
+        info_bits.append(f"{prefix}url {card.short_url}")  # type: ignore[attr-exists]
 
     prefix = " " if one_line else "\n    "
     sep = "," + prefix
     return card_info + prefix + sep.join(info_bits)
 
 
-def set_up_resources(board_key, settings):
+def set_up_resources(board_key: str, settings: argparse.Namespace) -> Board:
     try:
         board = get_board(board_key, board_key, verbosity=settings.verbosity)
     except trello.exceptions.Unauthorized:
-        board = get_board(board_key, board_key, verbosity=settings.verbosity,
-                          auth=create_auth_token(read_auth_data()))
+        board = get_board(
+            board_key,
+            board_key,
+            verbosity=settings.verbosity,
+            auth=create_auth_token(read_auth_data()),
+        )
     global main_board_id, board_lookup, list_lookup
-    main_board_id = board.id
+    main_board_id = board.id  # type: ignore[attr-defined]
 
-    def find_board(id):
-        return get_open_board_by_id(board.client, id)
+    def find_board(id: str) -> Board:
+        return get_open_board_by_id(board.client, id)  # type: ignore[attr-defined]
+
     board_lookup = Lookup(find_board)
-    board_lookup.put(main_board_id, board)
+    assert main_board_id is not None
+    board_lookup.put(cast(str, main_board_id), board)
 
-    def find_list(board_and_id):
+    def find_list(board_and_id: tuple[str | None, str]) -> List:
+        assert board_lookup is not None
         board_id, list_id = board_and_id
         if board_id is None:
+            assert main_board_id is not None
             board_id = main_board_id
-        return board_lookup.get(board_id).get_list(list_id)
+        return board_lookup.get(board_id).get_list(list_id)  # type: ignore[attr-defined]
+
     list_lookup = Lookup(find_list)
 
     return board
 
 
-def process_cards(board_key, settings):
+def process_cards(board_key: str, settings: argparse.Namespace) -> None:
     board = set_up_resources(board_key, settings)
     out = Outputter(verbosity=settings.verbosity)
-    unsorted_list = []
+    unsorted_list: list[tuple[int, str]] = []
     if settings.card:
-        card_iter = (board.get_card(cid) for cid in settings.card)
+        card_iter = (board.get_card(cid) for cid in settings.card)  # type: ignore[attr-defined]
     else:
         card_iter = board.open_cards()
     for card in card_iter:
-        repeat_data = [p for p in card.plugin_data
-                       if p['idPlugin'] in IDS_PLUGIN_REPEAT]
+        plugin_data = cast(Sequence[PluginData], card.plugin_data)  # type: ignore[attr-defined]
+        repeat_data = [p for p in plugin_data if p["idPlugin"] in IDS_PLUGIN_REPEAT]
         if not repeat_data:
             out.progress(".")  # No repeat data.
         elif len(repeat_data) > 1:
             out.progress("@")  # Multiple records. Should be impossible!
-        elif repeat_data[0]['value'] == '{}':
+        elif repeat_data[0]["value"] == "{}":
             out.progress("-")  # Have repeat data, but no repeat is set.
         else:
             try:
-                repeat = json.loads(repeat_data[0]['value'])['recurrence']
+                payload = json.loads(repeat_data[0]["value"])
+                if not isinstance(payload, dict) or "recurrence" not in payload:
+                    raise KeyError("recurrence")
+                repeat = cast(RepeatData, payload["recurrence"])
             except (json.decoder.JSONDecodeError, TypeError, KeyError):
                 # Invalid JSON, or not a dict, or no 'recurrence' element.
                 # All of those should be impossible!
                 out.progress("%")
                 continue
-            text = format_repeat(card, repeat, one_line=settings.one_line,
-                                 show_src_list=True,
-                                 show_src_id=(settings.verbosity >= 2),
-                                 show_url=(settings.verbosity >= 1
-                                           if settings.one_line
-                                           else settings.verbosity >= 0))
+            text = format_repeat(
+                card,
+                repeat,
+                one_line=settings.one_line,
+                show_src_list=True,
+                show_src_id=(settings.verbosity >= 2),
+                show_url=(
+                    settings.verbosity >= 1
+                    if settings.one_line
+                    else settings.verbosity >= 0
+                ),
+            )
             if settings.sorted:
-                unsorted_list.append((int(repeat['nextRecurrence']), text))
+                unsorted_list.append((int(repeat["nextRecurrence"]), text))
                 out.progress("+")
             else:
                 out.message(text)
@@ -241,28 +357,49 @@ def process_cards(board_key, settings):
             out.message(text)
 
 
-def parse_args():
-    parser = argparse.ArgumentParser(
-        description='Show info on repeating cards.'
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Show info on repeating cards.")
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        dest="verbosity",
+        action="count",
+        default=0,
+        help="Be more verbose. Can be repeated.",
     )
-    parser.add_argument('-v', '--verbose', dest='verbosity',
-                        action='count', default=0,
-                        help='Be more verbose. Can be repeated.')
-    parser.add_argument('-q', '--quiet', dest='verbosity',
-                        action='store_const', const=-1,
-                        help='Be non-verbose.')
-    parser.add_argument('-C', '--card', metavar='ID', action='append',
-                        help='Only show the specified card(s).')
-    parser.add_argument('-1', '--one-line', action='store_true',
-                        help='Show the info for every card on one line.')
-    parser.add_argument('-s', '--sorted', action='store_true',
-                        help='Show the entries sorted by trigger time.')
-    parser.add_argument('board', nargs='?', default='bert active')
+    parser.add_argument(
+        "-q",
+        "--quiet",
+        dest="verbosity",
+        action="store_const",
+        const=-1,
+        help="Be non-verbose.",
+    )
+    parser.add_argument(
+        "-C",
+        "--card",
+        metavar="ID",
+        action="append",
+        help="Only show the specified card(s).",
+    )
+    parser.add_argument(
+        "-1",
+        "--one-line",
+        action="store_true",
+        help="Show the info for every card on one line.",
+    )
+    parser.add_argument(
+        "-s",
+        "--sorted",
+        action="store_true",
+        help="Show the entries sorted by trigger time.",
+    )
+    parser.add_argument("board", nargs="?", default="bert active")
     settings = parser.parse_args()
     return settings
 
 
-def main():
+def main() -> None:
     settings = parse_args()
     process_cards(settings.board, settings)
 
