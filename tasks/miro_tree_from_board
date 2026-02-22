@@ -1,0 +1,122 @@
+#!/home/bert/.local/lib/python/venv/tasks/bin/python3
+# Summarize all objects in the specified board as a tree
+import argparse
+from dataclasses import dataclass
+from bert_miro import get_board, Item
+from typing import TypeAlias
+
+@dataclass
+class TreeNode:
+    item: Item
+    children: list["TreeNode"] | None = None
+
+
+Tree: TypeAlias = list[TreeNode]
+
+
+def get_parent_with_id(
+    item: Item, parents_by_id: dict[str, Item] | None = None
+) -> tuple[Item, str] | tuple[None, None]:
+    parent_id = item.parent_id
+    if parent_id is None:
+        return (None, None)
+    if parents_by_id is not None and parent_id in parents_by_id:
+        return (parents_by_id[parent_id], parent_id)
+    parent = item.parent
+    assert parent is not None, f"Item {item.id} has parent_id {parent_id} but no parent"
+    if parents_by_id is not None:
+        parents_by_id[parent_id] = parent
+    return (parent, parent_id)
+
+
+def get_ancestry(
+    item: Item, parents_by_id: dict[str, Item] | None = None
+) -> list[Item]:
+    ancestry: list[Item] = []
+    while True:
+        ancestry.append(item)
+        p_item, _ = get_parent_with_id(item, parents_by_id)
+        if p_item is None:
+            ancestry.reverse()
+            return ancestry
+        item = p_item
+
+
+def insert_into_tree(tree: Tree, ancestry: list[Item]) -> None:
+    current: Tree = tree
+    for item in ancestry:
+        found: TreeNode | None = None
+        for node in current:
+            if node.item.id == item.id:
+                found = node
+                break
+        if found is None:
+            current.append(TreeNode(item=item))
+            found = current[-1]
+        if found.children is None:
+            found.children = []
+        current = found.children
+
+
+
+def print_tree(tree: Tree, indent: int = 4) -> None:
+    for node in tree:
+        print(" " * indent + repr(node.item))
+        if node.children is not None:
+            print_tree(node.children, indent + 4)
+
+
+def print_object_info(
+    board_key: str,
+    verbosity: int = 0,
+) -> None:
+    board = get_board(board_key, board_key, verbosity=verbosity)
+    parents_by_id: dict[str, Item] = {}
+    tree: Tree = []
+    type_nesting: dict[str, list[Item]] = {}
+
+    for item in board.items(Item):
+        ancestry = get_ancestry(item, parents_by_id)
+        insert_into_tree(tree, ancestry)
+        type_list: str = " / ".join([a.type for a in ancestry])
+        if type_list not in type_nesting:
+            type_nesting[type_list] = []
+        type_nesting[type_list].append(item)
+
+    if len(type_nesting) > 0:
+        # Use a Schwartzian transform. Tuples are ordered for comparability.
+        # https://docs.python.org/3/howto/sorting.html#decorate-sort-undecorate
+        ordered = [
+            (-len(items), i, items, type_list)
+            for i, (type_list, items) in enumerate(type_nesting.items())
+        ]
+        ordered.sort()
+        print("Summary of object type nesting:")
+        for _, _, items, type_list in ordered:
+            print(f"    {len(items):4d} {type_list}")
+            if verbosity >= 2:
+                for item in items:
+                    print(f"        {item.id} {item!r}")
+    if len(tree) > 0:
+        print("\nObject tree:")
+        print_tree(tree)
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-v", "--verbose", action="count", default=0)
+    parser.add_argument("board")
+    settings = parser.parse_args()
+    return settings
+
+
+def main() -> None:
+    settings = parse_args()
+    print_object_info(
+        settings.board,
+        verbosity=settings.verbose,
+    )
+
+
+if __name__ == "__main__":
+    main()
