@@ -29,6 +29,7 @@ def print_frames(
         if print_color:
             to_print.append(repr(frame.fill_color))
         if print_geometry:
+            to_print.append(repr(frame.relative_position_anchor))
             to_print.append(repr(frame.relative_position))
             to_print.append(repr(frame.size))
         print("    " + ", ".join(to_print))

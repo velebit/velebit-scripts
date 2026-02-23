@@ -1,0 +1,134 @@
+#!/home/bert/.local/lib/python/venv/tasks/bin/python3
+# Resize sticky notes on the specified board to a standard set of sizes.
+# As of 2026-02-22, this doesn't work, I think because of a bug in the Miro API.
+import argparse
+from bert_miro import get_board, StickyNote, Item, Frame
+
+
+def get_parent_with_id(
+    item: Item, parents_by_id: dict[str, Item] | None = None
+) -> tuple[Item, str] | tuple[None, None]:
+    parent_id = item.parent_id
+    if parent_id is None:
+        return (None, None)
+    if parents_by_id is not None and parent_id in parents_by_id:
+        return (parents_by_id[parent_id], parent_id)
+    parent = item.parent
+    assert parent is not None, f"Item {item.id} has parent_id {parent_id} but no parent"
+    if parents_by_id is not None:
+        parents_by_id[parent_id] = parent
+    return (parent, parent_id)
+
+
+def get_enclosing_frame_name_and_id(
+    item: Item, parents_by_id: dict[str, Item] | None = None
+) -> tuple[str | None, str] | tuple[None, None]:
+    while True:
+        p_item, p_item_id = get_parent_with_id(item, parents_by_id)
+        if p_item is None or p_item_id is None:
+            assert p_item is None and p_item_id is None
+            return (None, None)
+        if type(p_item) is Frame:
+            return (p_item.text, p_item_id)
+        item = p_item
+
+
+def update_stickies(
+    board_name_or_id: str,
+    frame_name_or_id: str | None = None,
+    ratio: float = 1.2,
+    dry_run: bool = False,
+    verbosity: int = 0,
+) -> None:
+    board = get_board(board_name_or_id, board_name_or_id, verbosity=verbosity)
+    parents_by_id: dict[str, Item] = {}
+    num_stickies = 0
+    stickies_by_size: dict[tuple[float, float], list[StickyNote]] = {}
+
+    for note in board.sticky_notes():
+        if frame_name_or_id is not None:
+            frame_name, frame_id = get_enclosing_frame_name_and_id(note, parents_by_id)
+            if frame_name_or_id == "":
+                if frame_id is None:
+                    assert frame_name is None
+                else:
+                    continue
+            else:
+                if frame_id != frame_name_or_id and frame_name != frame_name_or_id:
+                    continue
+
+        note_size = note.size
+        assert note_size is not None, f"Sticky note {note.id} has no size"
+        num_stickies += 1
+        if note_size not in stickies_by_size:
+            stickies_by_size[note_size] = []
+        stickies_by_size[note_size].append(note)
+
+    while len(stickies_by_size) > 0:
+        common_size, common_items = max(
+            stickies_by_size.items(), key=lambda kv: len(kv[1])
+        )
+        pretty_size = f"{common_size[0]:6.2f},{common_size[1]:6.2f}"
+        common_count = len(common_items)
+        if common_count < max(0.05 * num_stickies, 3):
+            print(
+                f"Ignoring        size {pretty_size} (used by {common_count} sticky notes)"
+            )
+            del stickies_by_size[common_size]
+            continue
+        print(
+            f"Selecting exact size {pretty_size} (used by {common_count} sticky notes)"
+        )
+        del stickies_by_size[common_size]
+        approx_sizes = [
+            (size, count)
+            for size, count in stickies_by_size.items()
+            if (
+                (
+                    size[0] <= common_size[0] * ratio
+                    and size[0] >= common_size[0] / ratio
+                )
+                and (
+                    size[1] <= common_size[1] * ratio
+                    and size[1] >= common_size[1] / ratio
+                )
+            )
+        ]
+        approx_sizes.sort()
+        for approx_size, approx_items in approx_sizes:
+            pretty_approx_size = f"{approx_size[0]:6.2f},{approx_size[1]:6.2f}"
+            approx_count = len(approx_items)
+            del stickies_by_size[approx_size]
+            if dry_run:
+                print(
+                    f"Would update approx  {pretty_approx_size} (used by {approx_count} sticky notes) to {pretty_size}"
+                )
+            else:
+                print(
+                    f"Updating approx size {pretty_approx_size} (used by {approx_count} sticky notes) to {pretty_size}"
+                )
+                for note in approx_items:
+                    note.set_size(common_size)
+            pass
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-v", "--verbose", action="count", default=0)
+    parser.add_argument("board")
+    parser.add_argument("frame", nargs="?", default=None)
+    settings = parser.parse_args()
+    return settings
+
+
+def main() -> None:
+    settings = parse_args()
+    update_stickies(
+        settings.board,
+        frame_name_or_id=settings.frame,
+        verbosity=settings.verbose,
+    )
+
+
+if __name__ == "__main__":
+    main()

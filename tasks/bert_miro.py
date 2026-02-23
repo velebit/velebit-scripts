@@ -6,7 +6,7 @@ import requests
 import sys
 import urllib.parse
 import warnings
-from typing import Any, Callable, Type, TypeVar
+from typing import Any, Callable, Collection, Sequence, Mapping, Type, TypeVar
 
 # ===== general helpers =====
 
@@ -15,6 +15,31 @@ def html2text(html: str) -> str:
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=bs4.MarkupResemblesLocatorWarning)
         return bs4.BeautifulSoup(html, features="lxml").get_text("\n\n", strip=True)
+
+
+def get_from_data_hierarchy(hierarchy: Any, keys: Sequence[str]) -> Any:
+    node = hierarchy
+    try:
+        for key in keys:
+            node = node[key]
+    except KeyError:
+        return None
+    except TypeError:
+        return None
+    except IndexError:
+        return None
+    return node
+
+
+def set_in_data_hierarchy(hierarchy: Any, keys: Sequence[str], value: Any) -> None:
+    node = hierarchy
+    assert len(keys) > 0
+    for key in keys[:-1]:
+        if key not in node:
+            node[key] = {}  # it could be a list, but dict is more likely
+        node = node[key]
+    node[keys[-1]] = value
+    return hierarchy
 
 
 # ===== HTTP request error classes =====
@@ -113,6 +138,10 @@ class Client(object):
         headers = {"accept": "application/json", **extra_headers}
         response = request(url, headers=headers, **kwargs)
         if response.status_code not in accept_codes:
+            print(
+                f"(M) Unexpected response code {response.status_code} for url: {url}; json: {response.json()!r}",
+                file=sys.stderr,
+            )
             # try normal response error mechanism...
             response.raise_for_status()
             # ...otherwise generate our own exception
@@ -385,10 +414,14 @@ class Board(object):
                             compare_with_json=item_data,
                         )
                     else:
-                        item = item_class._from_json(json=item_data, board=self)  # pyright: ignore[reportPrivateUsage]
+                        item = item_class._from_json(  # pyright: ignore[reportPrivateUsage]
+                            json=item_data, board=self
+                        )
                     assert isinstance(item, item_class)
                     if item_type is not None:
-                        assert item.type == item_type, f"type mismatch: expected {item_type}, got {item.type}"
+                        assert (
+                            item.type == item_type
+                        ), f"type mismatch: expected {item_type}, got {item.type}"
                     assert item.id is not None
                     items.append(item)
                     item_ids.add(item.id)
@@ -581,17 +614,69 @@ class Item(object):
         return self.__board
 
     def _get_property(self, *keys: str) -> Any:
-        try:
-            node: Any = self.json
-            for key in keys:
-                node = node[key]
-            return node
-        except KeyError:
-            return None
-        except TypeError:
-            return None
-        except IndexError:
-            return None
+        return get_from_data_hierarchy(self.json, keys)
+
+    def _update_property_fields(
+        self,
+        keys: Sequence[str],
+        values: Mapping[str, Any],
+        request_values: Mapping[str, Any] | None = None,
+    ) -> None:
+        def limit_keys(
+            mapping: Mapping[str, Any], keys: Collection[str]
+        ) -> dict[str, Any]:
+            return {k: mapping[k] for k in keys if k in mapping}
+
+        if request_values is None:
+            request_values = values
+        old_values = limit_keys(get_from_data_hierarchy(self.json, keys), values.keys())
+        if old_values == values:
+            print(
+                f"(M) No need to update {'.'.join(keys)} to {values} for item {self.id}",
+                file=sys.stderr,
+            )
+            return
+        assert self.board is not None and self.board.client is not None
+        subdir = self.request_subdir()
+        url = (
+            "https://api.miro.com/v2/boards/"
+            + urllib.parse.quote(self.board.id)
+            + "/"
+            + subdir
+            + "/"
+            + urllib.parse.quote(self.id)
+        )
+        request_hierarchy: dict[str, Any] = {}
+        set_in_data_hierarchy(request_hierarchy, keys, request_values)
+        response = (
+            self.board.client._make_auth_request(  # pyright: ignore[reportPrivateUsage]
+                request=requests.patch, url=url, json=request_hierarchy
+            )
+        )
+        new_json: dict[str, Any] = response.json()
+        assert (
+            new_json["type"] == self.type
+        ), f"Type changed after update: expected {self.type}, got {new_json['type']}"
+        self.__json = new_json
+        new_values = limit_keys(get_from_data_hierarchy(new_json, keys), values.keys())
+        if new_values == values:
+            print(
+                f"(M) Updated {'.'.join(keys)} to {new_values} for item {self.id},"
+                f" PATCH response: {response.status_code} {response.reason}",
+                file=sys.stderr,
+            )
+        elif new_values == old_values:
+            print(
+                f"(M) Failed to update {'.'.join(keys)} to {values} for item {self.id},"
+                f" value is still {new_values} after PATCH response: {response.status_code} {response.reason}",
+                file=sys.stderr,
+            )
+        else:
+            print(
+                f"(M) Updated {'.'.join(keys)} to {new_values} for item {self.id},"
+                f" but expected {values}; PATCH response: {response.status_code} {response.reason}",
+                file=sys.stderr,
+            )
 
     @property
     def id(self) -> str:
@@ -633,9 +718,19 @@ class Item(object):
             return None
         return (geometry["width"], geometry["height"])
 
+    def set_size(self, size: tuple[float, float]) -> None:
+        # Note: for fixed aspect ratio items, we should be setting only one of width and height.
+        # TODO: Figure out which items aren't fixed aspect ratio.
+        # Note: as of 2026-02-22, setting the size DOES NOT work, at least for sticky notes.
+        self._update_property_fields(
+            ["geometry"],
+            {"width": size[0], "height": size[1]},
+            request_values={"width": size[0]},
+            #request_values={"height": size[1]},
+        )
+
     @property
-    def relative_position(self) -> tuple[str | None, float, float] | None:
-        # TODO: Add absolute_position too?
+    def relative_position_anchor(self) -> str | None:
         position = self._get_property("position")
         if position is None:
             return None
@@ -643,10 +738,23 @@ class Item(object):
             position["relativeTo"] == "parent_top_left"
             and position["origin"] == "center"
         ):
-            return (self.parent_id, position["x"], position["y"])
-        if position["relativeTo"] == "canvas_center" and position["origin"] == "center":
-            return (None, position["x"], position["y"])  # allow global as rel.
+            return self.parent_id
+        elif (
+            position["relativeTo"] == "canvas_center" and position["origin"] == "center"
+        ):
+            return None  # global as relative
         return None
+
+    @property
+    def relative_position(self) -> tuple[float, float] | None:
+        # TODO: Add absolute_position too?
+        position = self._get_property("position")
+        if position is None:
+            return None
+        return (position["x"], position["y"])
+
+    def set_relative_position(self, position: tuple[float, float]) -> None:
+        self._update_property_fields(["position"], {"x": position[0], "y": position[1]})
 
     @staticmethod  # there's no @staticproperty!
     def json_type() -> str:

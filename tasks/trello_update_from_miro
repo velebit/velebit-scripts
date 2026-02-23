@@ -73,7 +73,7 @@ class TaskInfo(bt.CardInfo):
     src: Src = Src.ACTIVE
     who: Who = Who.ME
     size: tuple[float, float] | None = None
-    relative_position: tuple[str | None, float, float] | None = None
+    relative_position: tuple[float, float] | None = None
 
 
 def get_clean_text_from_sticky(sticky: bm.StickyNote) -> str:

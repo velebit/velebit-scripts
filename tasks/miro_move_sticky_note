@@ -1,0 +1,63 @@
+#!/home/bert/.local/lib/python/venv/tasks/bin/python3
+# Resize sticky notes on the specified board to a standard set of sizes.
+import argparse
+from bert_miro import get_board, StickyNote
+
+
+def update_stickies(
+    board_name_or_id: str,
+    note_text: str,
+    *,
+    dx: float,
+    dy: float,
+    dry_run: bool = False,
+    verbosity: int = 0,
+) -> None:
+    board = get_board(board_name_or_id, board_name_or_id, verbosity=verbosity)
+    matches: list[StickyNote] = []
+
+    for note in board.sticky_notes():
+        if note.text == note_text:
+            matches.append(note)
+
+    if len(matches) == 0:
+        print(
+            f"No sticky notes with text {note_text!r} found on board {board_name_or_id!r}!"
+        )
+    elif len(matches) > 1:
+        print(
+            f"{len(matches)} sticky notes with text {note_text!r} found on board {board_name_or_id!r}!"
+        )
+    else:
+        sticky = matches[0]
+        position = sticky.relative_position
+        assert position is not None, f"Sticky note {sticky.id} has no position"
+        x, y = position
+        if not dry_run:
+            sticky.set_relative_position((x + dx, y + dy))
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-v", "--verbose", action="count", default=0)
+    parser.add_argument("board")
+    parser.add_argument("note_text")
+    parser.add_argument("dx", type=float)
+    parser.add_argument("dy", type=float)
+    settings = parser.parse_args()
+    return settings
+
+
+def main() -> None:
+    settings = parse_args()
+    update_stickies(
+        settings.board,
+        note_text=settings.note_text,
+        dx=settings.dx,
+        dy=settings.dy,
+        verbosity=settings.verbose,
+    )
+
+
+if __name__ == "__main__":
+    main()

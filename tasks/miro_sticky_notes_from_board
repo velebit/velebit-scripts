@@ -73,7 +73,9 @@ def print_sticky_notes(
                 "frame_id": repr(frame_id),
                 "frame_name": repr(frame_name),
                 "size": repr(note.size),
-                "relative_position": repr(note.relative_position),
+                "relative_position": repr(
+                    (note.relative_position_anchor, note.relative_position)
+                ),
                 "time_created": repr(note.json["createdAt"]),
                 "time_modified": repr(note.json["modifiedAt"]),
             }
