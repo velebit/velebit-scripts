@@ -106,6 +106,7 @@ class Client(object):
         client_secret: str | None = None,
         refresh_token: str | None = None,
         access_token: str | None = None,
+        default_verbosity: int = 0,
     ):
         self.__auth = auth
         if client_id is not None:
@@ -116,12 +117,17 @@ class Client(object):
             self.__auth.refresh_token = refresh_token
         if access_token is not None:
             self.__auth.access_token = access_token
+        self.__default_verbosity = default_verbosity
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}(...)"
 
     def __eq__(self, other: Any) -> bool:
         return isinstance(other, Client) and self.__auth == other.__auth
+
+    @property
+    def default_verbosity(self) -> int:
+        return self.__default_verbosity
 
     # HTTP request helpers
 
@@ -133,15 +139,18 @@ class Client(object):
         url: str,
         accept_codes: set[int] = {requests.codes.ok},
         extra_headers: dict[str, str] = {},
+        verbosity: int = 0,
         **kwargs: Any,
     ) -> requests.Response:
         headers = {"accept": "application/json", **extra_headers}
         response = request(url, headers=headers, **kwargs)
         if response.status_code not in accept_codes:
-            print(
-                f"(M) Unexpected response code {response.status_code} for url: {url}; json: {response.json()!r}",
-                file=sys.stderr,
-            )
+            verbosity_threshold = 0
+            if verbosity >= verbosity_threshold:
+                print(
+                    f"(M) Unexpected response code {response.status_code} for url: {url}; json: {response.json()!r}",
+                    file=sys.stderr,
+                )
             # try normal response error mechanism...
             response.raise_for_status()
             # ...otherwise generate our own exception
@@ -154,15 +163,24 @@ class Client(object):
         return response
 
     def _make_auth_request(
-        self, *, extra_headers: dict[str, str] = {}, **kwargs: Any
+        self,
+        *,
+        extra_headers: dict[str, str] = {},
+        verbosity: int | None = None,
+        **kwargs: Any,
     ) -> requests.Response:
+        request_verbosity = (
+            verbosity if verbosity is not None else self.__default_verbosity
+        )
         if self.__auth.access_token is None:
             raise MissingAuthorizationError("Access token not present.")
         headers = {
             "authorization": "Bearer " + self.__auth.access_token,
             **extra_headers,
         }
-        return self._make_basic_request(extra_headers=headers, **kwargs)
+        return self._make_basic_request(
+            extra_headers=headers, verbosity=request_verbosity, **kwargs
+        )
 
     # authentication-related functionality
 
@@ -178,6 +196,7 @@ class Client(object):
             request=requests.get,
             url=url,
             accept_codes={requests.codes.ok, requests.codes.unauthorized},
+            verbosity=-1,
         )
         return response.status_code == requests.codes.ok
 
@@ -260,7 +279,10 @@ class Client(object):
             "refresh_token": self.__auth.refresh_token,
         }
         data = self._make_basic_request(
-            request=requests.post, url=url, params=params
+            request=requests.post,
+            url=url,
+            params=params,
+            verbosity=self.default_verbosity,
         ).json()
         self.__auth.access_token = data["access_token"]
         self.__auth.refresh_token = data["refresh_token"]
@@ -474,6 +496,7 @@ class Board(object):
                 f" '{json['type']}' for item .../{ext_id}"
             )
         if compare_with_json is not None:
+            # compare_with_json ignores verbosity
             if json == compare_with_json:
                 print(f"(M) New JSON for {item_id} matches old", file=sys.stderr)
             else:
@@ -621,22 +644,27 @@ class Item(object):
         keys: Sequence[str],
         values: Mapping[str, Any],
         request_values: Mapping[str, Any] | None = None,
+        verbosity: int | None = None,
     ) -> None:
         def limit_keys(
             mapping: Mapping[str, Any], keys: Collection[str]
         ) -> dict[str, Any]:
             return {k: mapping[k] for k in keys if k in mapping}
 
+        assert self.board is not None and self.board.client is not None
         if request_values is None:
             request_values = values
+        if verbosity is None:
+            verbosity = self.board.client.default_verbosity
+        verbosity_threshold = 1
         old_values = limit_keys(get_from_data_hierarchy(self.json, keys), values.keys())
         if old_values == values:
-            print(
-                f"(M) No need to update {'.'.join(keys)} to {values} for item {self.id}",
-                file=sys.stderr,
-            )
+            if verbosity >= verbosity_threshold:
+                print(
+                    f"(M) No need to update {'.'.join(keys)} to {values} for item {self.id}",
+                    file=sys.stderr,
+                )
             return
-        assert self.board is not None and self.board.client is not None
         subdir = self.request_subdir()
         url = (
             "https://api.miro.com/v2/boards/"
@@ -658,25 +686,28 @@ class Item(object):
             new_json["type"] == self.type
         ), f"Type changed after update: expected {self.type}, got {new_json['type']}"
         self.__json = new_json
-        new_values = limit_keys(get_from_data_hierarchy(new_json, keys), values.keys())
-        if new_values == values:
-            print(
-                f"(M) Updated {'.'.join(keys)} to {new_values} for item {self.id},"
-                f" PATCH response: {response.status_code} {response.reason}",
-                file=sys.stderr,
+        if verbosity >= verbosity_threshold:
+            new_values = limit_keys(
+                get_from_data_hierarchy(new_json, keys), values.keys()
             )
-        elif new_values == old_values:
-            print(
-                f"(M) Failed to update {'.'.join(keys)} to {values} for item {self.id},"
-                f" value is still {new_values} after PATCH response: {response.status_code} {response.reason}",
-                file=sys.stderr,
-            )
-        else:
-            print(
-                f"(M) Updated {'.'.join(keys)} to {new_values} for item {self.id},"
-                f" but expected {values}; PATCH response: {response.status_code} {response.reason}",
-                file=sys.stderr,
-            )
+            if new_values == values:
+                print(
+                    f"(M) Updated {'.'.join(keys)} to {new_values} for item {self.id},"
+                    f" PATCH response: {response.status_code} {response.reason}",
+                    file=sys.stderr,
+                )
+            elif new_values == old_values:
+                print(
+                    f"(M) Failed to update {'.'.join(keys)} to {values} for item {self.id},"
+                    f" value is still {new_values} after PATCH response: {response.status_code} {response.reason}",
+                    file=sys.stderr,
+                )
+            else:
+                print(
+                    f"(M) Updated {'.'.join(keys)} to {new_values} for item {self.id},"
+                    f" but expected {values}; PATCH response: {response.status_code} {response.reason}",
+                    file=sys.stderr,
+                )
 
     @property
     def id(self) -> str:
@@ -726,7 +757,7 @@ class Item(object):
             ["geometry"],
             {"width": size[0], "height": size[1]},
             request_values={"width": size[0]},
-            #request_values={"height": size[1]},
+            # request_values={"height": size[1]},
         )
 
     @property
@@ -931,6 +962,7 @@ def create_client(
     auth: dict[str, Any] | None = None,
     allow_user_input: bool = True,
     reauth_and_save: bool = True,
+    default_verbosity: int = 0,
 ) -> Client:
     if auth is None:
         auth = read_auth_data()
@@ -939,6 +971,7 @@ def create_client(
         client_secret=auth.get("client_secret", None),
         refresh_token=auth.get("refresh_token", None),
         access_token=auth.get("access_token", None),
+        default_verbosity=default_verbosity,
     )
     if reauth_and_save:
         updated = client.authenticate(allow_user_input=allow_user_input)
@@ -957,14 +990,18 @@ def get_board(
     verbosity: int = 0,
 ) -> Board:
     verbosity_threshold, extra_msg = 2, ""
-    client = create_client(auth=auth, reauth_and_save=False)
+    client = create_client(
+        auth=auth, reauth_and_save=False, default_verbosity=verbosity
+    )
     try:
         board = client.board_by_id(board_id)
     except requests.exceptions.HTTPError as e:
         if e.response.status_code != requests.codes.unauthorized:
             raise
         # authentication has failed, so reauthenticate
-        client = create_client(auth=auth, reauth_and_save=True)
+        client = create_client(
+            auth=auth, reauth_and_save=True, default_verbosity=verbosity
+        )
         board = client.board_by_id(board_id)
     if board is None:
         board = client.board_by_name(board_name)
