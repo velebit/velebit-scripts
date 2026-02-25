@@ -924,6 +924,25 @@ class Group(Item):
         assert self.item_ids is not None
         return [self.board.item_by_id(str(i)) for i in self.item_ids]
 
+    @property
+    def relative_position(self) -> None:
+        return None
+
+    def set_relative_position(self, position: tuple[float, float]) -> None:
+        raise NotImplementedError(
+            "Groups cannot be moved directly. Move the group's items instead."
+        )
+
+    def get_items_recursive(self) -> list[Item]:
+        """Recursively get all non-Group items in this group."""
+        all_items: list[Item] = []
+        for item in self.items:
+            if isinstance(item, Group):
+                all_items.extend(item.get_items_recursive())
+            else:
+                all_items.append(item)
+        return all_items
+
 
 Group._register_subclass()  # pyright: ignore[reportPrivateUsage]
 
@@ -1022,7 +1041,7 @@ def get_frame(
     verbosity_threshold, extra_msg = 1, ""
     try:
         frame = Frame.by_id(frame_id, board=board)
-    except KeyError:
+    except (KeyError, requests.exceptions.HTTPError):
         raise  # getting by name is unimplemented
         # ... verbosity_threshold, extra_msg = 0, '*by name*, fix the ID!'
     assert type(frame) is Frame, f"Bad type for frame: {type(frame)}"
@@ -1032,6 +1051,15 @@ def get_frame(
             file=sys.stderr,
         )
     return frame
+
+
+def create_item_id_to_group_mapping(board: Board) -> dict[str, Group]:
+    mapping: dict[str, Group] = {}
+    for group in board.groups():
+        for item_id in group.item_ids or []:
+            assert item_id not in mapping  # Miro invariant
+            mapping[item_id] = group
+    return mapping
 
 
 # ... ad hoc tests ...
