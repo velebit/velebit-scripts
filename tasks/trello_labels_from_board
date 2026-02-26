@@ -10,7 +10,7 @@ import trello.exceptions  # type: ignore[import-untyped]
 from bert_trello import get_board, create_auth_token, read_auth_data, Board, Label
 
 
-class _LabelLike(Protocol):
+class LabelProto(Protocol):
     id: str
     name: str
     color: str
@@ -92,7 +92,7 @@ def print_labels(board_key: str, settings: argparse.Namespace) -> None:
     ]
     labels.sort()
     for _, _, _, label in labels:
-        label = cast(_LabelLike, label)
+        label = cast(LabelProto, label)
         fields: list[str] = []
         if settings.verbose > 0:
             fields.append(repr(label.id))

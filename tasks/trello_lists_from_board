@@ -35,8 +35,8 @@ def print_lists(board_key: str, settings: argparse.Namespace) -> None:
         if not is_closed or settings.print_archived:
             fields: list[str] = []
             if settings.verbose > 0:
-                fields.append(str(tlist.id))
-            fields.append(str(tlist.name))
+                fields.append(repr(tlist.id))
+            fields.append(repr(tlist.name))
             print("{:3s} {}".format(("#" if is_closed else " "), ", ".join(fields)))
             if settings.verbose >= 2:
                 import unicodedata

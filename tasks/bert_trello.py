@@ -22,7 +22,9 @@ class CardInfo:
 
     name: str
     desc: str | None = None
-    cards: list[Card] = field(default_factory=list)  # pyright: ignore[reportUnknownVariableType]
+    cards: list[Card] = field(  # pyright: ignore[reportUnknownVariableType]
+        default_factory=list
+    )
 
 
 # A label-rule dict mapping rule-key constants to sets of label objects
