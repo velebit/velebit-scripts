@@ -9,6 +9,7 @@ import sys
 from typing import Collection, Sequence
 import trello.exceptions  # type: ignore[import-untyped]
 import bert_miro as bm
+import bert_miro_grid as bg
 import bert_task_utilities as bu
 import bert_trello as bt
 
@@ -46,6 +47,14 @@ class Who(enum.Enum):
     INACTIVE = enum.auto()
 
 
+class LabeledPriority(enum.Enum):
+    P1 = enum.auto()
+    P2 = enum.auto()
+    P3 = enum.auto()
+    P4 = enum.auto()
+    NONE = enum.auto()
+
+
 sticky_colors_me_regular = frozenset(["blue"])
 sticky_colors_me_repeating = frozenset(["light_blue"])
 sticky_colors_joint_regular = frozenset(["light_yellow"])
@@ -74,6 +83,7 @@ class TaskInfo(bt.CardInfo):
     who: Who = Who.ME
     size: tuple[float, float] | None = None
     relative_position: tuple[float, float] | None = None
+    priority: LabeledPriority = LabeledPriority.NONE
 
 
 def get_clean_text_from_sticky(sticky: bm.StickyNote) -> str:
@@ -96,6 +106,24 @@ def get_who_from_sticky(sticky: bm.StickyNote) -> Who:
     return Who.INACTIVE
 
 
+def get_priority_from_grid(
+    grid: bg.StickyNoteGrid | None, sticky: bm.StickyNote
+) -> LabeledPriority:
+    if grid is None:
+        return LabeledPriority.NONE
+    _, row = grid.sticky_grid_indices(sticky)
+    if row == 0:
+        return LabeledPriority.P1
+    elif row == 1:
+        return LabeledPriority.P2
+    elif row == 2:
+        return LabeledPriority.P3
+    elif row == 3:
+        return LabeledPriority.P4
+    else:
+        return LabeledPriority.NONE
+
+
 def read_miro_board_frames(verbosity: int = 0) -> list[TaskInfo]:
     board = bm.get_board(
         board_id=MIRO_BOARD_ID, board_name=MIRO_BOARD_NAME, verbosity=verbosity
@@ -107,9 +135,15 @@ def read_miro_board_frames(verbosity: int = 0) -> list[TaskInfo]:
         (MIRO_TRIAGE_FRAME_ID, MIRO_TRIAGE_FRAME_NAME, Src.TRIAGE),
         (MIRO_DONE_FRAME_ID, MIRO_DONE_FRAME_NAME, Src.DONE),
     ):
-        for sn in bm.get_frame(
+        sticky_notes = bm.get_frame(
             board=board, frame_id=frame_id, frame_name=frame_name, verbosity=verbosity
-        ).sticky_notes():
+        ).sticky_notes()
+        if frame_id == MIRO_ACTIVE_FRAME_ID:
+            # Only create a grid for the active frame, since that's the only one where it matters
+            grid = bg.StickyNoteGrid(sticky_notes)
+        else:
+            grid = None
+        for sn in sticky_notes:
             tasks_active.append(
                 TaskInfo(
                     name=get_clean_text_from_sticky(sn),
@@ -118,6 +152,7 @@ def read_miro_board_frames(verbosity: int = 0) -> list[TaskInfo]:
                     who=get_who_from_sticky(sn),
                     size=sn.size,
                     relative_position=sn.relative_position,
+                    priority=get_priority_from_grid(grid, sn),
                 )
             )
     return tasks_active
@@ -162,7 +197,8 @@ def update_trello(settings: argparse.Namespace, tasks: Sequence[TaskInfo]) -> No
         {
             bt.REMOVE_LABELS: ["Miro: me", "Miro: joint", "Miro: talk", "Miro: other"],
             bt.RETIRE_LABELS: ["ex-Miro"],
-        }
+        },
+        {bt.REMOVE_LABELS: ["Miro p1", "Miro p2", "Miro p3", "Miro p4"]},
     ]
     src_label_rule_input: dict[Src, list[dict[str, list[str]]]] = {
         Src.ACTIVE: [],
@@ -204,6 +240,38 @@ def update_trello(settings: argparse.Namespace, tasks: Sequence[TaskInfo]) -> No
                 bt.ADD_LABELS: ["Miro: joint"],
                 bt.REMOVE_LABELS: ["Miro: me", "Miro: talk", "Miro: other"],
                 bt.RETIRE_LABELS: ["ex-Miro"],
+            }
+        ],
+    }
+    priority_label_rule_input: dict[LabeledPriority, list[dict[str, list[str]]]] = {
+        LabeledPriority.P1: [
+            {
+                bt.ADD_LABELS: ["Miro p1"],
+                bt.REMOVE_LABELS: ["Miro p2", "Miro p3", "Miro p4"],
+            }
+        ],
+        LabeledPriority.P2: [
+            {
+                bt.ADD_LABELS: ["Miro p2"],
+                bt.REMOVE_LABELS: ["Miro p1", "Miro p3", "Miro p4"],
+            }
+        ],
+        LabeledPriority.P3: [
+            {
+                bt.ADD_LABELS: ["Miro p3"],
+                bt.REMOVE_LABELS: ["Miro p1", "Miro p2", "Miro p4"],
+            }
+        ],
+        LabeledPriority.P4: [
+            {
+                bt.ADD_LABELS: ["Miro p4"],
+                bt.REMOVE_LABELS: ["Miro p1", "Miro p2", "Miro p3"],
+            }
+        ],
+        LabeledPriority.NONE: [
+            {
+                bt.ADD_LABELS: [],
+                bt.REMOVE_LABELS: ["Miro p1", "Miro p2", "Miro p3", "Miro p4"],
             }
         ],
     }
@@ -250,6 +318,13 @@ def update_trello(settings: argparse.Namespace, tasks: Sequence[TaskInfo]) -> No
         who_label_rules[kw] = bt.look_up_label_objects_in_label_rules(
             board, who_label_rule_input[kw], verbosity=settings.verbose
         )
+    priority_label_rules: dict[
+        LabeledPriority, Collection[dict[str, Collection[bt.Label]]]
+    ] = {}
+    for kp in LabeledPriority:
+        priority_label_rules[kp] = bt.look_up_label_objects_in_label_rules(
+            board, priority_label_rule_input[kp], verbosity=settings.verbose
+        )
 
     # Moving between lists (assumes lists are already deduplicated):
     # - if Miro done, move to Trello done
@@ -265,50 +340,58 @@ def update_trello(settings: argparse.Namespace, tasks: Sequence[TaskInfo]) -> No
     all_tasks: list[TaskInfo] = []
     for s in Src:
         for w in Who:
-            working = [t for t in tasks if t.src is s and t.who is w]
-            tasks = [t for t in tasks if t not in working]
-            rules = (*common_label_rules, *src_label_rules[s], *who_label_rules[w])
-            default_labels = bt.get_default_labels_from_rules(rules)
-            create = s is not Src.DONE
-            if create:
-                card_info = bt.get_or_create_cards_with_info(
-                    inbox_list,
-                    working,
-                    default_labels,
-                    verbosity=settings.verbose,
-                    log_ignore_duplicates_in_lists={"done": [done_list.id]},
+            for p in LabeledPriority:
+                working = [
+                    t for t in tasks if t.src is s and t.who is w and t.priority is p
+                ]
+                tasks = [t for t in tasks if t not in working]
+                rules = (
+                    *common_label_rules,
+                    *src_label_rules[s],
+                    *who_label_rules[w],
+                    *priority_label_rules[p],
                 )
-            else:
-                card_info = bt.get_cards_with_info(board, working)
-                # will not produce output about existing/multiple cards
-            card_groups = bt.grouped_cards_from_info(card_info)
-            cards_to_move: list[bt.Card] = []
-            for group in card_groups:
-                templates = [c for c in group if bt.is_card_template(c)]
-                if len(templates) == 0 or move_template_clones:
-                    cards_to_move.extend(group)
+                default_labels = bt.get_default_labels_from_rules(rules)
+                create = s is not Src.DONE
+                if create:
+                    card_info = bt.get_or_create_cards_with_info(
+                        inbox_list,
+                        working,
+                        default_labels,
+                        verbosity=settings.verbose,
+                        log_ignore_duplicates_in_lists={"done": [done_list.id]},
+                    )
                 else:
-                    cards_to_move.extend(templates)
-            if s is Src.DONE:
-                bt.move_cards_not_in_lists_to_list(
-                    cards_to_move,
-                    [done_list],
-                    done_list,
-                    verbosity=settings.verbose,
-                    dry_run=not settings.move,
+                    card_info = bt.get_cards_with_info(board, working)
+                    # will not produce output about existing/multiple cards
+                card_groups = bt.grouped_cards_from_info(card_info)
+                cards_to_move: list[bt.Card] = []
+                for group in card_groups:
+                    templates = [c for c in group if bt.is_card_template(c)]
+                    if len(templates) == 0 or move_template_clones:
+                        cards_to_move.extend(group)
+                    else:
+                        cards_to_move.extend(templates)
+                if s is Src.DONE:
+                    bt.move_cards_not_in_lists_to_list(
+                        cards_to_move,
+                        [done_list],
+                        done_list,
+                        verbosity=settings.verbose,
+                        dry_run=not settings.move,
+                    )
+                else:
+                    bt.move_cards_from_lists_to_list(
+                        cards_to_move,
+                        [done_list],
+                        inbox_list,
+                        verbosity=settings.verbose,
+                        dry_run=not settings.move,
+                    )
+                bt.update_card_labels(
+                    bu.flatten(card_groups), rules, verbosity=settings.verbose
                 )
-            else:
-                bt.move_cards_from_lists_to_list(
-                    cards_to_move,
-                    [done_list],
-                    inbox_list,
-                    verbosity=settings.verbose,
-                    dry_run=not settings.move,
-                )
-            bt.update_card_labels(
-                bu.flatten(card_groups), rules, verbosity=settings.verbose
-            )
-            all_tasks.extend(working)
+                all_tasks.extend(working)
     assert len(tasks) == 0
     bt.update_orphan_labeled_tasks(
         board,
