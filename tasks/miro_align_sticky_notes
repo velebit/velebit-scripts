@@ -61,24 +61,26 @@ def update_stickies(
 
     sticky_notes = frame.sticky_notes()
     if not sticky_notes:
-        print(
-            f"No sticky notes found in frame {frame_name_or_id!r} on board {board_name_or_id!r}!"
-        )
+        if verbosity >= 0:
+            print(
+                f"No sticky notes found in frame {frame_name_or_id!r} on board {board_name_or_id!r}!"
+            )
         return
 
     grid = StickyNoteGrid(sticky_notes)
     grid.check_grid_overlaps()
-    smaller_most_common_size = min(grid.most_common_sticky_dimensions())
-    spacing = grid.new_spacing(spacing_mode)
+    if verbosity >= 0:
+        smaller_most_common_size = min(grid.most_common_sticky_dimensions())
+        spacing = grid.new_spacing(spacing_mode)
 
-    if spacing[0] < smaller_most_common_size:
-        print(
-            f"X spacing {spacing[0]} is smaller than sticky size {smaller_most_common_size}, proceeding anyway"
-        )
-    if spacing[1] < smaller_most_common_size:
-        print(
-            f"Y spacing {spacing[1]} is smaller than sticky size {smaller_most_common_size}, proceeding anyway"
-        )
+        if spacing[0] < smaller_most_common_size:
+            print(
+                f"X spacing {spacing[0]} is smaller than sticky size {smaller_most_common_size}, proceeding anyway"
+            )
+        if spacing[1] < smaller_most_common_size:
+            print(
+                f"Y spacing {spacing[1]} is smaller than sticky size {smaller_most_common_size}, proceeding anyway"
+            )
 
     moves = tuple(
         (s, grid.sticky_original_position(s), grid.sticky_new_position(s, spacing_mode))
@@ -126,6 +128,7 @@ def update_stickies(
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("-v", "--verbose", action="count", default=0)
+    parser.add_argument("-q", "--quiet", action="store_const", dest="verbose", const=-1)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument(
         "--equal",
