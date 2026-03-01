@@ -514,52 +514,48 @@ def move_cards_not_in_lists_to_list(
 # ===== directly managing labels on a card =====
 
 
-def add_labels_to_card(
-    card: Card, labels_to_add: Iterable[Label], verbosity: int = 0
+def add_and_remove_labels_for_card(
+    card: Card,
+    labels_to_add: Iterable[Label],
+    labels_to_remove: Iterable[Label],
+    verbosity: int = 0,
 ) -> bool:
+    changed = False
     missing_labels = difference(labels_to_add, card.labels)
     if len(missing_labels) > 0:
         for ml in missing_labels:
             card.add_label(ml)  # type: ignore[attr-exists]
-        if verbosity >= 0:
-            card_name = card.name  # type: ignore[attr-exists]
+        changed = True
+    extra_labels = intersection(labels_to_remove, card.labels)
+    if len(extra_labels) > 0:
+        for el in extra_labels:
+            card.remove_label(el)  # type: ignore[attr-exists]
+        changed = True
+    if verbosity >= 0 and changed:
+        card_name = card.name  # type: ignore[attr-exists]
+        parts: list[str] = []
+        if len(missing_labels) > 0:
             label_info = ", ".join(
                 [
                     "'" + ml.name + "'"  # type: ignore[attr-exists]
                     for ml in missing_labels
                 ]
             )
-            print(
-                f"(T) Updated card '{card_name}': added label(s) {label_info}.",
-                file=sys.stderr,
-            )
-        return True
-    else:
-        return False
-
-
-def remove_labels_from_card(
-    card: Card, labels_to_remove: Iterable[Label], verbosity: int = 0
-) -> bool:
-    extra_labels = intersection(labels_to_remove, card.labels)
-    if len(extra_labels) > 0:
-        for el in extra_labels:
-            card.remove_label(el)  # type: ignore[attr-exists]
-        if verbosity >= 0:
-            card_name = card.name  # type: ignore[attr-exists]
+            parts.append(f"added label(s) {label_info}")
+        if len(extra_labels) > 0:
             label_info = ", ".join(
                 [
                     "'" + el.name + "'"  # type: ignore[attr-exists]
                     for el in extra_labels
                 ]
             )
-            print(
-                f"(T) Updated card '{card_name}': removed label(s) {label_info}.",
-                file=sys.stderr,
-            )
-        return True
-    else:
-        return False
+            parts.append(f"removed label(s) {label_info}")
+        detail = "; ".join(parts)
+        print(
+            f"(T) Updated card '{card_name}': {detail}.",
+            file=sys.stderr,
+        )
+    return changed
 
 
 # ===== managing labels on cards according to rules =====
@@ -625,11 +621,11 @@ def update_card_labels(
                 want_labels = union(want_labels, rule[ADD_LABELS])
             if REMOVE_LABELS in rule:
                 want_labels = difference(want_labels, rule[REMOVE_LABELS])
-        add_labels_to_card(
-            card, difference(want_labels, card.labels), verbosity=verbosity
-        )
-        remove_labels_from_card(
-            card, difference(card.labels, want_labels), verbosity=verbosity
+        add_and_remove_labels_for_card(
+            card,
+            difference(want_labels, card.labels),
+            difference(card.labels, want_labels),
+            verbosity=verbosity,
         )
         # The assertion is unreliable because the card.labels update is delayed
 
@@ -667,11 +663,11 @@ def update_orphan_labeled_tasks(
                 if len(extra) > 0:
                     want_labels = difference(want_labels, try_remove)
                     want_labels = union(want_labels, rule[RETIRE_LABELS])
-        add_labels_to_card(
-            card, difference(want_labels, card.labels), verbosity=verbosity
-        )
-        remove_labels_from_card(
-            card, difference(card.labels, want_labels), verbosity=verbosity
+        add_and_remove_labels_for_card(
+            card,
+            difference(want_labels, card.labels),
+            difference(card.labels, want_labels),
+            verbosity=verbosity,
         )
         # The assertion is unreliable because the card.labels update is delayed
 
