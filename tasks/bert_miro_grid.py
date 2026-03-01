@@ -330,6 +330,60 @@ class GridSpacingGenerator:
         )
 
 
+class GridAxisRealigner:
+    """Readjusts positions for one axis to minimize number of moves."""
+
+    def __init__(
+        self,
+        *,
+        previous_positions: Sequence[float],
+    ):
+        self._previous_positions = previous_positions
+
+    def find_offset(self, positions: Sequence[float]) -> float:
+        """Shift positions to minimize movement based on previous positions."""
+        assert len(positions) == len(self._previous_positions)
+        moved_by = [p - pp for p, pp in zip(positions, self._previous_positions)]
+        candidates = list(set(moved_by))
+        num_nearby_points = {
+            c: len([mb for mb in moved_by if abs(mb - c) < 0.1]) for c in candidates
+        }
+        num_close_points = {
+            c: len([mb for mb in moved_by if abs(mb - c) < 1e-6]) for c in candidates
+        }
+        best = max(
+            candidates,
+            key=lambda c: (num_nearby_points[c], num_close_points[c], -abs(c)),
+        )
+        return -best
+
+
+class GridRealigner:
+    """Readjusts positions for each axis to minimize number of moves."""
+
+    def __init__(
+        self,
+        *,
+        previous_x_positions: Sequence[float],
+        previous_y_positions: Sequence[float],
+    ):
+        self._x_realigner = GridAxisRealigner(
+            previous_positions=previous_x_positions,
+        )
+        self._y_realigner = GridAxisRealigner(
+            previous_positions=previous_y_positions,
+        )
+
+    def find_offset(
+        self, x_positions: Sequence[float], y_positions: Sequence[float]
+    ) -> tuple[float, float]:
+        """Shift positions to minimize movement for each axis."""
+        return (
+            self._x_realigner.find_offset(x_positions),
+            self._y_realigner.find_offset(y_positions),
+        )
+
+
 class StickyNoteGrid:
     """Manage sticky note grid analysis."""
 
@@ -355,6 +409,7 @@ class StickyNoteGrid:
         self._most_common_sticky_dimensions: tuple[float, float] | None = None
         self._analyzers: tuple[GridAxisAnalyzer, GridAxisAnalyzer] | None = None
         self._generator: GridSpacingGenerator | None = None
+        self._realigner: GridRealigner | None = None
         self._index_positions: dict[
             GridSpacingMode, tuple[list[float], list[float]]
         ] = {}
@@ -407,11 +462,7 @@ class StickyNoteGrid:
     ) -> tuple[float, float]:
         """Get the new position of a sticky note."""
         grid_indices = self.sticky_grid_indices(sticky)
-        if mode in self._index_positions:
-            index_positions = self._index_positions[mode]
-        else:
-            index_positions = self._get_generator().generate(mode)
-            self._index_positions[mode] = index_positions
+        index_positions = self._get_index_positions(mode)
         return (
             index_positions[0][grid_indices[0]],
             index_positions[1][grid_indices[1]],
@@ -466,6 +517,21 @@ class StickyNoteGrid:
         assert self._generator is not None
         return self._generator
 
+    def _get_realigner(self) -> GridRealigner:
+        """Get or create a realigner for spacing calculations."""
+        if self._realigner is None:
+            self._realigner = self._create_realigner()
+        assert self._realigner is not None
+        return self._realigner
+
+    def _get_index_positions(
+        self, mode: GridSpacingMode
+    ) -> tuple[list[float], list[float]]:
+        """Get or create a index_positions for spacing calculations."""
+        if mode not in self._index_positions:
+            self._index_positions[mode] = self._calculate_index_positions(mode)
+        return self._index_positions[mode]
+
     # Other private methods
 
     def _calculate_most_common_dimensions(self) -> tuple[float, float]:
@@ -479,6 +545,29 @@ class StickyNoteGrid:
             size_counts[sticky_size] += 1
         most_common_size, _ = max(size_counts.items(), key=lambda kv: kv[1])
         return most_common_size
+
+    def _calculate_index_positions(
+        self, mode: GridSpacingMode
+    ) -> tuple[list[float], list[float]]:
+        """Calculate the index positions."""
+        # Get basic positions.
+        raw_positions = self._get_generator().generate(mode)
+        # Realign.
+        # We need to repeat positions as in the original, to get correct weighting.
+        analyzers = self._get_analyzers()
+        repeated_raw_x = [
+            raw_positions[0][analyzers[0].position_to_index_mapping()[x]]
+            for x in self.original_x_positions
+        ]
+        repeated_raw_y = [
+            raw_positions[1][analyzers[1].position_to_index_mapping()[y]]
+            for y in self.original_y_positions
+        ]
+        offset = self._get_realigner().find_offset(repeated_raw_x, repeated_raw_y)
+        return (
+            [x + offset[0] for x in raw_positions[0]],
+            [y + offset[1] for y in raw_positions[1]],
+        )
 
     def _create_analyzers(self) -> tuple[GridAxisAnalyzer, GridAxisAnalyzer]:
         """Create analyzers for both axes."""
@@ -520,3 +609,11 @@ class StickyNoteGrid:
             y_item_size=most_common_size[1],
         )
         return generator
+
+    def _create_realigner(self) -> GridRealigner:
+        """Create a realigner for spacing calculations."""
+        realigner = GridRealigner(
+            previous_x_positions=self.original_x_positions,
+            previous_y_positions=self.original_y_positions,
+        )
+        return realigner
