@@ -31,12 +31,17 @@ except ImportError:
 MOUNT_ROOT = "/media"
 MOUNT_PREFIX = f"{MOUNT_ROOT}/backup"
 
+OUTPUT_COLOR_YELLOW = "\033[33m"
+OUTPUT_COLOR_RED = "\033[31m"
+
 
 def run_cmd(
     cmd: list[str],
     *,
     dry_run: bool = False,
     capture_output: bool = False,
+    output_color_stdout: str = OUTPUT_COLOR_YELLOW,
+    output_color_stderr: str = OUTPUT_COLOR_RED,
     check: bool = True,
 ) -> subprocess.CompletedProcess[str]:
     """Run a command with optional dry-run mode."""
@@ -106,7 +111,10 @@ def run_cmd(
 
     out_thread = threading.Thread(
         target=colorize_and_indent,
-        args=([process.stdout, process.stderr], ["\033[33m", "\033[31m"]),
+        args=(
+            [process.stdout, process.stderr],
+            [output_color_stdout, output_color_stderr],
+        ),
     )
     out_thread.start()
     exit_code = process.wait()
@@ -231,8 +239,14 @@ class TemporaryMount:
         if self.__verbose:
             print(f"\033[34m({self._msg_mounting} {device!r} on {mountpoint!r})\033[0m")
         if not os.path.exists(mountpoint) and not self.__dry_run:
-            os.makedirs(mountpoint)
-            self.__dir_created = True
+            try:
+                os.makedirs(mountpoint)
+                self.__dir_created = True
+            except PermissionError as exc:
+                print(
+                    f"\033[93mWarning: Failed to create mountpoint directory {mountpoint!r}: {exc}\033[0m",
+                    file=sys.stderr,
+                )
         try:
             run_cmd(
                 ["mount", *self.__mount_options, device, mountpoint],
@@ -240,6 +254,10 @@ class TemporaryMount:
             )
             self.__mounted_here = True
         except subprocess.CalledProcessError as exc:
+            print(
+                f"\033[91mFailed to mount {device!r} on {mountpoint!r}\033[0m",
+                file=sys.stderr,
+            )
             raise FailedMountError(
                 f"Failed to mount {device!r} on {mountpoint!r}"
             ) from exc
@@ -715,6 +733,8 @@ def copy_files(
     dst_path: str,
     *,
     exclude: list[str] | None = None,
+    careful: bool = True,
+    optimize_space: bool = False,  # can override careful for delete options!
     verbose: bool = False,
     dry_run: bool = False,
 ) -> bool:
@@ -729,21 +749,25 @@ def copy_files(
     rsync_cmd.extend(arg for pattern in exclude for arg in ("--exclude", pattern))
     rsync_cmd.extend(
         [
-            "--checksum",
             "--archive",
-            "--delete",
             "--hard-links",
             "--sparse",
             "--acls",
             "--xattrs",
         ]
     )
-
+    if careful:
+        rsync_cmd.append("--checksum")
+    if optimize_space:
+        rsync_cmd.append("--delete-before")
+    elif careful:
+        rsync_cmd.append("--delete-delay")
+    else:
+        rsync_cmd.append("--delete")
     if verbose:
         rsync_cmd.extend(
             ["--info=progress2,flist2,stats2,skip,symsafe", "--human-readable"]
         )
-
     rsync_cmd.extend([f"{src_path}/.", f"{dst_path}/."])
 
     try:
@@ -1040,9 +1064,12 @@ def update_grub(root_path: str, *, dry_run: bool = False) -> bool:
 
     try:
         timer = ElapsedTimer()
+        # update-grub sends all of its output to stderr. We make the stderr output not-red to minimize yelling at the user,
+        # at the risk of not highlighting actual errors.
         run_cmd(
             command_prefix + update_cmd,
             capture_output=False,
+            output_color_stderr=OUTPUT_COLOR_YELLOW,
             dry_run=dry_run,
         )
         print(f"  ...done in {timer.elapsed()}.")
@@ -1061,6 +1088,8 @@ class SyncFlags:
     """Flags for syncing partitions"""
 
     exclude: list[str]
+    careful: bool
+    optimize_space: bool
     verbosity: int
     dry_run: bool
 
@@ -1086,6 +1115,8 @@ def sync_partition(
         src_dev.mountpoint_path,
         dst_dev.mountpoint_path,
         exclude=flags.exclude,
+        careful=flags.careful,
+        optimize_space=flags.optimize_space,
         verbose=flags.verbosity > 0,
         dry_run=flags.dry_run,
     ):
@@ -1140,6 +1171,8 @@ def sync_efi_boot_root(
                     "/mnt/",
                     *flags.exclude,
                 ],
+                careful=flags.careful,
+                optimize_space=flags.optimize_space,
                 verbosity=flags.verbosity,
                 dry_run=flags.dry_run,
             ),
@@ -1413,6 +1446,19 @@ def parse_arguments() -> argparse.Namespace:
         default=[],
         help="Exclude pattern (can be used multiple times)",
     )
+    parser.add_argument(
+        "--fast",
+        action="store_true",
+        help=(
+            "Enable fast mode (look only at file size and modification time, not data checksum)."
+            " Running fast some of the time is probably a reasonable tradeoff."
+        ),
+    )
+    parser.add_argument(
+        "--tight",
+        action="store_true",
+        help="Enable `tight on space' mode (delete files early).",
+    )
     parser.add_argument("-v", "--verbose", action="count", help="Verbose rsync output")
     parser.add_argument(
         "--write-times",
@@ -1446,6 +1492,8 @@ def main() -> None:
 
     sync_flags = SyncFlags(
         exclude=args.exclude or [],
+        careful=not args.fast,
+        optimize_space=args.tight,
         verbosity=args.verbose or 0,
         dry_run=args.dry_run,
     )
