@@ -1,10 +1,14 @@
 #!/bin/bash
 # Realign sticky notes in several frames of the chores board.
 
+dir="$(dirname "$(realpath "$0")")"
+
 set -eu
 
-./tasks/miro_align_sticky_notes --tight "$@" uXjVPR8tBqw= 3458764558974521944
-./tasks/miro_align_sticky_notes --tiled "$@" uXjVPR8tBqw= 3458764632524709740
-./tasks/miro_align_sticky_notes --tight "$@" uXjVPR8tBqw= 3458764534889282822
-./tasks/miro_align_sticky_notes --equal "$@" uXjVPR8tBqw= 3458764534889282819
-./tasks/miro_align_sticky_notes --equal "$@" uXjVPR8tBqw= 3458764534889282821
+if [[ "$#" -eq 0 ]]; then set -- --quiet-empty; fi
+
+"$dir"/miro_align_sticky_notes --tight "$@" uXjVPR8tBqw= 3458764558974521944
+"$dir"/miro_align_sticky_notes --tiled "$@" uXjVPR8tBqw= 3458764632524709740
+"$dir"/miro_align_sticky_notes --tight "$@" uXjVPR8tBqw= 3458764534889282822
+"$dir"/miro_align_sticky_notes --extend "$@" uXjVPR8tBqw= 3458764534889282819
+"$dir"/miro_align_sticky_notes --extend "$@" uXjVPR8tBqw= 3458764534889282821

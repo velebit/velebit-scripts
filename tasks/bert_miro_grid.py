@@ -10,9 +10,9 @@ from bert_miro import StickyNote
 
 class GridSpacingMode(Enum):
     EQUAL = "equal"
+    INTERNAL_STRICT = "internal_strict"
+    INTERNAL_OR_EQUAL = "internal_or_equal"
     TIGHT = "tight"
-    TIGHT_X = "tight_x"
-    TIGHT_Y = "tight_y"
     TILED = "tiled"
 
 
@@ -25,6 +25,10 @@ class MissingGapError(ValueError):
 
 
 class OverlappingStickiesError(ValueError):
+    pass
+
+
+class NotEnoughDataError(ValueError):
     pass
 
 
@@ -124,6 +128,7 @@ class GridAxisAnalyzer:
         blob_indices = self._assign_blob_indices(blob_collection)
         self._grid_size = max(blob_indices) + 1  # needed for _make_blob_array()
         self._blobs = self._make_blob_array(blob_collection, blob_indices)
+        assert len(self._blobs) == self._grid_size
 
     def _separate_into_blobs(self) -> list[list[float]]:
         """1D clustering based on gap detection."""
@@ -229,16 +234,23 @@ class GridAxisSpacingGenerator:
     def __init__(
         self,
         *,
-        previous_min: float,
-        previous_max: float,
-        grid_size: int,
+        previous_nominal: Sequence[float | None],
     ):
-        self._previous_min = previous_min
-        self._previous_max = previous_max
-        self._grid_size = grid_size
-        assert self._previous_max >= self._previous_min
+        self._previous = tuple(previous_nominal)
+        self._grid_size = len(self._previous)
         assert self._grid_size >= 1
-        assert (self._previous_max > self._previous_min) or self._grid_size == 1
+        non_none = [p for p in self._previous if p is not None]
+        assert all(
+            non_none[i] < non_none[i + 1] for i in range(len(non_none) - 1)
+        ), "non-None positions should be sorted"
+        assert self._previous[0] is not None
+        assert self._previous[-1] is not None
+        # save min and max separately so we can access them without checks for None
+        self._previous_min: float = self._previous[0]
+        self._previous_max: float = self._previous[-1]
+        # redundant checks:
+        assert self._previous_min <= self._previous_max
+        assert (self._previous_min < self._previous_max) or self._grid_size == 1
 
     def generate(self, spacing: float) -> list[float]:
         """Calculate spacing based on a provided spacing value."""
@@ -256,6 +268,20 @@ class GridAxisSpacingGenerator:
         )
         return spacing
 
+    def internal_spacing(self, strict: bool) -> float:
+        """Calculate spacing based on the most common spacing, not considering the edges of the grid."""
+        pts = [(i, p) for i, p in enumerate(self._previous[1:-1]) if p is not None]
+        steps = [
+            (pts[i + 1][1] - pts[i][1]) / (pts[i + 1][0] - pts[i][0])
+            for i in range(len(pts) - 1)
+        ]
+        if len(steps) > 0:
+            return median(steps)
+        elif strict:
+            raise NotEnoughDataError("Not enough internal points to calculate spacing")
+        else:
+            return self.equal_spacing()
+
 
 class GridSpacingGenerator:
     """Calculates spacing and new positions for both axes."""
@@ -263,25 +289,17 @@ class GridSpacingGenerator:
     def __init__(
         self,
         *,
-        previous_x_min: float,
-        previous_x_max: float,
-        x_grid_size: int,
+        previous_nominal_x: Sequence[float | None],
         x_item_size: float,
-        previous_y_min: float,
-        previous_y_max: float,
-        y_grid_size: int,
+        previous_nominal_y: Sequence[float | None],
         y_item_size: float,
     ):
         self._x_generator = GridAxisSpacingGenerator(
-            previous_min=previous_x_min,
-            previous_max=previous_x_max,
-            grid_size=x_grid_size,
+            previous_nominal=previous_nominal_x,
         )
         self._x_size = x_item_size
         self._y_generator = GridAxisSpacingGenerator(
-            previous_min=previous_y_min,
-            previous_max=previous_y_max,
-            grid_size=y_grid_size,
+            previous_nominal=previous_nominal_y,
         )
         self._y_size = y_item_size
 
@@ -298,19 +316,19 @@ class GridSpacingGenerator:
                 self._x_generator.equal_spacing(),
                 self._y_generator.equal_spacing(),
             )
+        elif mode == GridSpacingMode.INTERNAL_OR_EQUAL:
+            return (
+                self._x_generator.internal_spacing(strict=False),
+                self._y_generator.internal_spacing(strict=False),
+            )
+        elif mode == GridSpacingMode.INTERNAL_STRICT:
+            return (
+                self._x_generator.internal_spacing(strict=True),
+                self._y_generator.internal_spacing(strict=True),
+            )
         elif mode == GridSpacingMode.TIGHT:
             return (
                 tight_size_x,
-                tight_size_y,
-            )
-        elif mode == GridSpacingMode.TIGHT_X:
-            return (
-                tight_size_x,
-                self._y_generator.equal_spacing(),
-            )
-        elif mode == GridSpacingMode.TIGHT_Y:
-            return (
-                self._x_generator.equal_spacing(),
                 tight_size_y,
             )
         elif mode == GridSpacingMode.TILED:
@@ -587,25 +605,25 @@ class StickyNoteGrid:
     def _create_generator(self) -> GridSpacingGenerator:
         """Create a generator for spacing calculations."""
         analyzers = self._get_analyzers()
-        x_min = analyzers[0].calculate_blob_median(0)
-        x_max = analyzers[0].calculate_blob_median(-1)
-        y_min = analyzers[1].calculate_blob_median(0)
-        y_max = analyzers[1].calculate_blob_median(-1)
+        x_medians = [
+            analyzers[0].calculate_blob_median(i)
+            for i in range(analyzers[0].grid_size())
+        ]
+        y_medians = [
+            analyzers[1].calculate_blob_median(i)
+            for i in range(analyzers[1].grid_size())
+        ]
         assert (
-            x_min is not None
-            and x_max is not None
-            and y_min is not None
-            and y_max is not None
+            x_medians[0] is not None
+            and x_medians[-1] is not None
+            and y_medians[0] is not None
+            and y_medians[-1] is not None
         )
         most_common_size = self.most_common_sticky_dimensions()
         generator = GridSpacingGenerator(
-            previous_x_min=x_min,
-            previous_x_max=x_max,
-            x_grid_size=analyzers[0].grid_size(),
+            previous_nominal_x=x_medians,
             x_item_size=most_common_size[0],
-            previous_y_min=y_min,
-            previous_y_max=y_max,
-            y_grid_size=analyzers[1].grid_size(),
+            previous_nominal_y=y_medians,
             y_item_size=most_common_size[1],
         )
         return generator
