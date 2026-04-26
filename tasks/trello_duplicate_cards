@@ -83,14 +83,14 @@ def handle_cards(
                 response = (
                     input(
                         f"  What to do with card [{i+1}] {card.short_url}? "  # type: ignore[attr-defined]
-                        "(r)emove, (a)rchive, move to (d)one, (s)kip: "
+                        "(x)=delete, (a)rchive, move to (d)one, (s)kip: "
                     )
                     .strip()
                     .lower()
                 )
-                if response == "r":
+                if response == "x":
                     card.delete()
-                    print(f"Removed card {card.id!r}.")  # type: ignore[attr-defined]
+                    print(f"Deleted card {card.id!r}.")  # type: ignore[attr-defined]
                     break
                 elif response == "a":
                     card.set_closed(True)  # type: ignore[attr-defined]
