@@ -16,6 +16,8 @@ from bert_miro_grid import (
     StickyNoteGrid,
 )
 
+MOVE_THRESHOLD = 1e-6
+
 
 class GridAxes(Enum):
     X_AND_Y = "xy"
@@ -77,8 +79,12 @@ def update_stickies(
     print_empty_warnings: bool | None = None,
     print_grid_warnings: bool | None = None,
 ) -> None:
-    print_empty_warnings = print_empty_warnings if print_empty_warnings is not None else verbosity >= 0
-    print_grid_warnings = print_grid_warnings if print_grid_warnings is not None else verbosity >= 0
+    print_empty_warnings = (
+        print_empty_warnings if print_empty_warnings is not None else verbosity >= 0
+    )
+    print_grid_warnings = (
+        print_grid_warnings if print_grid_warnings is not None else verbosity >= 0
+    )
 
     board = get_board(board_name_or_id, board_name_or_id, verbosity=verbosity)
     frame = get_frame(board, frame_name_or_id, frame_name_or_id, verbosity=verbosity)
@@ -99,11 +105,19 @@ def update_stickies(
         size = grid.grid_size()
 
         # If the grid size is only 1 in a dimentsion, spacing doesn't matter so skip warning
-        if spacing[0] < smaller_most_common_size and size[0] > 1 and print_grid_warnings:
+        if (
+            spacing[0] < smaller_most_common_size
+            and size[0] > 1
+            and print_grid_warnings
+        ):
             print(
                 f"X spacing {spacing[0]} is smaller than sticky size {smaller_most_common_size}, proceeding anyway"
             )
-        if spacing[1] < smaller_most_common_size and size[1] > 1 and print_grid_warnings:
+        if (
+            spacing[1] < smaller_most_common_size
+            and size[1] > 1
+            and print_grid_warnings
+        ):
             print(
                 f"Y spacing {spacing[1]} is smaller than sticky size {smaller_most_common_size}, proceeding anyway"
             )
@@ -114,7 +128,14 @@ def update_stickies(
     )
     moves = tuple((s, o, apply_axes(adjust_axes, old=o, new=n)) for s, o, n in xy_moves)
 
-    if verbosity >= 1:
+    # Count how many are actually moving
+    num_moving = 0
+    for sticky, old_pos, new_pos in moves:
+        dx, dy = new_pos[0] - old_pos[0], new_pos[1] - old_pos[1]
+        if abs(dx) > MOVE_THRESHOLD or abs(dy) > MOVE_THRESHOLD:
+            num_moving += 1
+
+    if num_moving > 0 and verbosity >= 1:
         min_old_x = min(m[1][0] for m in moves)
         max_old_x = max(m[1][0] for m in moves)
         min_old_y = min(m[1][1] for m in moves)
@@ -124,24 +145,22 @@ def update_stickies(
         min_new_y = min(m[2][1] for m in moves)
         max_new_y = max(m[2][1] for m in moves)
 
-        print(f"Left   moving by {min_new_x - min_old_x:.3f}")
-        print(f"Right  moving by {max_new_x - max_old_x:.3f}")
-        print(f"Top    moving by {min_new_y - min_old_y:.3f}")
-        print(f"Bottom moving by {max_new_y - max_old_y:.3f}")
-
-    # Count how many are actually moving
-    num_moving = 0
-    for sticky, old_pos, new_pos in moves:
-        dx, dy = new_pos[0] - old_pos[0], new_pos[1] - old_pos[1]
-        if abs(dx) > 1e-6 or abs(dy) > 1e-6:
-            num_moving += 1
+        amounts = {
+            "Left": min_new_x - min_old_x,
+            "Right": max_new_x - max_old_x,
+            "Top": min_new_y - min_old_y,
+            "Bottom": max_new_y - max_old_y,
+        }
+        for k, v in amounts.items():
+            vv = f"{v:+.3f}" if abs(v) > MOVE_THRESHOLD else "0"
+            print(f"{k:<6s} moving by {vv}")
 
     # Execute moves
     if num_moving > 0:
         group_map = create_item_id_to_group_mapping(board)
         for sticky, old_pos, new_pos in moves:
             dx, dy = new_pos[0] - old_pos[0], new_pos[1] - old_pos[1]
-            if abs(dx) > 1e-6 or abs(dy) > 1e-6:
+            if abs(dx) > MOVE_THRESHOLD or abs(dy) > MOVE_THRESHOLD:
                 move_with_group(
                     sticky,
                     dx,
