@@ -272,7 +272,10 @@ def parse_args() -> argparse.Namespace:
         help="Ask the user what to do with each duplicate card.",
     )
     parser.add_argument(
-        "board", nargs="?", default="6531ac71f384b1da10602fce"  # "bert active"
+        "board",
+        nargs="?",
+        default="6531ac71f384b1da10602fce",  # "bert active"
+        help='Optionally specify the ID or name of the Trello board to use. [default: the key for the "bert active" board]',
     )
     settings = parser.parse_args()
     if settings.threshold < 1:
