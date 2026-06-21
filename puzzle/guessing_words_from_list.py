@@ -164,8 +164,8 @@ def main() -> None:
         )
         for choice in best_words
     }
-    best_words = sorted(best_words)  # break ties
-    best_words = sorted(best_words, key=lambda w: expected_decreases[w], reverse=True)
+    best_words = tuple(sorted(best_words))  # break ties
+    best_words = tuple(sorted(best_words, key=lambda w: expected_decreases[w], reverse=True))
     print(f"Best words:")
     for word in best_words:
         remaining = total_bits - expected_decreases[word]
