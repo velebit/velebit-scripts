@@ -1,9 +1,11 @@
 #!/home/bert/.local/lib/python/venv/tasks/bin/ipython3
 
 import argparse
-from collections.abc import Collection, Hashable, Mapping, Sequence
+from collections import defaultdict
+from collections.abc import Sequence
 from frozendict import frozendict
 from functools import cache
+import math
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -88,6 +90,34 @@ def get_possible_words(
     return tuple(possible_words)
 
 
+@cache
+def get_total_unknown_bits(words: tuple[str, ...]) -> float:
+    assert len(words) > 0
+    return math.log2(len(words))
+
+
+@cache
+def get_expected_remaining_bits_for_choice(
+    *, words: tuple[str, ...], choice: str
+) -> float:
+    assert len(words) > 0
+    bucket_sizes: dict[int, int] = defaultdict(int)
+    for actual in words:
+        bucket_sizes[get_matches(choice, actual)] += 1
+
+    total = len(words)
+    return sum((count / total) * math.log2(count) for count in bucket_sizes.values())
+
+
+@cache
+def get_expected_information_decrease_for_choice(
+    *, words: tuple[str, ...], choice: str
+) -> float:
+    return get_total_unknown_bits(words) - get_expected_remaining_bits_for_choice(
+        words=words, choice=choice
+    )
+
+
 # Note: `words` and `guesses` must be Hashable types, to support @cache
 @cache
 def get_best_max_guesses(
@@ -122,12 +152,27 @@ def main() -> None:
     print(f"{len(words)+len(guesses)} words specified.")
 
     possible_words = get_possible_words(words, guesses)
+    total_bits = get_total_unknown_bits(possible_words)
+    print(f"Current unknown information: {total_bits:.3f} bits")
+
     max_guesses, best_words = get_best_max_guesses(
         words=possible_words, guesses=guesses
     )
-    print(f"Best words (max {max_guesses} guesses):")
+    expected_decreases = {
+        choice: get_expected_information_decrease_for_choice(
+            words=possible_words, choice=choice
+        )
+        for choice in best_words
+    }
+    best_words = sorted(best_words)  # break ties
+    best_words = sorted(best_words, key=lambda w: expected_decreases[w], reverse=True)
+    print(f"Best words:")
     for word in best_words:
-        print(f"  {word}")
+        remaining = total_bits - expected_decreases[word]
+        print(
+            f"  {word}: {max_guesses} max guesses\n"
+            f"    expected entropy decrease is {expected_decreases[word]:.2f} bits ({remaining:.2f} bits remaining)"
+        )
 
 
 if __name__ == "__main__":
