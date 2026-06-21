@@ -1,4 +1,6 @@
 #!/home/bert/.local/lib/python/venv/tasks/bin/python3
+"""Realign sticky notes in a Miro frame to a regular grid."""
+
 # Realign sticky notes in the specified frame.
 import argparse
 from enum import Enum
@@ -20,6 +22,8 @@ MOVE_THRESHOLD = 1e-6
 
 
 class GridAxes(Enum):
+    """Which axes should be adjusted when applying grid positions."""
+
     X_AND_Y = "xy"
     X_ONLY = "x"
     Y_ONLY = "y"
@@ -34,6 +38,8 @@ def move_with_group(
     verbosity: int = 0,
     group_map: Mapping[str, Group] | None = None,
 ) -> None:
+    """Move a sticky note and all items in its top-level group by the same delta."""
+
     assert sticky.board is not None, f"Sticky note {sticky.id} has no board"
     if group_map is None:
         group_map = create_item_id_to_group_mapping(sticky.board)
@@ -60,6 +66,8 @@ def move_with_group(
 def apply_axes(
     axes: GridAxes, *, old: tuple[float, float], new: tuple[float, float]
 ) -> tuple[float, float]:
+    """Combine old/new coordinates according to the selected axis mode."""
+
     if axes == GridAxes.X_ONLY:
         return (new[0], old[1])
     elif axes == GridAxes.Y_ONLY:
@@ -79,6 +87,8 @@ def update_stickies(
     print_empty_warnings: bool | None = None,
     print_grid_warnings: bool | None = None,
 ) -> None:
+    """Compute and apply sticky-note moves needed to align notes in a frame."""
+
     print_empty_warnings = (
         print_empty_warnings if print_empty_warnings is not None else verbosity >= 0
     )
@@ -172,41 +182,93 @@ def update_stickies(
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-v", "--verbose", action="count", default=0)
-    parser.add_argument("-q", "--quiet", action="store_const", dest="verbose", const=-1)
-    parser.add_argument("--quiet-empty", action="store_true", default=None)
-    parser.add_argument("--dry-run", action="store_true")
+    """Parse command-line arguments for sticky-note grid alignment."""
+
+    parser = argparse.ArgumentParser(
+        description="Realign sticky notes in a Miro frame to a regular grid."
+    )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="count",
+        default=0,
+        help="Produce more verbose informational output (can be specified multiple times).",
+    )
+    parser.add_argument(
+        "-q",
+        "--quiet",
+        action="store_const",
+        dest="verbose",
+        const=-1,
+        help="Suppress informational output.",
+    )
+    parser.add_argument(
+        "--quiet-empty",
+        action="store_true",
+        default=None,
+        help=(
+            "Do not print a warning when the selected frame has no sticky notes. "
+            "(The default is to print a warning unless -q is specified.)"
+        ),
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show planned moves without applying them to the board.",
+    )
     parser.add_argument(
         "--equal",
         action="store_const",
         dest="spacing_mode",
         const=GridSpacingMode.EQUAL,
         default=GridSpacingMode.EQUAL,
+        help=(
+            "Rebuild the grid with uniform column and row gaps. All neighboring notes will end up "
+            "equally spaced while keeping the grid boundaries the same (default)."
+        ),
     )
     parser.add_argument(
         "--extend-strict",
         action="store_const",
         dest="spacing_mode",
         const=GridSpacingMode.INTERNAL_STRICT,
+        help=(
+            "Preserve the current internal gaps by extending the existing row/column pitch inferred from the notes. "
+            "If there aren't enough notes to infer a pitch, the grid will not be adjusted."
+        ),
     )
     parser.add_argument(
         "--extend",
         action="store_const",
         dest="spacing_mode",
         const=GridSpacingMode.INTERNAL_OR_EQUAL,
+        help=(
+            "Try to preserve the current internal row/column pitch, but fall back to uniform equal spacing "
+            "when there aren't enough notes to infer a pitch."
+        ),
     )
     parser.add_argument(
         "--tight",
         action="store_const",
         dest="spacing_mode",
         const=GridSpacingMode.TIGHT,
+        help=(
+            "Keep a fixed minimal pitch between rows and columns while keeping the same grid ordering. "
+            "Horizontally, the minimal pitch is the same as the horizontal edge-to-edge placement in the Miro UI "
+            "(i.e. the pitch is the same as Miro's sticky note width). Vertically, the minimal pitch is *smaller* "
+            "than edge-to-edge, and intends to make vertical spacing visually consistent with horizontal spacing."
+        ),
     )
     parser.add_argument(
         "--tiled",
         action="store_const",
         dest="spacing_mode",
         const=GridSpacingMode.TILED,
+        help=(
+            "Tile notes edge-to-edge using sticky dimensions so adjacent notes touch. "
+            "Note that Miro renders sticky notes as narrower than their reported dimensions, so there will be "
+            "visual gaps, especially vertically. For more uniform gaps, use --tight instead."
+        ),
     )
     parser.add_argument(
         "--x-only",
@@ -214,20 +276,30 @@ def parse_args() -> argparse.Namespace:
         dest="adjust_axes",
         const=GridAxes.X_ONLY,
         default=GridAxes.X_AND_Y,
+        help="Adjust only X positions and keep Y positions unchanged.",
     )
     parser.add_argument(
         "--y-only",
         action="store_const",
         dest="adjust_axes",
         const=GridAxes.Y_ONLY,
+        help="Adjust only Y positions and keep X positions unchanged.",
     )
-    parser.add_argument("board")
-    parser.add_argument("frame")
+    parser.add_argument(
+        "board",
+        help="Board name or board ID containing the frame to align.",
+    )
+    parser.add_argument(
+        "frame",
+        help="Frame name or frame ID whose sticky notes will be realigned.",
+    )
     settings = parser.parse_args()
     return settings
 
 
 def main() -> None:
+    """Entry point for command-line execution."""
+
     settings = parse_args()
     update_stickies(
         settings.board,
