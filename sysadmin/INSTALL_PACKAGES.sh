@@ -129,10 +129,10 @@ add_if always               jigdo-file
 add_if always               screen
 add_if "!$is_vm"            flatpak
 
-add_if "$is_server"         virt-manager
-add_if "$is_server"         qemu-system-x86
-add_if "$is_server"         qemu-system-arm
-add_if "$is_server"         qemu-block-extra vde2
+add_if "$is_vm_host"         virt-manager
+add_if "$is_vm_host"         qemu-system-x86
+add_if "$is_vm_host+$is_server"  qemu-system-arm
+add_if "$is_vm_host"         qemu-block-extra vde2
 add_if "!$is_vm"            fatresize
 
 add_if "!$is_headless"      gnome-terminal
@@ -193,9 +193,9 @@ add_if "!$is_headless"      ripgrep
 add_if always               sshfs
 
 ### Internet tools
-add_if "!$is_headless"      chromium
+add_if "!$is_headless+!is_video_buggy"  chromium
 add_if always               whois bind9-dnsutils
-# youtube-dl is installed from upstream because Debian version is very old
+# youtube-dl is installed via Python because Debian version is very old
 
 ### media tools
 add_if "!$is_vm"            atomicparsley libmp3-tag-perl
