@@ -5,7 +5,7 @@ dir="$(dirname "$(realpath "$0")")"
 
 set -eu
 
-if [[ "$#" -eq 0 ]]; then set -- --quiet-empty; fi
+if [[ "$#" -eq 0 ]]; then set -- -v --quiet-empty; fi
 
 "$dir"/miro_align_sticky_notes --tight "$@" uXjVPR8tBqw= 3458764558974521944
 "$dir"/miro_align_sticky_notes --tiled "$@" uXjVPR8tBqw= 3458764632524709740

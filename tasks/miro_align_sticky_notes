@@ -54,13 +54,14 @@ def move_with_group(
     for item in movable_items:
         position = item.relative_position
         assert position is not None, f"Item {item.id} has no position"
+        desc = f"{type(item).__name__} {item.id} ({item.text!r})"
         if not dry_run:
             if verbosity >= 1:
-                print(f"Moving {item!r} by ({dx}, {dy})")
+                print(f"Moving {desc} by ({dx}, {dy})")
             item.set_relative_position((position[0] + dx, position[1] + dy))
         else:
             if verbosity >= 0:
-                print(f"Would move {item!r} by ({dx}, {dy})")
+                print(f"Would move {desc} by ({dx}, {dy})")
 
 
 def apply_axes(

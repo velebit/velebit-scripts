@@ -690,22 +690,28 @@ class Item(object):
             new_values = limit_keys(
                 get_from_data_hierarchy(new_json, keys), values.keys()
             )
+            patch_verbosity_threshold = 2
+            patch_text = (
+                f"PATCH response: {response.status_code} {response.reason}"
+                if verbosity >= patch_verbosity_threshold
+                else ""
+            )
             if new_values == values:
                 print(
-                    f"(M) Updated {'.'.join(keys)} to {new_values} for item {self.id},"
-                    f" PATCH response: {response.status_code} {response.reason}",
+                    f"(M) Updated {'.'.join(keys)} to {new_values} for item {self.id}"
+                    f"{', ' if patch_text else ''}{patch_text}",
                     file=sys.stderr,
                 )
             elif new_values == old_values:
                 print(
                     f"(M) Failed to update {'.'.join(keys)} to {values} for item {self.id},"
-                    f" value is still {new_values} after PATCH response: {response.status_code} {response.reason}",
+                    f" value is still {new_values}{' after ' if patch_text else ''}{patch_text}",
                     file=sys.stderr,
                 )
             else:
                 print(
                     f"(M) Updated {'.'.join(keys)} to {new_values} for item {self.id},"
-                    f" but expected {values}; PATCH response: {response.status_code} {response.reason}",
+                    f" but expected {values}{'; ' if patch_text else ''}{patch_text}",
                     file=sys.stderr,
                 )
 
