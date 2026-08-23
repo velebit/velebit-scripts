@@ -80,6 +80,7 @@ def handle_cards(
         done_list: trello.List | None = None
         for i, card in enumerate(pcards):
             while True:
+                # TODO: consider making option strings and callbacks generic.
                 response = (
                     input(
                         f"  What to do with card [{i+1}] {card.short_url}? "  # type: ignore[attr-defined]
@@ -110,13 +111,14 @@ def handle_cards(
                             )
                             continue
                     card.change_list(done_list.id)  # type: ignore[attr-defined]
-                    print(f"Moved card {card.id!r} to list {done_list.name!r}.")  # type: ignore[attr-defined]
+                    card.set_pos("bottom")
+                    print(f"Moved card {card.id!r} to the bottom of list {done_list.name!r}.")  # type: ignore[attr-defined]
                     break
                 elif response == "s":
                     print(f"Skipped card {card.id!r}.")  # type: ignore[attr-defined]
                     break
                 else:
-                    print("  Please answer 'r', 'a', 'd', or 's'.")
+                    print("  Please answer 'x', 'a', 'd', or 's'.")
 
 
 def process_cards(board_key: str, settings: argparse.Namespace) -> None:
