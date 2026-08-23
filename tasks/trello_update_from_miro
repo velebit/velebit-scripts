@@ -190,15 +190,28 @@ def sanitize_tasks(tasks: Sequence[TaskInfo], verbosity: int = 0) -> list[TaskIn
 
 def update_trello(settings: argparse.Namespace, tasks: Sequence[TaskInfo]) -> None:
     common_label_rule_input = [
-        {bt.REMOVE_LABELS: ["Miro: triage", "Miro: done"]},
-        {bt.REMOVE_LABELS: ["ex-Miro"]},
+        {
+            bt.REMOVE_LABELS: ["ex-Miro"],
+        },
+        {
+            bt.REMOVE_LABELS: ["Miro: triage", "Miro: done"],
+            bt.RETIRE_LABELS: ["ex-Miro"],
+        },
+        {
+            bt.REMOVE_LABELS: ["Miro p1", "Miro p2", "Miro p3", "Miro p4"],
+            bt.RETIRE_LABELS: ["ex-Miro"],
+        },
     ]
     orphan_label_rule_input = [
         {
-            bt.REMOVE_LABELS: ["Miro: me", "Miro: joint", "Miro: talk", "Miro: other"],
+            bt.REMOVE_LABELS: [
+                "Miro: me",
+                "Miro: joint",
+                "Miro: talk",
+                "Miro: other",
+            ],
             bt.RETIRE_LABELS: ["ex-Miro"],
         },
-        {bt.REMOVE_LABELS: ["Miro p1", "Miro p2", "Miro p3", "Miro p4"]},
     ]
     src_label_rule_input: dict[Src, list[dict[str, list[str]]]] = {
         Src.ACTIVE: [],
@@ -247,33 +260,24 @@ def update_trello(settings: argparse.Namespace, tasks: Sequence[TaskInfo]) -> No
         LabeledPriority.P1: [
             {
                 bt.ADD_LABELS: ["Miro p1"],
-                bt.REMOVE_LABELS: ["Miro p2", "Miro p3", "Miro p4"],
             }
         ],
         LabeledPriority.P2: [
             {
                 bt.ADD_LABELS: ["Miro p2"],
-                bt.REMOVE_LABELS: ["Miro p1", "Miro p3", "Miro p4"],
             }
         ],
         LabeledPriority.P3: [
             {
                 bt.ADD_LABELS: ["Miro p3"],
-                bt.REMOVE_LABELS: ["Miro p1", "Miro p2", "Miro p4"],
             }
         ],
         LabeledPriority.P4: [
             {
                 bt.ADD_LABELS: ["Miro p4"],
-                bt.REMOVE_LABELS: ["Miro p1", "Miro p2", "Miro p3"],
             }
         ],
-        LabeledPriority.NONE: [
-            {
-                bt.ADD_LABELS: [],
-                bt.REMOVE_LABELS: ["Miro p1", "Miro p2", "Miro p3", "Miro p4"],
-            }
-        ],
+        LabeledPriority.NONE: [{}],
     }
 
     try:
