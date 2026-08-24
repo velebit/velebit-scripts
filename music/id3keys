@@ -1,32 +1,28 @@
 #!/home/bert/.local/lib/python/venv/default/bin/python3 -B
-# Show ID3 tags present in a file
+"""Show ID3 tags present in files."""
 
 import argparse
-import eyed3
-import sys
 
-from id3tools import all_props, frame_props, abstract_props, key_info
+from id3tools import abstract_props, all_props, frame_props, get_valid_id3_tag, key_info
 
 
-def parse_args():
+def parse_args() -> argparse.Namespace:
+    """Parse command-line options and input files."""
     parser = argparse.ArgumentParser()
-    parser.add_argument('-v', '--verbose', action='count', default=0)
-    parser.add_argument('--frames', action='store_true', default=None)
-    parser.add_argument('--abstract', action='store_true', default=None)
-    parser.add_argument('files', nargs='*')
+    parser.add_argument("-v", "--verbose", action="count", default=0)
+    parser.add_argument("--frames", action="store_true", default=None)
+    parser.add_argument("--abstract", action="store_true", default=None)
+    parser.add_argument("files", nargs="*")
     settings = parser.parse_args()
     if settings.frames is None and settings.abstract is None:
         settings.frames = settings.abstract = True
     return settings
 
 
-def show_file(file, settings):
-    id3file = eyed3.load(file)
-    if not id3file:
-        print(f"Could not load {file}!", file=sys.stderr)
-        return
-    if not id3file.tag:
-        print(f"No ID3 tag data in {file}!", file=sys.stderr)
+def show_file(file: str, settings: argparse.Namespace) -> None:
+    """Print the selected ID3 properties found in one file."""
+    tag = get_valid_id3_tag(file)
+    if not tag:
         return
     get_props = None
     if settings.frames and settings.abstract:
@@ -37,14 +33,15 @@ def show_file(file, settings):
         get_props = abstract_props
     else:
         return
-    for info in key_info(get_props(id3file.tag)):
+    for info in key_info(get_props(tag)):
         if settings.verbose > 0:
-            print("%-11s %s" % (info['id'], info['id_description']))
+            print("%-11s %s" % (info["id"], info["id_description"]))
         else:
-            print(info['id'])
+            print(info["id"])
 
 
-def main():
+def main() -> None:
+    """Parse arguments and show ID3 properties for each input file."""
     settings = parse_args()
     for file in settings.files:
         show_file(file, settings)

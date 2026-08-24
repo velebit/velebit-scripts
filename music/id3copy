@@ -5,25 +5,28 @@ import argparse
 from id3tools import make_backup, copy_id3
 
 
-def parse_args():
+def parse_args() -> argparse.Namespace:
+    """Parse command-line options and source and destination file names."""
     parser = argparse.ArgumentParser()
-    parser.add_argument('-f', '--force',
-                        action='store_false', dest='backup', default=True)
-    parser.add_argument('--backup',
-                        action='store_true', dest='backup', default=True)
-    parser.add_argument('source_file')
-    parser.add_argument('destination_file')
+    parser.add_argument(
+        "-f", "--force", action="store_false", dest="backup", default=True
+    )
+    parser.add_argument("--backup", action="store_true", dest="backup", default=True)
+    parser.add_argument("source_file")
+    parser.add_argument("destination_file")
     settings = parser.parse_args()
     return settings
 
 
-def process_file(src_file, dst_file, settings):
+def process_file(src_file: str, dst_file: str, settings: argparse.Namespace) -> None:
+    """Copy ID3 tags from ``src_file`` to ``dst_file``, backing up first if enabled."""
     if settings.backup:
         make_backup(dst_file)
     copy_id3(src_file, dst_file)
 
 
-def main():
+def main() -> None:
+    """Parse arguments and copy tags between the requested files."""
     settings = parse_args()
     process_file(settings.source_file, settings.destination_file, settings)
 

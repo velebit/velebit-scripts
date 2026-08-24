@@ -1,38 +1,36 @@
 #!/home/bert/.local/lib/python/venv/default/bin/python3 -B
-# Extract ID3 tags present in a file
+"""Extract selected ID3 tags from files."""
 
 import argparse
-import eyed3
-import sys
 
-from id3tools import all_props
+from id3tools import all_props, get_valid_id3_tag
 
 
-def parse_args():
+def parse_args() -> argparse.Namespace:
+    """Parse the requested frame and output-format options."""
     parser = argparse.ArgumentParser()
-    parser.add_argument('-a', '--ascii', '--unidecode',
-                        action='store_true', default=False)
-    parser.add_argument('-r', '--raw', action='store_true', default=False)
-    parser.add_argument('frame_id')
-    parser.add_argument('files', nargs='*')
+    parser.add_argument(
+        "-a", "--ascii", "--unidecode", action="store_true", default=False
+    )
+    parser.add_argument("-r", "--raw", action="store_true", default=False)
+    parser.add_argument("frame_id")
+    parser.add_argument("files", nargs="*")
     settings = parser.parse_args()
     return settings
 
 
-def show_file(file, settings):
-    id3file = eyed3.load(file)
-    if not id3file:
-        print(f"Could not load {file}!", file=sys.stderr)
+def show_file(file: str, settings: argparse.Namespace) -> None:
+    """Print the requested frame value found in one file."""
+    tag = get_valid_id3_tag(file)
+    if not tag:
         return
-    if not id3file.tag:
-        print(f"No ID3 tag data in {file}!", file=sys.stderr)
-        return
-    for info in all_props(id3file.tag, ascii=settings.ascii, raw=settings.raw):
-        if info['id'] == settings.frame_id:
-            print(info['pretty'])
+    for info in all_props(tag, as_ascii=settings.ascii, raw=settings.raw):
+        if info["id"] == settings.frame_id:
+            print(info["pretty"])
 
 
-def main():
+def main() -> None:
+    """Parse arguments and extract the requested frame from each file."""
     settings = parse_args()
     for file in settings.files:
         show_file(file, settings)

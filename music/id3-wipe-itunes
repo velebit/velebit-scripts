@@ -1,39 +1,50 @@
 #!/home/bert/.local/lib/python/venv/default/bin/python3 -B
-# erase known iTunes-specific ID3 tags from a file
+"""Erase known iTunes-specific ID3 tags from one or more files."""
 
 import argparse
-import eyed3.id3.frames
 import re
+
+import eyed3.id3.frames
 
 from id3tools import make_backup, remove_frames_from_file
 
 
-def parse_args():
+def parse_args() -> argparse.Namespace:
+    """Parse command-line options and the input file names."""
     parser = argparse.ArgumentParser()
-    parser.add_argument('--backup',
-                        action='store_true', dest='backup', default=False)
-    parser.add_argument('-f', '--force',
-                        action='store_false', dest='backup', default=False)
-    parser.add_argument('files', nargs='*')
+    parser.add_argument("--backup", action="store_true", dest="backup", default=False)
+    parser.add_argument(
+        "-f", "--force", action="store_false", dest="backup", default=False
+    )
+    parser.add_argument("files", nargs="*")
     settings = parser.parse_args()
     return settings
 
 
-def is_itunes_frame(frame):
-    try:
-        fid, fdesc = frame.id, frame.description
-    except AttributeError:
+def is_itunes_frame(frame: eyed3.id3.frames.Frame) -> bool:
+    """Return whether an ID3 comment frame contains an iTunes tag."""
+    fid: bytes | None = getattr(frame, "id", None)
+    fdesc: str | None = getattr(frame, "description", None)
+    if fid is None or fdesc is None:
         return False
-    return fid == eyed3.id3.frames.COMMENT_FID and re.search(r'^iTun', fdesc)
+    if fid != eyed3.id3.frames.COMMENT_FID:
+        return False
+    if not isinstance(fdesc, str):
+        return False
+    if not re.search(r"^iTun", fdesc):
+        return False
+    return True
 
 
-def process_file(file, settings):
+def process_file(file: str, settings: argparse.Namespace) -> None:
+    """Optionally back up a file and remove its iTunes-specific frames."""
     if settings.backup:
         make_backup(file)
     remove_frames_from_file(file, is_itunes_frame)
 
 
-def main():
+def main() -> None:
+    """Parse arguments and process each requested file."""
     settings = parse_args()
     for file in settings.files:
         process_file(file, settings)

@@ -1,157 +1,206 @@
 #!/home/bert/.local/lib/python/venv/default/bin/python3 -B
-# dump ID3 tags from a file
+"""Dump ID3 tags from one or more files."""
 
 import argparse
-import eyed3
 import pprint
 import re
-import sys
+from typing import Mapping
 
-from id3tools import frame_props, abstract_props_map
+import eyed3
+import eyed3.id3
+
+from id3tools import abstract_props_map, frame_props, get_valid_id3_tag
 
 
-def parse_args():
+def parse_args() -> argparse.Namespace:
+    """Parse command-line options and the input file names."""
     parser = argparse.ArgumentParser()
-    parser.add_argument('-f', '--frames', action='store_true', default=False)
-    parser.add_argument('-t', '--table', action='store_true', default=False)
-    parser.add_argument('-c', '--compact', action='store_true', default=False)
-    parser.add_argument('-a', '--ascii', '--unidecode',
-                        action='store_true', default=False)
-    parser.add_argument('-r', '--raw', action='store_true', default=False)
-    parser.add_argument('-v', '--verbose', action='count', default=0)
-    parser.add_argument('files', nargs='*')
+    parser.add_argument("-f", "--frames", action="store_true", default=False)
+    parser.add_argument("-o", "--one-line-frames", action="store_true", default=False)
+    parser.add_argument("-t", "--table", action="store_true", default=False)
+    parser.add_argument("-c", "--compact", action="store_true", default=False)
+    parser.add_argument(
+        "-a", "--ascii", "--unidecode", action="store_true", default=False
+    )
+    parser.add_argument("-r", "--raw", action="store_true", default=False)
+    parser.add_argument("-v", "--verbose", action="count", default=0)
+    parser.add_argument("files", nargs="*")
     settings = parser.parse_args()
-    if not any((settings.frames, settings.table, settings.compact)):
+    if not any(
+        (settings.frames, settings.one_line_frames, settings.table, settings.compact)
+    ):
         settings.frames = True
-    assert not any((settings.ascii, settings.raw)) \
-        or any((settings.table, settings.compact)), "-a/-r require -t/-c"
+    assert not any((settings.ascii, settings.raw)) or any(
+        (settings.table, settings.compact)
+    ), "-a/-r require -t/-c"
     return settings
 
 
-def wfmt_dot(width, text):
+def wfmt_dot(width: int, text: str) -> str:
+    """Pad text to a fixed width, or truncate it with an ellipsis."""
     length = len(text)
     if length <= width:
-        return text + (' ' * (width - length))
-    return text[0:(width-3)] + '...'
+        return text + (" " * (width - length))
+    return text[0 : (width - 3)] + "..."
 
 
-def wfmt_trunc(width, text):
+def wfmt_trunc(width: int, text: str) -> str:
+    """Pad text to a fixed width, or truncate it without an ellipsis."""
     length = len(text)
     if length <= width:
-        return text + (' ' * (width - length))
+        return text + (" " * (width - length))
     return text[0:width]
 
 
-def field(fixed, width, val, *, truncate=None):
+def field(
+    fixed: bool, width: int, val: str | None, *, truncate: bool | None = None
+) -> str:
+    """Format an optional value as a fixed-width or variable-width field."""
     if val is None:
-        val = ''
+        val = ""
     if not fixed:
         return val
     if truncate is None:
-        truncate = (width < 6)
+        truncate = width < 6
     if truncate:
         return wfmt_trunc(width, val)
     else:
         return wfmt_dot(width, val)
 
 
-def version(tag):
-    return 'ID3' + eyed3.id3.versionToString(tag.version)
+def version(tag: eyed3.core.Tag) -> str:
+    """Return the tag's version with an ``ID3`` prefix."""
+    tag_version: tuple[int, int | None, int | None] | None = getattr(tag, "version")
+    assert tag_version is not None
+    v_string: str = eyed3.id3.versionToString(tag_version)
+    assert v_string[0] == "v"
+    return "ID3" + v_string
 
 
-def compact_version(tag):
-    return re.sub(r'[\s\.]', '',
-                  re.sub(r'/.*', '+',
-                         re.sub(r'^v', '',
-                                eyed3.id3.versionToString(tag.version))))
+def compact_version(tag: eyed3.core.Tag) -> str:
+    """Return the tag's version in a compact form for table output."""
+    v_string: str = version(tag)[3:]
+    return re.sub(r"[\s\.]", "", re.sub(r"/.*", "+", re.sub(r"^v", "", v_string)))
 
 
-def varsify(obj, *, depth=1):
+def varsify(obj: object, *, depth: int = 1) -> object:
+    """Recursively convert an object's attributes to printable mappings."""
     if depth <= 0:
         return obj
     try:
         top = vars(obj)
     except TypeError:
         return obj
-    return {'<self>': obj, **{k: varsify(v, depth=(depth-1))
-                              for k, v in top.items()}}
+    return {"<self>": obj, **{k: varsify(v, depth=(depth - 1)) for k, v in top.items()}}
 
 
-def pretty_format(obj, *, initial_indent=4, width=80, **kwargs):
-    return re.sub(r'(?m)^', (' ' * initial_indent),
-                  pprint.pformat(obj, compact=False,
-                                 width=(width-initial_indent), **kwargs))
+def pretty_format(
+    obj: object, *, initial_indent: int, indent: int, width: int = 80
+) -> str:
+    """Pretty-print an object with a configurable initial indentation."""
+    return re.sub(
+        r"(?m)^",
+        (" " * initial_indent),
+        pprint.pformat(
+            obj,
+            compact=False,
+            width=(width - initial_indent),
+            indent=indent,
+        ),
+    )
 
 
-def show_frames(tag, settings):
-    for info in frame_props(tag, ascii=settings.ascii, raw=settings.raw):
+def show_frames(tag: eyed3.core.Tag, file: str, settings: argparse.Namespace) -> None:
+    """Print the individual ID3 frames selected by the command-line settings."""
+    for info in frame_props(tag, as_ascii=settings.ascii, raw=settings.raw):
         info = dict(info)  # shallow copy
-        what = info.pop('id')
-        desc = info.pop('id_description')
-        if 'language' in info:
-            what += '(' + info['language'] + ')'
-        if 'key' in info:
-            what += '[' + info.pop('key') + ']'
-        info.pop('value', None)
-        info.pop('pretty', None)
-        info.pop('raw_encoding', None)
-        info.pop('data', None)
-        frame = info.pop('frame', None)
-        print("%-23s ( %s )" % (what, desc))
-        if True:
-            print(pretty_format(info, initial_indent=4, indent=2))
-        if settings.verbose >= 1:
-            print(pretty_format(varsify(frame, depth=2),
-                                initial_indent=8, indent=2))
+        what = info.pop("id")
+        desc = info.pop("id_description")
+        if "language" in info:
+            what += "(" + info["language"] + ")"
+        if "key" in info:
+            what += "[" + info.pop("key") + "]"
+        info.pop("value", None)
+        info.pop("pretty", None)
+        info.pop("raw_encoding", None)
+        info.pop("data", None)
+        info.pop("image_data", None)
+        frame = info.pop("frame", None)
+        if settings.one_line_frames:
+            if settings.verbose >= 1:
+                print(f"{file}:{what} ({desc}) {info!r}")
+            else:
+                print(f"{file}:{what} {info!r}")
+        if settings.frames:
+            print(f"{what:<23s} ( {desc} )")
+            if True:
+                print(pretty_format(info, initial_indent=4, indent=2))
+                if settings.verbose >= 1:
+                    print(
+                        pretty_format(
+                            varsify(frame, depth=2), initial_indent=8, indent=2
+                        )
+                    )
 
 
-def get_fields(obj, *keys):
+DeepStrDict = Mapping[str, "str | DeepStrDict | None"]
+
+
+def get_fields(obj: DeepStrDict | None, *keys: str) -> str | None:
+    """Get a string value from nested mapping keys."""
+    val: str | DeepStrDict | None = obj
     for k in keys:
-        if obj is None:
+        if val is None:
             return None
-        obj = obj.get(k)
-    return obj
+        assert not isinstance(val, str)
+        val = val.get(k)
+    assert isinstance(val, str)
+    return val
 
 
-def show_table(tag, fixed, settings):
-    props = abstract_props_map(tag, ascii=settings.ascii, raw=settings.raw)
-    if 'track_num' in props:
-        track = ("%2s" % (props['track_num']['value'],))
+def show_table(tag: eyed3.core.Tag, fixed: bool, settings: argparse.Namespace) -> None:
+    """Print selected tag properties in compact or fixed-width table format."""
+    props = abstract_props_map(tag, as_ascii=settings.ascii, raw=settings.raw)
+    if "track_num" in props:
+        track = "%2s" % (props["track_num"]["value"],)
         # track = track[-2:]
     else:
-        track = '  '
+        track = "  "
     ver = compact_version(tag)
-    print(field(fixed, 20, get_fields(props, 'artist', 'value')) + '|' +
-          field(fixed, 26, get_fields(props, 'title', 'value')) + '|' +
-          track + '|' +
-          field(fixed, 22, get_fields(props, 'album', 'value')) + '<' +
-          'v' + field(fixed, 4, ver, truncate=True))
+    print(
+        field(fixed, 20, get_fields(props, "artist", "value"))
+        + "|"
+        + field(fixed, 26, get_fields(props, "title", "value"))
+        + "|"
+        + track
+        + "|"
+        + field(fixed, 22, get_fields(props, "album", "value"))
+        + "<"
+        + "v"
+        + field(fixed, 4, ver, truncate=True)
+    )
 
 
-def show_file(file, show_func, *args):
-    id3file = eyed3.load(file)
-    if not id3file:
-        print(f"Could not load {file}!", file=sys.stderr)
-        return
-    if not id3file.tag:
-        print(f"No ID3 tag data in {file}!", file=sys.stderr)
-        return
-    show_func(id3file.tag, *args)
-
-
-def main():
+def main() -> None:
+    """Parse arguments and dump tags in the requested output format."""
     settings = parse_args()
-    if settings.frames:
+    if settings.frames or settings.one_line_frames:
         for file in settings.files:
-            print(f"* {file} *")
             if settings.frames:
-                show_file(file, show_frames, settings)
+                print(f"* {file} *")
+            tag = get_valid_id3_tag(file)
+            if tag:
+                show_frames(tag, file, settings)
     if settings.compact:
         for file in settings.files:
-            show_file(file, show_table, False, settings)
+            tag = get_valid_id3_tag(file)
+            if tag:
+                show_table(tag, False, settings)
     if settings.table:
         for file in settings.files:
-            show_file(file, show_table, True, settings)
+            tag = get_valid_id3_tag(file)
+            if tag:
+                show_table(tag, True, settings)
 
 
 if __name__ == "__main__":
