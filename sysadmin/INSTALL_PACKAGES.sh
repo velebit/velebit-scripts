@@ -80,6 +80,7 @@ add_if "$is_primary_os"     mdadm
 add_if "$is_primary_os"     f3    # flash memory capacity
 add_if "$is_primary_os"     fio iozone3  # flash memory (etc) performance
 add_if always               parted fdisk gdisk
+add_if always               dosfstools
 add_if "$is_primary_os"     cryptsetup-bin cryptsetup-run keyutils
 add_if "$is_primary_os"     kpartx
 add_if "$is_server"         partclone
@@ -127,12 +128,14 @@ add_if "$is_server"         samba samba-vfs-modules
 add_if always               rsync
 add_if always               jigdo-file
 add_if always               screen
+add_if always               tmux
 add_if "!$is_vm"            flatpak
 
 add_if "$is_vm_host"         virt-manager
 add_if "$is_vm_host"         qemu-system-x86
 add_if "$is_vm_host+$is_server"  qemu-system-arm
 add_if "$is_vm_host"         qemu-block-extra vde2
+add_if "$is_vm_host"         guestfs-tools
 add_if "!$is_vm"            fatresize
 
 add_if "!$is_headless"      gnome-terminal
@@ -193,7 +196,7 @@ add_if "!$is_headless"      ripgrep
 add_if always               sshfs
 
 ### Internet tools
-add_if "!$is_headless+!is_video_buggy"  chromium
+add_if "!$is_headless+!$is_video_buggy"  chromium
 add_if always               whois bind9-dnsutils
 # youtube-dl is installed via Python because Debian version is very old
 
