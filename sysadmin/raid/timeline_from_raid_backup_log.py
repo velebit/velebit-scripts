@@ -1,0 +1,122 @@
+#!/usr/bin/python3
+import argparse
+import datetime as dt
+import re
+
+
+def process_logfile(path: str, settings: argparse.Namespace) -> None:
+    start: dt.datetime | None = None
+    prev: dt.datetime | None = None
+    end: dt.datetime | None = None
+    next: dt.datetime | None = None
+
+    def format_hms(s: int) -> str:
+        m = s // 60
+        s -= m * 60
+        h = m // 60
+        m -= h * 60
+        return f"{h:02d}:{m:02d}:{s:02d}"
+
+    def replace_plus(match: re.Match[str]) -> str:
+        nonlocal start
+        nonlocal prev
+        stamp = match.group(1)
+        time = dt.datetime.strptime(stamp, "%Y-%m-%d %H:%M:%S")
+        if start is None:
+            start = time
+            prev = time
+            since_prev = "(start)"
+        else:
+            assert prev is not None  # for mypy
+            since_prev = "+" + format_hms(int((time - prev).total_seconds()))
+        assert start is not None  # for mypy
+        since_start = "@+" + format_hms(int((time - start).total_seconds()))
+        prev = time
+        return f"[{stamp}]:  {since_start:>10s}  {since_prev:>9s}"
+
+    def replace_minus(match: re.Match[str]) -> str:
+        nonlocal end
+        nonlocal next
+        stamp = match.group(1)
+        time = dt.datetime.strptime(stamp, "%Y-%m-%d %H:%M:%S")
+        if end is None:  # assumes going backwards
+            end = time
+            next = time
+            since_next = "(end)"
+        else:
+            assert next is not None  # for mypy
+            since_next = "-" + format_hms(int((next - time).total_seconds()))
+        assert end is not None  # for mypy
+        since_end = "@-" + format_hms(int((end - time).total_seconds()))
+        next = time
+        return f"[{stamp}]:  {since_next:>9s}  {since_end:>10s}"
+
+    with open(path, "r") as f:
+        lines = [line.rstrip() for line in f if re.search(r"^-- ", line)]
+
+    lines = list(
+        reversed(
+            [
+                re.sub(
+                    r"\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]", replace_minus, line
+                )
+                for line in reversed(lines)
+            ]
+        )
+    )
+    lines = [
+        re.sub(r"\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]:", replace_plus, line)
+        for line in lines
+    ]
+
+    if settings.strip_time:
+        lines = [
+            re.sub(r"\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]:\s+", "", line)
+            for line in lines
+        ]
+    if settings.strip_color:
+        lines = [re.sub(r"\033\[\d+(?:;\d+)*m", "", line) for line in lines]
+    if settings.duration:
+        lines = [
+            re.sub(
+                (
+                    r"@\+\d{2,}:\d{2}:\d{2}\s+"
+                    r"(?:\+\d{2,}:\d{2}:\d{2}|\(start\))\s+"
+                    r"(?:-(\d{2,}:\d{2}:\d{2})|(\(end\)))\s+"
+                    r"@-\d{2,}:\d{2}:\d{2}"
+                ),
+                r"\1\2",
+                line,
+            )
+            for line in lines
+            if re.search(r"(?:Backing up|Cleaning up)", line)
+        ]
+
+    print(path)
+    for line in lines:
+        print(line)
+    print("")
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Read a `raid-backup` log and show timing of steps."
+    )
+    parser.add_argument("--keep-time", dest="strip_time", action="store_false")
+    parser.add_argument("--strip-color", action="store_true")
+    parser.add_argument("--duration", action="store_true")
+    parser.add_argument(
+        "logfile", nargs="+", metavar="LOGFILE", help="Log file(s) to read."
+    )
+    settings = parser.parse_args()
+    return settings
+
+
+def main() -> None:
+    settings = parse_args()
+    for path in settings.logfile:
+        process_logfile(path, settings)
+
+
+if __name__ == "__main__":
+    main()
