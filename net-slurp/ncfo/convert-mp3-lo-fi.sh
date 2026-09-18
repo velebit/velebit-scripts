@@ -8,7 +8,7 @@ cd "`dirname "$0"`" || exit 1
 lo_fi_dir='../../../lo-fi'
 seen=
 for top_dir in 'NCFO practice' 'North Cambridge Family Opera' \
-    'NCFO Science Festival Chorus'; do
+    'NCFO Science Festival Chorus' 'NCFO audition'; do
   if [ -d "$top_dir" ]; then
     seen=yes
     if [ -n "$ERASE_OLD" ]; then

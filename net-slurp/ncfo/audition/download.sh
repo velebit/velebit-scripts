@@ -1,5 +1,5 @@
 #!/bin/sh
-page=2026_Weedpatch_Auditions
+page=2027_Space_Opera_Auditions
 file="$(basename "${page}")"
 type=files
 dir=files
@@ -12,7 +12,7 @@ wget \
     -r -l 1 -A .mp3,.MP3,.pdf,.PDF,"${file}" \
     --reject-regex '^http://www.familyopera.org/drupal/$' \
     --progress=bar:force \
-    http://www.familyopera.org/drupal/"${page}" \
+    https://www.familyopera.org/drupal/"${page}" \
   2>&1 | tee "${log}"
 if [ -f "${dir}/${file}" ]; then
     rm -f "${dir}"/index.html "${dir}/${file}".orig

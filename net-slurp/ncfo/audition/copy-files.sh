@@ -6,6 +6,8 @@ if [ ! -e links.lst ]; then
     ~/scripts/net-slurp/plinks.pl -h -pt -t "${dir}"/index.html > links.lst
 fi
 
+verbose=0
+
 get_for () {
     local who="$1"; shift
     local tab='	'
@@ -18,10 +20,14 @@ get_for () {
             prefix="${prefix} "
         fi
         while IFS="${tab}" read -r h pt t url; do
-            if [[ "$h" == *"${filter_h}"* ]] \
-                   && [[ "$pt" == "${filter_pt}"* ]] \
-                   && [[ "$url" == *.mp3 ]]; then
-                audio="$(basename "$url")"
+            audio="$(basename "$url")"
+            if [[ "$url" != *.mp3 ]]; then
+                [[ "${verbose}" -ge 2 ]] && printf '# %s: not .mp3' "${audio}\n" >&2
+            elif [[ "$h" != *"${filter_h}"* ]]; then
+                [[ "${verbose}" -ge 1 ]] && printf "# %s: h {{%s}} doesn't match {{%s}}\n" "${audio}" "$h" "${filter_h}" >&2
+            elif [[ "$pt" != "${filter_pt}"* ]]; then
+                [[ "${verbose}" -ge 1 ]] && printf "# %s: pt {{%s}} doesn't match {{%s}}\n" "${audio}" "$pt" "${filter_pt}" >&2
+            else
                 echo "${dir}/${audio}=${who}/${prefix}${t}.mp3"
             fi
         done < links.lst
@@ -35,9 +41,11 @@ generate () {
     #        'Harmony Audition' 'Treble' 'L harm SA'
     get_for Abbe \
             'Solo Audition' 'Mezzo' 'A solo A1' \
-            'Solo Audition' 'Tenor' 'A solo A2' \
-            'Harmony Audition' 'Treble' 'A harm SA'
+            'Solo Audition' 'Tenor' 'A solo A2_T' \
+            'Harmony Audition' 'Alto' 'A harm A' \
+            'Harmony Audition' 'Tenor' 'A harm T'
     get_for bert \
+            'Solo Audition' 'Tenor' 'b solo T' \
             'Solo Audition' 'Bass' 'b solo B' \
             'Harmony Audition' 'Tenor' 'b harm T' \
             'Harmony Audition' 'Bass' 'b harm B'
