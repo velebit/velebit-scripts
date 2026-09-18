@@ -25,8 +25,17 @@ class LogData:
 @dataclass
 class CollatedTime:
     text: str
-    duration_min: dt.timedelta
-    duration_max: dt.timedelta
+    sorted_durations: list[dt.timedelta]
+
+    @property
+    def duration_min(self) -> dt.timedelta:
+        assert len(self.sorted_durations) > 0
+        return self.sorted_durations[0]
+
+    @property
+    def duration_max(self) -> dt.timedelta:
+        assert len(self.sorted_durations) > 0
+        return self.sorted_durations[-1]
 
 
 def strip_color(text: str) -> str:
@@ -112,12 +121,76 @@ def collate_times(
         ]
         durations = [a.duration for a in matching if a.duration is not None]
         assert durations, "No matching durations (!?)"
-        collated.append(
-            CollatedTime(
-                text=action, duration_min=min(durations), duration_max=max(durations)
-            )
-        )
+        collated.append(CollatedTime(text=action, sorted_durations=sorted(durations)))
     return collated
+
+
+def calculate_percentile(
+    duration: dt.timedelta, collated_time: CollatedTime
+) -> float | None:
+    durations = collated_time.sorted_durations
+    num_samples = len(durations)
+    if num_samples < 2 or durations[-1] < dt.timedelta(minutes=1):
+        return None
+    percents = [100.0 * i / (num_samples - 1) for i in range(num_samples)]
+    assert len(percents) == num_samples
+    indices_matching = [i for i in range(num_samples) if durations[i] == duration]
+    if indices_matching:
+        result = (percents[indices_matching[0]] + percents[indices_matching[-1]]) / 2
+        return result
+    indices_before = [i for i in range(num_samples) if durations[i] < duration]
+    indices_after = [i for i in range(num_samples) if durations[i] > duration]
+    assert (len(indices_before) + len(indices_after)) == num_samples
+    EPSILON = dt.timedelta(seconds=1e-6)
+    if len(indices_before) == 0:
+        index0, index1 = indices_after[0], indices_after[1]
+        assert (index1 - index0) == 1
+        # if would divide by 0, try finding a better span
+        if (durations[index1] - durations[index0]) < EPSILON:
+            better_indices = [
+                i
+                for i in indices_after
+                if durations[i] >= (durations[index0] + EPSILON)
+            ]
+            if len(better_indices) > 0:
+                index1 = better_indices[0]
+                assert (index1 - index0) > 1
+        duration0, duration1 = durations[index0], durations[index1]
+        duration_delta = max((duration1 - duration0, EPSILON))  # avoid division by 0
+    elif len(indices_after) == 0:
+        index0, index1 = indices_before[-2], indices_before[-1]
+        assert (index1 - index0) == 1
+        # if would divide by 0, try finding a better span
+        if (durations[index1] - durations[index0]) < EPSILON:
+            better_indices = [
+                i
+                for i in indices_before
+                if durations[i] <= (durations[index1] - EPSILON)
+            ]
+            if len(better_indices) > 0:
+                index0 = better_indices[-1]
+                assert (index1 - index0) > 1
+        duration0, duration1 = durations[index0], durations[index1]
+        duration_delta = max((duration1 - duration0, EPSILON))  # avoid division by 0
+    else:
+        index0, index1 = indices_before[-1], indices_after[0]
+        assert (index1 - index0) == 1
+        duration0, duration1 = durations[index0], durations[index1]
+        duration_delta = duration1 - duration0
+        assert duration_delta > dt.timedelta(seconds=0)
+    ratio = (duration - duration0) / duration_delta
+    percent0, percent1 = percents[index0], percents[index1]
+    result = percent0 + ratio * (percent1 - percent0)
+    return result
+
+
+def percentile_text(percent: float | None, prefix: str = "", suffix: str = "") -> str:
+    return f"{prefix}<0{suffix}"
+    return f"{prefix}>100{suffix}"
+
+
+def percentile_bar_graph(percent: float | None) -> str:
+    pass
 
 
 def print_estimate(
@@ -131,16 +204,21 @@ def print_estimate(
         range = f"{begin}:"
         print(f"{'started':<10s} {range:<20s} (backup started)")
         for a in active_log_data.actions:
+            matching_times = [c for c in collated_times if c.text == a.text]
+            assert len(matching_times) == 1
             if a.duration is not None:
                 assert a.end is not None
                 end = a.end.strftime("%H:%M:%S")
-                range = f"{end}:"
+                percent = percentile_text(
+                    calculate_percentile(a.duration, matching_times[0]),
+                    prefix="(",
+                    suffix="%ile)",
+                )
+                range = f"{end + ':':<9s}{percent:>11s}"
                 print(f"{'ended':<10s} {range:<20s} {a.text}")
                 next_start_min, next_start_max = (a.end,) * 2
             else:
                 # started but not completed
-                matching_times = [c for c in collated_times if c.text == a.text]
-                assert len(matching_times) == 1
                 end_min = a.begin + matching_times[0].duration_min
                 end_max = a.begin + matching_times[0].duration_max
                 # if we're already past the expected time, adjust it
@@ -189,9 +267,10 @@ def process_logfiles(settings: argparse.Namespace) -> None:
         end_time = active.end
         assert end_time is not None
         end = end_time.strftime("%H:%M:%S")
-        print(f"Error: supposedly active log {active.path}" f" has completed at {end}!")
-    else:
-        print_estimate(active, history)
+        print(
+            f"Warning: supposedly active log {active.path}" f" has completed at {end}!"
+        )
+    print_estimate(active, history)
 
 
 def parse_args() -> argparse.Namespace:
@@ -202,7 +281,7 @@ def parse_args() -> argparse.Namespace:
         "reference_logs",
         nargs="+",
         metavar="REFERENCE_LOG",
-        help=("Log file(s) to read to deduce the order" " and timing."),
+        help=("Log file(s) to read to deduce the order and timing."),
     )
     parser.add_argument(
         "active_log", metavar="ACTIVE_LOG", help="Log file for the in-progress backup."

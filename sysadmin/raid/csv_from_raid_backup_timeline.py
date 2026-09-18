@@ -41,7 +41,9 @@ def print_csv(
 
     def write_data(fio: io.TextIOBase) -> None:
         writer = csv.writer(fio, dialect=csv.excel)
-        columns = [re.sub(r"^log\.", "", Path(log.path).stem) for log in logs_data]
+        columns = [
+            repr(re.sub(r"^log\.", "", Path(log.path).stem)) for log in logs_data
+        ]
         writer.writerow(["action", *columns])
         writer.writerows([(dd[0], *dd[1]) for dd in data])
 
