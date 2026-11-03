@@ -31,8 +31,15 @@ except ImportError:
 MOUNT_ROOT = "/media"
 MOUNT_PREFIX = f"{MOUNT_ROOT}/backup"
 
-OUTPUT_COLOR_YELLOW = "\033[33m"
-OUTPUT_COLOR_RED = "\033[31m"
+OUTPUT_COLOR_FG_RED = "\033[31m"
+OUTPUT_COLOR_FG_YELLOW = "\033[33m"
+OUTPUT_COLOR_FG_BLUE = "\033[34m"
+OUTPUT_COLOR_FG_GRAY = "\033[90m"  # "bright black"
+OUTPUT_COLOR_FG_BRIGHT_RED = "\033[91m"
+OUTPUT_COLOR_FG_BRIGHT_YELLOW = "\033[93m"
+OUTPUT_COLOR_FG_DARK_GREEN = "\033[2;32m"
+OUTPUT_COLOR_BG_RED = "\033[41m"
+OUTPUT_COLOR_RESET = "\033[0m"
 
 
 def run_cmd(
@@ -40,85 +47,91 @@ def run_cmd(
     *,
     dry_run: bool = False,
     capture_output: bool = False,
-    output_color_stdout: str = OUTPUT_COLOR_YELLOW,
-    output_color_stderr: str = OUTPUT_COLOR_RED,
+    output_color_stdout: str = OUTPUT_COLOR_FG_YELLOW,
+    output_color_stderr: str = OUTPUT_COLOR_FG_RED,
+    output_color_dry_run: str = OUTPUT_COLOR_FG_GRAY,
     check: bool = True,
 ) -> subprocess.CompletedProcess[str]:
     """Run a command with optional dry-run mode."""
     if dry_run:
-        print(f"\033[90m    WOULD run: {" ".join(cmd)}\033[0m", file=sys.stderr)
+        print(
+            f"{output_color_dry_run}    WOULD run: {" ".join(cmd)}"
+            + (OUTPUT_COLOR_RESET if output_color_dry_run else ""),
+            file=sys.stderr,
+        )
         return subprocess.CompletedProcess(args=cmd, returncode=0, stdout="", stderr="")
 
     if capture_output:
         return subprocess.run(cmd, capture_output=True, check=check, text=True)
 
     # Stream output with coloring, don't collect it
-    process = subprocess.Popen(
+    with subprocess.Popen(
         cmd,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=False,  # to preserve '\r' where needed
-    )
+    ) as process:
 
-    def read_available(
-        fds: list[int | None], size: int = 4096, timeout: float = 3600.0
-    ) -> tuple[list[bytes], list[int | None]]:
-        """Read data from fd when available, blocking until data arrives or EOF."""
-        assert not all(fd is None for fd in fds)
-        ready, _, _ = select.select(
-            [fd for fd in fds if fd is not None], [], [], timeout
+        def read_available(
+            fds: list[int | None], size: int = 4096, timeout: float = 3600.0
+        ) -> tuple[list[bytes], list[int | None]]:
+            """Read data from fd when available, blocking until data arrives or EOF."""
+            assert not all(fd is None for fd in fds)
+            ready, _, _ = select.select(
+                [fd for fd in fds if fd is not None], [], [], timeout
+            )
+            # in `reads`, None means read not attempted, b"" means EOF
+            # `fd is not None` is included just to make the type checker happy
+            reads = [
+                os.read(fd, size) if fd is not None and fd in ready else None
+                for fd in fds
+            ]
+            for i, chunk in enumerate(reads):
+                if chunk == b"":
+                    fds[i] = None  # mark EOF
+            return [chunk if chunk else b"" for chunk in reads], fds
+
+        def colorize_and_indent(
+            streams: list[io.BufferedIOBase], colors: list[str]
+        ) -> None:
+            assert len(streams) == len(colors)
+            fds: list[int | None] = [stream.fileno() for stream in streams]
+            indent = "    "
+            indented = False
+            reset = OUTPUT_COLOR_RESET
+
+            while True:
+                chunks, fds = read_available(fds)
+                if all(fd is None for fd in fds):
+                    break  # EOF on all descriptors
+
+                for i, chunk in enumerate(chunks):
+                    lines = re.split(rb"(?<=[\n\r])", chunk)
+                    for line in lines:
+                        if not line:
+                            continue
+                        text = line.decode("utf-8", errors="replace")
+                        print(
+                            f"{'' if indented else indent}{colors[i]}{text}{reset}",
+                            end="",
+                            file=sys.stdout,
+                            flush=True,
+                        )
+                        indented = not (text.endswith("\n") or text.endswith("\r"))
+
+            if indented:
+                print("", file=sys.stdout)
+
+        out_thread = threading.Thread(
+            target=colorize_and_indent,
+            args=(
+                [process.stdout, process.stderr],
+                [output_color_stdout, output_color_stderr],
+            ),
         )
-        # in `reads`, None means read not attempted, b"" means EOF
-        # `fd is not None` is included just to make the type checker happy
-        reads = [
-            os.read(fd, size) if fd is not None and fd in ready else None for fd in fds
-        ]
-        for i, chunk in enumerate(reads):
-            if chunk == b"":
-                fds[i] = None  # mark EOF
-        return [chunk if chunk else b"" for chunk in reads], fds
-
-    def colorize_and_indent(
-        streams: list[io.BufferedIOBase], colors: list[str]
-    ) -> None:
-        assert len(streams) == len(colors)
-        fds: list[int | None] = [stream.fileno() for stream in streams]
-        indent = "    "
-        indented = False
-        reset = "\033[0m"
-
-        while True:
-            chunks, fds = read_available(fds)
-            if all(fd is None for fd in fds):
-                break  # EOF on all descriptors
-
-            for i, chunk in enumerate(chunks):
-                lines = re.split(rb"(?<=[\n\r])", chunk)
-                for line in lines:
-                    if not line:
-                        continue
-                    text = line.decode("utf-8", errors="replace")
-                    print(
-                        f"{'' if indented else indent}{colors[i]}{text}{reset}",
-                        end="",
-                        file=sys.stdout,
-                        flush=True,
-                    )
-                    indented = not (text.endswith("\n") or text.endswith("\r"))
-
-        if indented:
-            print("", file=sys.stdout)
-
-    out_thread = threading.Thread(
-        target=colorize_and_indent,
-        args=(
-            [process.stdout, process.stderr],
-            [output_color_stdout, output_color_stderr],
-        ),
-    )
-    out_thread.start()
-    exit_code = process.wait()
-    out_thread.join()
+        out_thread.start()
+        exit_code = process.wait()
+        out_thread.join()
 
     if check and exit_code != 0:
         raise subprocess.CalledProcessError(exit_code, cmd)
@@ -133,7 +146,7 @@ def run_cmd(
 class ElapsedTimer:
     """Timer for measuring elapsed time"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.start_time: float = time.time()
 
     def __str__(self) -> str:
@@ -145,8 +158,7 @@ class ElapsedTimer:
         delta = int(end_time - self.start_time)
         if delta >= 3600:
             return f"{delta // 3600:02d}:{(delta // 60) % 60:02d}:{delta % 60:02d}"
-        else:
-            return f"{delta // 60:02d}:{delta % 60:02d}"
+        return f"{delta // 60:02d}:{delta % 60:02d}"
 
 
 # ------------------------------------------------------------
@@ -207,7 +219,7 @@ class TemporaryMount:
         """Whether the device is currently mounted"""
         return self.__mounted_here
 
-    def __del__(self):
+    def __del__(self) -> None:
         """On destruction, unmount the device if still mounted as a fallback"""
         self.unmount()
 
@@ -228,7 +240,13 @@ class TemporaryMount:
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(" f"mount_info={self._mount_info!r}, ...)"
 
-    def mount(self) -> None:
+    def mount(
+        self,
+        *,
+        output_color_mounts: str = OUTPUT_COLOR_FG_BLUE,
+        output_color_error: str = OUTPUT_COLOR_FG_BRIGHT_RED,
+        output_color_warning: str = OUTPUT_COLOR_FG_BRIGHT_YELLOW,
+    ) -> None:
         """Mount a device"""
         if self.__mounted_here:
             return
@@ -237,14 +255,18 @@ class TemporaryMount:
         mountpoint = self._mount_info.mountpoint
 
         if self.__verbose:
-            print(f"\033[34m({self._msg_mounting} {device!r} on {mountpoint!r})\033[0m")
+            print(
+                f"{output_color_mounts}({self._msg_mounting} {device!r} on {mountpoint!r})"
+                + (OUTPUT_COLOR_RESET if output_color_mounts else "")
+            )
         if not os.path.exists(mountpoint) and not self.__dry_run:
             try:
                 os.makedirs(mountpoint)
                 self.__dir_created = True
             except PermissionError as exc:
                 print(
-                    f"\033[93mWarning: Failed to create mountpoint directory {mountpoint!r}: {exc}\033[0m",
+                    f"{output_color_warning}Warning: Failed to create mountpoint directory {mountpoint!r}: {exc}"
+                    + (OUTPUT_COLOR_RESET if output_color_warning else ""),
                     file=sys.stderr,
                 )
         try:
@@ -255,14 +277,15 @@ class TemporaryMount:
             self.__mounted_here = True
         except subprocess.CalledProcessError as exc:
             print(
-                f"\033[91mFailed to mount {device!r} on {mountpoint!r}\033[0m",
+                f"{output_color_error}Failed to mount {device!r} on {mountpoint!r}"
+                + (OUTPUT_COLOR_RESET if output_color_error else ""),
                 file=sys.stderr,
             )
             raise FailedMountError(
                 f"Failed to mount {device!r} on {mountpoint!r}"
             ) from exc
 
-    def unmount(self) -> None:
+    def unmount(self, *, output_color_mounts: str = OUTPUT_COLOR_FG_BLUE) -> None:
         """Unmount the device"""
         if not self.__mounted_here:
             return
@@ -272,8 +295,9 @@ class TemporaryMount:
 
         if self.__verbose:
             print(
-                f"\033[34m({self._msg_unmounting} {device!r}"
-                f" from {mountpoint!r})\033[0m"
+                f"{output_color_mounts}({self._msg_unmounting} {device!r}"
+                f" from {mountpoint!r})"
+                + (OUTPUT_COLOR_RESET if output_color_mounts else "")
             )
         try:
             run_cmd(
@@ -389,21 +413,26 @@ def is_mounted(*, device: str | None = None, mountpoint: str | None = None) -> b
 def get_mount_from_mountpoint(
     mountpoint: str,
     ignore_filter: Callable[[MountInfo], bool] | None = None,
+    *,
+    output_color_warning: str = OUTPUT_COLOR_FG_BRIGHT_YELLOW,
+    output_color_notice: str = OUTPUT_COLOR_FG_YELLOW,
 ) -> MountInfo:
     """Given a mountpoint, find the MountInfo of the mounted device"""
 
     matched_dev_objects = get_matching_mounted_devices(
         mountpoint=mountpoint, ignore_missing=False
     )
+    infos: list[MountInfo]
     if ignore_filter is None:
         infos = matched_dev_objects
         desc_mount = "mount"
     else:
-        infos: list[MountInfo] = []
+        infos = []
         for dev in matched_dev_objects:
             if ignore_filter(dev):
                 print(
-                    f"\033[33mNotice: Ignoring {dev.device!r} for {mountpoint!r}...\033[0m",
+                    f"{output_color_notice}Notice: Ignoring {dev.device!r} for {mountpoint!r}..."
+                    + (OUTPUT_COLOR_RESET if output_color_notice else ""),
                     file=sys.stderr,
                 )
             else:
@@ -413,8 +442,9 @@ def get_mount_from_mountpoint(
         if len(infos) > 1:
             ignored_devices = ", ".join([repr(dev.device) for dev in infos[1:]])
             print(
-                f"\033[93mWarning: Path {mountpoint!r} has more than one {desc_mount}?! "
-                f"(will use {infos[0].device!r} and ignore {ignored_devices})\033[0m",
+                f"{output_color_warning}Warning: Path {mountpoint!r} has more than one {desc_mount}?! "
+                f"(will use {infos[0].device!r} and ignore {ignored_devices})"
+                + (OUTPUT_COLOR_RESET if output_color_warning else ""),
                 file=sys.stderr,
             )
         return infos[0]
@@ -430,21 +460,26 @@ def get_mount_from_mountpoint(
 def get_mount_from_device(
     device: str,
     ignore_filter: Callable[[MountInfo], bool] | None = None,
+    *,
+    output_color_warning: str = OUTPUT_COLOR_FG_BRIGHT_YELLOW,
+    output_color_notice: str = OUTPUT_COLOR_FG_YELLOW,
 ) -> MountInfo:
     """Given a device, find its MountInfo"""
 
     matched_dev_objects = get_matching_mounted_devices(
         device=device, ignore_missing=False
     )
+    infos: list[MountInfo]
     if ignore_filter is None:
         infos = matched_dev_objects
         desc_mount = "mount"
     else:
-        infos: list[MountInfo] = []
+        infos = []
         for dev in matched_dev_objects:
             if ignore_filter(dev):
                 print(
-                    f"\033[33mNotice: Ignoring {dev.mountpoint!r} for {device!r}...\033[0m",
+                    f"{output_color_notice}Notice: Ignoring {dev.mountpoint!r} for {device!r}..."
+                    + (OUTPUT_COLOR_RESET if output_color_notice else ""),
                     file=sys.stderr,
                 )
             else:
@@ -454,8 +489,9 @@ def get_mount_from_device(
         if len(infos) > 1:
             ignored_mountpoints = ", ".join([repr(dev.mountpoint) for dev in infos[1:]])
             print(
-                f"\033[93mWarning: Device {device!r} has more than one {desc_mount}?! "
-                f"(will use {infos[0].mountpoint!r} and ignore {ignored_mountpoints})\033[0m",
+                f"{output_color_warning}Warning: Device {device!r} has more than one {desc_mount}?! "
+                f"(will use {infos[0].mountpoint!r} and ignore {ignored_mountpoints})"
+                + (OUTPUT_COLOR_RESET if output_color_warning else ""),
                 file=sys.stderr,
             )
         return infos[0]
@@ -737,6 +773,7 @@ def copy_files(
     optimize_space: bool = False,  # can override careful for delete options!
     verbose: bool = False,
     dry_run: bool = False,
+    output_color_error: str = OUTPUT_COLOR_FG_BRIGHT_RED,
 ) -> bool:
     """Copy files using rsync"""
     if exclude is None:
@@ -773,14 +810,23 @@ def copy_files(
     try:
         run_cmd(rsync_cmd, capture_output=False, dry_run=dry_run)
     except subprocess.CalledProcessError:
-        print("\033[91m...FAILED!\033[0m")
+        print(
+            f"{output_color_error}...FAILED!"
+            + (OUTPUT_COLOR_RESET if output_color_error else "")
+        )
         return False
     print(f"  ...done in {timer.elapsed()}.")
     return True
 
 
 def file_shell_game(
-    filetype: str, file_old: str, file_cur: str, file_new: str, *, dry_run: bool = False
+    filetype: str,
+    file_old: str,
+    file_cur: str,
+    file_new: str,
+    *,
+    dry_run: bool = False,
+    output_color_error: str = OUTPUT_COLOR_FG_BRIGHT_RED,
 ) -> bool:
     """Move current to old, then move new to current"""
     if dry_run:
@@ -788,7 +834,8 @@ def file_shell_game(
 
     if not os.path.exists(file_new):
         print(
-            f"\033[91m  ERROR: no new {filetype} file was found!\033[0m",
+            f"{output_color_error}  ERROR: no new {filetype} file was found!"
+            + (OUTPUT_COLOR_RESET if output_color_error else ""),
             file=sys.stderr,
         )
         return False
@@ -803,8 +850,8 @@ def file_shell_game(
         shutil.move(file_cur, file_old)
         if os.path.exists(file_cur):
             print(
-                f"\033[91m  ERROR: failed to move the current {filetype} file"
-                " out of the way!\033[0m",
+                f"{output_color_error}  ERROR: failed to move the current {filetype} file"
+                " out of the way!" + (OUTPUT_COLOR_RESET if output_color_error else ""),
                 file=sys.stderr,
             )
             return False
@@ -812,13 +859,15 @@ def file_shell_game(
     shutil.move(file_new, file_cur)
     if os.path.exists(file_new):
         print(
-            f"\033[91m  ERROR: failed to move the new {filetype} file!\033[0m",
+            f"{output_color_error}  ERROR: failed to move the new {filetype} file!"
+            + (OUTPUT_COLOR_RESET if output_color_error else ""),
             file=sys.stderr,
         )
         return False
     if not os.path.exists(file_cur):
         print(
-            f"\033[91m  ERROR: failed to replace the current {filetype} file!\033[0m",
+            f"{output_color_error}  ERROR: failed to replace the current {filetype} file!"
+            + (OUTPUT_COLOR_RESET if output_color_error else ""),
             file=sys.stderr,
         )
         return False
@@ -827,14 +876,22 @@ def file_shell_game(
 
 
 def file_fallback(
-    filetype: str, file_old: str, file_cur: str, file_new: str, *, dry_run: bool = False
+    filetype: str,
+    file_old: str,
+    file_cur: str,
+    file_new: str,
+    *,
+    dry_run: bool = False,
+    output_color_warning: str = OUTPUT_COLOR_FG_BRIGHT_YELLOW,
+    output_color_dry_run: str = OUTPUT_COLOR_FG_GRAY,
 ) -> bool:
     """Fallback: if there's no new file, create one from cur/old"""
     if not os.path.exists(file_new):
         if os.path.exists(file_cur):
             if dry_run:
                 print(
-                    f"\033[90m    WOULD copy {file_cur} to {file_new}\033[0m",
+                    f"{output_color_dry_run}    WOULD copy {file_cur} to {file_new}"
+                    + (OUTPUT_COLOR_RESET if output_color_dry_run else ""),
                     file=sys.stderr,
                 )
             else:
@@ -842,14 +899,16 @@ def file_fallback(
         elif os.path.exists(file_old):
             if dry_run:
                 print(
-                    f"\033[90m    WOULD copy {file_old} to {file_new}\033[0m",
+                    f"{output_color_dry_run}    WOULD copy {file_old} to {file_new}"
+                    + (OUTPUT_COLOR_RESET if output_color_dry_run else ""),
                     file=sys.stderr,
                 )
             else:
                 shutil.copy2(file_old, file_new)
         else:
             print(
-                f"\033[93mWarning: No {filetype} file found in {file_cur} or {file_old}!\033[0m",
+                f"{output_color_warning}Warning: No {filetype} file found in {file_cur} or {file_old}!"
+                + (OUTPUT_COLOR_RESET if output_color_warning else ""),
                 file=sys.stderr,
             )
             return False
@@ -876,7 +935,12 @@ def restore_fstab(dst_path: str, *, dry_run: bool = False) -> bool:
     return file_shell_game("fstab", fstab_old, fstab_cur, fstab_new, dry_run=dry_run)
 
 
-def propagate_fstab(dst_path: str, *, dry_run: bool = False) -> bool:
+def propagate_fstab(
+    dst_path: str,
+    *,
+    dry_run: bool = False,
+    output_color_error: str = OUTPUT_COLOR_FG_BRIGHT_RED,
+) -> bool:
     """Propagate edited fstab file"""
     dst_path = dst_path.rstrip("/")
     fstab_old = f"{dst_path}/etc/fstab.source"
@@ -886,7 +950,10 @@ def propagate_fstab(dst_path: str, *, dry_run: bool = False) -> bool:
     print("  Propagating edited fstab file.")
     result = file_shell_game("fstab", fstab_old, fstab_cur, fstab_new, dry_run=dry_run)
     if not result:
-        print("\033[91m...FAILED!\033[0m")
+        print(
+            f"{output_color_error}...FAILED!"
+            + (OUTPUT_COLOR_RESET if output_color_error else "")
+        )
     return result
 
 
@@ -897,6 +964,7 @@ def edit_fstab(
     dst_root_dev: Device,
     *,
     dry_run: bool = False,
+    output_color_dry_run: str = OUTPUT_COLOR_FG_GRAY,
 ) -> bool:
     """Edit fstab file to update UUIDs"""
     dst_path = dst_path.rstrip("/")
@@ -904,7 +972,10 @@ def edit_fstab(
     edited_fstab = f"{dst_path}/etc/fstab.edited"
 
     if dry_run:
-        print("\033[90m    WOULD edit fstab file.\033[0m")
+        print(
+            f"{output_color_dry_run}    WOULD edit fstab file."
+            + (OUTPUT_COLOR_RESET if output_color_dry_run else "")
+        )
         return True
 
     print("  Editing fstab file.")
@@ -1012,7 +1083,12 @@ def edit_fstab_contents(
         fout.write(line)
 
 
-def update_initrd(root_path: str, *, dry_run: bool = False) -> bool:
+def update_initrd(
+    root_path: str,
+    *,
+    dry_run: bool = False,
+    output_color_error: str = OUTPUT_COLOR_FG_BRIGHT_RED,
+) -> bool:
     """Update initrd files, optionally in a chroot environment with bind mounts."""
     root_path = root_path.rstrip("/")
     update_bin = "/usr/sbin/update-initramfs"
@@ -1040,13 +1116,21 @@ def update_initrd(root_path: str, *, dry_run: bool = False) -> bool:
         )
         print(f"  ...done in {timer.elapsed()}.")
     except subprocess.CalledProcessError:
-        print("\033[91m  ...FAILED!\033[0m")
+        print(
+            f"{output_color_error}  ...FAILED!"
+            + (OUTPUT_COLOR_RESET if output_color_error else "")
+        )
         return False
 
     return True
 
 
-def update_grub(root_path: str, *, dry_run: bool = False) -> bool:
+def update_grub(
+    root_path: str,
+    *,
+    dry_run: bool = False,
+    output_color_error: str = OUTPUT_COLOR_FG_BRIGHT_RED,
+) -> bool:
     """Update GRUB menus in current partition"""
     root_path = root_path.rstrip("/")
     update_bin = "/usr/sbin/update-grub"
@@ -1069,12 +1153,15 @@ def update_grub(root_path: str, *, dry_run: bool = False) -> bool:
         run_cmd(
             command_prefix + update_cmd,
             capture_output=False,
-            output_color_stderr=OUTPUT_COLOR_YELLOW,
+            output_color_stderr=OUTPUT_COLOR_FG_YELLOW,
             dry_run=dry_run,
         )
         print(f"  ...done in {timer.elapsed()}.")
     except subprocess.CalledProcessError:
-        print("\033[91m  ...FAILED!\033[0m")
+        print(
+            f"{output_color_error}  ...FAILED!"
+            + (OUTPUT_COLOR_RESET if output_color_error else "")
+        )
         return False
 
     return True
@@ -1099,6 +1186,7 @@ def sync_partition(
     src_dev: Device,
     dst_dev: Device,
     flags: SyncFlags,
+    output_color_error: str = OUTPUT_COLOR_FG_BRIGHT_RED,
 ) -> bool:
     """Sync one partition to another"""
     if dst_dev.device_uuid == src_dev.device_uuid:
@@ -1120,7 +1208,10 @@ def sync_partition(
         verbose=flags.verbosity > 0,
         dry_run=flags.dry_run,
     ):
-        print("\033[91m...FAILED!\033[0m")
+        print(
+            f"{output_color_error}...FAILED!"
+            + (OUTPUT_COLOR_RESET if output_color_error else "")
+        )
         return False
 
     print(f"...done in {timer.elapsed()}.")
@@ -1293,6 +1384,44 @@ def process_partition(
         )
 
 
+def validate_partition_specs(
+    partition_pairs: list[list[str]],
+    *,
+    verbosity: int = 0,
+    output_color_error: str = OUTPUT_COLOR_FG_BRIGHT_RED,
+    output_color_validated: str = OUTPUT_COLOR_FG_DARK_GREEN,
+) -> None:
+    """Ensure every source and destination partition can be resolved."""
+    failures: list[tuple[str, Exception]] = []
+    spec_seen: set[str] = set()
+    for partition_pair in partition_pairs:
+        assert len(partition_pair) == 2, repr(partition_pair)
+        for partition_spec in partition_pair:
+            if partition_spec in spec_seen:
+                continue
+            spec_seen.add(partition_spec)
+            try:
+                valid_device = Device(partition_spec, verbose=False, dry_run=True)
+                if verbosity > 0:
+                    print(
+                        f"{output_color_validated}Found valid device {valid_device.device_path}"
+                        f" from spec {partition_spec!r}"
+                        + (OUTPUT_COLOR_RESET if output_color_validated else "")
+                    )
+            except (OSError, ValueError) as exc:
+                failures.append((partition_spec, exc))
+
+    if failures:
+        print(
+            f"{output_color_error}Error: Could not resolve all partitions:"
+            + (OUTPUT_COLOR_RESET if output_color_error else ""),
+            file=sys.stderr,
+        )
+        for f_partition_spec, f_exc in failures:
+            print(f"  {f_partition_spec!r}: {f_exc}", file=sys.stderr)
+        sys.exit(1)
+
+
 def process_efi_boot_root(
     efi_devs: list[str] | None,
     boot_devs: list[str] | None,
@@ -1369,22 +1498,28 @@ def process_efi_boot_root(
         )
 
 
-def validate_log_file(log_file: str) -> None:
+def validate_log_file(
+    log_file: str, *, output_color_error: str = OUTPUT_COLOR_FG_BRIGHT_RED
+) -> None:
     """Validate log file path. Not race condition safe!"""
     if os.path.islink(log_file):
         print(
-            f"\033[91mError: {log_file!r} is a symbolic link!\033[0m", file=sys.stderr
+            f"{output_color_error}Error: {log_file!r} is a symbolic link!"
+            + (OUTPUT_COLOR_RESET if output_color_error else ""),
+            file=sys.stderr,
         )
         sys.exit(3)
     if os.path.exists(log_file) and not os.path.isfile(log_file):
         print(
-            f"\033[91mError: {log_file!r} is not a regular file!\033[0m",
+            f"{output_color_error}Error: {log_file!r} is not a regular file!"
+            + (OUTPUT_COLOR_RESET if output_color_error else ""),
             file=sys.stderr,
         )
         sys.exit(3)
     if os.path.exists(log_file) and os.stat(log_file).st_uid != os.getuid():
         print(
-            f"\033[91mError: {log_file!r} is not owned by this user!\033[0m",
+            f"{output_color_error}Error: {log_file!r} is not owned by this user!"
+            + (OUTPUT_COLOR_RESET if output_color_error else ""),
             file=sys.stderr,
         )
         sys.exit(3)
@@ -1401,12 +1536,18 @@ def write_to_log_file(log_file: str, text: str, erase: bool = False) -> None:
 class ArgumentParserWithColor(argparse.ArgumentParser):
     """ArgumentParser that prints errors in red"""
 
-    def error(self, message: str) -> NoReturn:
+    def error(
+        self, message: str, *, output_color_error: str = OUTPUT_COLOR_FG_BRIGHT_RED
+    ) -> NoReturn:
         """Print error message in red and exit"""
-        super().error(f"\033[91m{message}\033[0m")
+        super().error(
+            f"{output_color_error}{message}{OUTPUT_COLOR_RESET if output_color_error else ''}"
+        )
 
 
-def parse_arguments() -> argparse.Namespace:
+def parse_arguments(
+    *, output_color_error: str = OUTPUT_COLOR_FG_BRIGHT_RED
+) -> argparse.Namespace:
     """Parse command line arguments"""
     parser = ArgumentParserWithColor(
         description="Back up a partition to another partition with different UUID"
@@ -1459,7 +1600,7 @@ def parse_arguments() -> argparse.Namespace:
         action="store_true",
         help="Enable `tight on space' mode (delete files early).",
     )
-    parser.add_argument("-v", "--verbose", action="count", help="Verbose rsync output")
+    parser.add_argument("-v", "--verbose", action="count", help="Verbose output")
     parser.add_argument(
         "--write-times",
         metavar="LOG_FILE",
@@ -1471,14 +1612,16 @@ def parse_arguments() -> argparse.Namespace:
     # Check combinations of operations
     if (args.efi or args.boot) and not args.root:
         print(
-            "\033[91mError: --efi and --boot cannot be used without --root.\033[0m",
+            f"{output_color_error}Error: --efi and --boot cannot be used without --root."
+            + (OUTPUT_COLOR_RESET if output_color_error else ""),
             file=sys.stderr,
         )
         sys.exit(1)
     if not args.data and not args.root:
         print(
-            "\033[91mError: Must specify at least one operation: either --data or"
-            " (optional --efi and/or --boot with) --root.\033[0m",
+            f"{output_color_error}Error: Must specify at least one operation: either --data or"
+            " (optional --efi and/or --boot with) --root."
+            + (OUTPUT_COLOR_RESET if output_color_error else ""),
             file=sys.stderr,
         )
         sys.exit(1)
@@ -1498,12 +1641,19 @@ def main() -> None:
         dry_run=args.dry_run,
     )
 
+    partition_pairs = [*args.data, args.efi, args.boot, args.root]
+    validate_partition_specs(partition_pairs, verbosity=sync_flags.verbosity)
+
     if args.write_times and not args.dry_run:
         write_to_log_file(
             args.write_times,
             f"# Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
             erase=True,
         )
+
+    output_color_failure = OUTPUT_COLOR_BG_RED
+    output_color_reset = OUTPUT_COLOR_RESET
+    stopping_message = f"{output_color_failure}(stopping){output_color_reset}"
 
     # Process operations
     success = True
@@ -1513,7 +1663,7 @@ def main() -> None:
         result = process_partition(data_pair, flags=sync_flags)
         success = success and result
         if not success:
-            print("\033[41m(stopping)\033[0m", file=sys.stderr)
+            print(stopping_message, file=sys.stderr)
             sys.exit(2)
 
     # Process system partitions if specified (only one)
@@ -1526,7 +1676,7 @@ def main() -> None:
         )
         success = success and result
         if not success:
-            print("\033[41m(stopping)\033[0m", file=sys.stderr)
+            print(stopping_message, file=sys.stderr)
             sys.exit(2)
 
     # Write end time to log

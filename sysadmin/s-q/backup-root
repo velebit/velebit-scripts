@@ -1,26 +1,31 @@
 #!/bin/bash
 # Back up a root partition to another partition on a SATA SSD.
 
-script="$(dirname $(realpath "$0"))/../backup_partition.py"
-if [ ! -e "$script" ]; then
+script="$(dirname "$(realpath "$0" || true)")/../backup_partition.py"
+if [[ ! -e "${script}" ]]; then
     echo "Could not find backup_partition.py script" >&2; exit 1
 fi
 
+c_warn=$'\033[103;30m'
+c_reset=$'\033[0m'
+
+verbosity=( -v )
 passthrough=()
-while [ "$#" -gt 0 ]; do
+while [[ "$#" -gt 0 ]]; do
     case "$1" in
-        -v|--verbose)  passthrough+=("--verbose"); shift ;;
+        -v|--verbose)  verbosity+=( -v ); shift ;;
+        -q|--quiet)  verbosity=(); shift ;;
         -n|--dry-run)  passthrough+=("--dry-run"); shift ;;
         -*)  echo "Unknown flag '$1'" 2>&1; exit 1 ;;
-        *)   echo "Unknown argument '$1'" 2>&1; exit 1 ;;
+        *) echo "Unexpected option: $1" >&2; exit 1 ;;
     esac
 done
 
-if [ "`id -u`" != 0 ]; then
-    echo "Warning: not root.  (Try with ssudo?)" >&2
+if [[ "$(id -u || true)" != 0 ]]; then
+    echo "${c_warn}Warning: not root.  (Try with ssudo?)${c_reset}" >&2
 fi
 
-"$script" "${passthrough[@]}" \
+"${script}" "${verbosity[@]}" "${passthrough[@]}" \
           --write-times /common/backups/last_backup.root \
           -X .cache -X .gvfs \
           --root \
