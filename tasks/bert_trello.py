@@ -1,17 +1,20 @@
 #!/not-executable/python3
 from collections.abc import Callable, Collection, Iterable
 from dataclasses import dataclass, field
-import dateutil
-import dateutil.parser
+from functools import cache
 import json
 import os
 import sys
-import trello  # type: ignore[import-untyped]
-from trello import TrelloClient, Board, Card, Label  # type: ignore[import-untyped]
-from trello.trellolist import List  # type: ignore[import-untyped]
 from typing import Any, cast
 
-from bert_task_utilities import flatten, difference, union, intersection, select_one
+import dateutil
+import dateutil.parser
+from frozendict import frozendict
+import trello  # type: ignore[import-untyped]
+from trello import Board, Card, Label, TrelloClient  # type: ignore[import-untyped]
+from trello.trellolist import List  # type: ignore[import-untyped]
+
+from bert_task_utilities import difference, flatten, intersection, select_one, union
 
 # ===== data types =====
 
@@ -299,17 +302,39 @@ def is_card_template(card: Card) -> bool:
     return False
 
 
-def get_cards_with_info(
-    board: Board, cards: Collection[CardInfo], /, include_templates: bool = True
-) -> list[CardInfo]:
+def fetch_open_existing_cards(board: Board) -> frozendict[str, tuple[Card, ...]]:
     existing: dict[str, list[Card]] = {}
     for c in board.open_cards():
-        if include_templates or not is_card_template(c):
-            card_name: str = cast(str, c.name)  # type: ignore[assignment]
-            existing.setdefault(card_name, []).append(c)
+        card_name: str = cast(str, c.name)  # type: ignore[assignment]
+        existing.setdefault(card_name, []).append(c)
+    return frozendict({k: tuple(v) for k, v in existing.items()})
+
+
+@cache
+def fetch_open_existing_cards_once(board: Board) -> frozendict[str, tuple[Card, ...]]:
+    return fetch_open_existing_cards(board)
+
+
+def get_open_existing_cards(
+    board: Board, /, cached: bool = True
+) -> frozendict[str, tuple[Card, ...]]:
+    if cached:
+        return fetch_open_existing_cards_once(board)
+    else:
+        return fetch_open_existing_cards(board)
+
+
+def get_cards_with_info(
+    board: Board,
+    cards: Collection[CardInfo],
+    /,
+    include_templates: bool = True,
+    cached: bool = True,
+) -> list[CardInfo]:
+    existing = get_open_existing_cards(board, cached=cached)
     cards = [type(info)(**info.__dict__) for info in cards]  # clone the info list
     for info in cards:
-        info.cards = existing.get(info.name, [])
+        info.cards = [c for c in existing.get(info.name, tuple()) if include_templates or not is_card_template(c)]
     return cards
 
 
