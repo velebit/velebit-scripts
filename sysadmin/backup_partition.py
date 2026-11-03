@@ -1641,7 +1641,9 @@ def main() -> None:
         dry_run=args.dry_run,
     )
 
-    partition_pairs = [*args.data, args.efi, args.boot, args.root]
+    partition_pairs = [
+        p for p in [*args.data, args.efi, args.boot, args.root] if p is not None
+    ]
     validate_partition_specs(partition_pairs, verbosity=sync_flags.verbosity)
 
     if args.write_times and not args.dry_run:
