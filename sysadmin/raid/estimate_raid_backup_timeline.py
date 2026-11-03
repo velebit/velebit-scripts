@@ -185,16 +185,37 @@ def calculate_percentile(
 
 
 def percentile_text(percent: float | None, prefix: str = "", suffix: str = "") -> str:
-    return f"{prefix}<0{suffix}"
-    return f"{prefix}>100{suffix}"
+    if percent is None:
+        return ""
+    if percent < 0:
+        return f"{prefix}<0{suffix}"
+    if percent > 100:
+        return f"{prefix}>100{suffix}"
+    return f"{prefix}{percent:.0f}{suffix}"
 
 
-def percentile_bar_graph(percent: float | None) -> str:
-    pass
+def percentile_bar_graph(
+    percent: float | None, prefix: str = "", suffix: str = "", width: int = 11
+) -> str:
+    if percent is None:
+        return ""
+    assert width >= 2
+    disp = ["|", *(["-"] * (width - 2)), "|"]
+    if percent < 0:
+        disp[0] = "<"
+    elif percent > 100:
+        disp[-1] = ">"
+    else:
+        pos = round(percent * (width - 1) / 100)
+        assert 0 <= pos <= width
+        disp[pos] = "*"
+    return prefix + "".join(disp) + suffix
 
 
 def print_estimate(
-    active_log_data: LogData, collated_times: list[CollatedTime]
+    active_log_data: LogData,
+    collated_times: list[CollatedTime],
+    percent_as_text: bool = False,
 ) -> None:
     # first, print data for already completed and started actions
     if active_log_data.actions:
@@ -209,11 +230,15 @@ def print_estimate(
             if a.duration is not None:
                 assert a.end is not None
                 end = a.end.strftime("%H:%M:%S")
-                percent = percentile_text(
-                    calculate_percentile(a.duration, matching_times[0]),
-                    prefix="(",
-                    suffix="%ile)",
-                )
+                pct_value = calculate_percentile(a.duration, matching_times[0])
+                if percent_as_text:
+                    percent = percentile_text(
+                        pct_value,
+                        prefix="(",
+                        suffix="%ile)",
+                    )
+                else:
+                    percent = percentile_bar_graph(pct_value, width=9)
                 range = f"{end + ':':<9s}{percent:>11s}"
                 print(f"{'ended':<10s} {range:<20s} {a.text}")
                 next_start_min, next_start_max = (a.end,) * 2
@@ -270,12 +295,19 @@ def process_logfiles(settings: argparse.Namespace) -> None:
         print(
             f"Warning: supposedly active log {active.path}" f" has completed at {end}!"
         )
-    print_estimate(active, history)
+    print_estimate(active, history, percent_as_text=settings.percent)
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Read `raid-backup` logs and estimate backup completion."
+    )
+    parser.add_argument(
+        "--percent",
+        help=(
+            "Display the percentile of the completed portions of the active run"
+            " among all runs as a number, instead of a text graph."
+        ),
     )
     parser.add_argument(
         "reference_logs",
