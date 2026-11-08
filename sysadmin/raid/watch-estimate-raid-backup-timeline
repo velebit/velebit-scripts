@@ -1,0 +1,15 @@
+#!/bin/bash
+# Watches the output of estimate-raid-backup-timeline
+
+set -euo pipefail
+
+dir="$(dirname "$(realpath "$0")")"
+watch_cmd="${dir}"/../../user/print-cmd-diffs
+estimate="${dir}"/estimate-raid-backup-timeline
+
+# check that we can run the estimate script (log files were provided etc)
+"${estimate}" "$@" > /dev/null
+status="$?"
+if [[ "${status}" -ne 0 ]]; then exit "$?"; fi
+
+exec "${watch_cmd}" "${estimate}" "$@"

@@ -1,0 +1,51 @@
+#!/bin/bash
+# Usage: [WATCH_CMD_LABEL=label] watch-cmd-with-diff CMD...
+# Watches the output of CMD and highlights changes between refreshes.
+# WATCH_CMD_LABEL, if set, replaces the command line shown in the watch header.
+
+set -euo pipefail
+
+if [[ $# -lt 1 ]]; then
+    echo "Usage: $(basename "$0") CMD..." >&2
+    exit 1
+fi
+cmd=("$@")
+
+wdir="$(mktemp --tmpdir -d watch.XXXXXX)"
+trap 'rm -rf "${wdir}"' EXIT INT
+touch "${wdir}/prev"
+
+pretty_cmd="${WATCH_CMD_LABEL:-}"
+if [[ -z "${pretty_cmd}" ]]; then
+    for w in "${cmd[@]}"; do
+        if [[ -n "${pretty_cmd}" ]]; then
+            pretty_cmd+=' '
+        fi
+        # printf %q doesn't quote unnecessarily, but @Q looks better
+        if [[ "$(printf '%q' "${w}")" == "${w}" ]]; then
+            pretty_cmd+="${w}"
+        else
+            pretty_cmd+="${w@Q}"  # bash >= 4.4 (2016)
+        fi
+    done
+fi
+
+# Arguments after the script are passed as $1 (wdir), $2... (cmd).
+# Not using watch -d (--differences) because of how it handles line add/rm
+# Note that only basic and bright fg and bg SGR colors are supported by watch -c
+# The first line of the inline script is shown in watch's header, so it carries the process name.
+# shellcheck disable=SC2016 # The inline script is intentionally single-quoted; its $vars expand in the inner bash.
+watch -xpc \
+      bash -euc "# ${pretty_cmd}"'
+          wdir="$1"; shift; cmd=("$@")
+          "${cmd[@]}" > "${wdir}/curr"
+          x="$(diff -U9999 --color=always "${wdir}/prev" "${wdir}/curr" \
+               | tail -n +3 || true)"
+          if [[ -n "${x}" ]]; then
+              echo "${x}" | sed -e $'\''s/^\e\[31/\e\[101/'\'' \
+                                -e $'\''s/^\e\[32/\e\[102/'\''
+              mv "${wdir}/curr" "${wdir}/prev"
+          else
+              echo ""; sed -e "s/^/ /" "${wdir}/curr"
+          fi' \
+              _ "${wdir}" "${cmd[@]}"

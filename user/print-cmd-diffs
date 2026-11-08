@@ -1,0 +1,50 @@
+#!/bin/bash
+# Usage: [WATCH_CMD_LABEL=label] print-cmd-diffs CMD...
+# Shows all changes in the output of CMD with highlighted changes.
+# WATCH_CMD_LABEL, if set, replaces the command line shown in the headers.
+
+set -euo pipefail
+
+if [[ $# -lt 1 ]]; then
+    echo "Usage: $(basename "$0") CMD..." >&2
+    exit 1
+fi
+cmd=("$@")
+
+wdir="$(mktemp --tmpdir -d watch.XXXXXX)"
+trap 'rm -rf "${wdir}"' EXIT INT
+touch "${wdir}/prev"
+
+pretty_cmd="${WATCH_CMD_LABEL:-}"
+if [[ -z "${pretty_cmd}" ]]; then
+    for w in "${cmd[@]}"; do
+        if [[ -n "${pretty_cmd}" ]]; then
+            pretty_cmd+=' '
+        fi
+        # printf %q doesn't quote unnecessarily, but @Q looks better
+        if [[ "$(printf '%q' "${w}")" == "${w}" ]]; then
+            pretty_cmd+="${w}"
+        else
+            pretty_cmd+="${w@Q}"  # bash >= 4.4 (2016)
+        fi
+    done
+fi
+
+"${cmd[@]}" > "${wdir}/prev"
+printf '\033[34m%s\n# %s\033[0m\n' \
+       "$(date || true)" "${pretty_cmd}"
+sed -e "s/^/ /" "${wdir}/prev"
+
+while true; do
+    sleep "${WATCH_INTERVAL:-2}"
+    "${cmd[@]}" > "${wdir}/curr"
+    x="$(diff -U9999 --color=always "${wdir}/prev" "${wdir}/curr" \
+         | tail -n +3 || true)"
+    if [[ -n "${x}" ]]; then
+        printf '\n\033[34m%s\n# %s\033[0m\n' \
+               "$(date || true)" "${pretty_cmd}"
+        echo "${x}" | sed -e $'s/^\e\[31/\e\[101/' \
+                          -e $'s/^\e\[32/\e\[102/'
+        mv "${wdir}/curr" "${wdir}/prev"
+    fi
+done
