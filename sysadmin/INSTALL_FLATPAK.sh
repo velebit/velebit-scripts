@@ -100,7 +100,7 @@ add_if "$is_media"          org.openscad.OpenSCAD
 add_if "!$is_headless"      com.discordapp.Discord
 add_if "!$is_headless"      org.signal.Signal
 add_if "$is_multiuser"      us.zoom.Zoom
-add_if "$is_multiuser"      com.slack.Slack
+add_if "$is_multiuser,$is_bert_desktop" com.slack.Slack
 
 #### games
 #add_if "$is_multiuser"      com.mojang.Minecraft # <- local manual install
