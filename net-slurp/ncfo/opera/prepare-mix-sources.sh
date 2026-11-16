@@ -2,12 +2,7 @@
 
 source "$(dirname "$0")/_uri.sh"
 
-labeled_uris=(
-    "$chorus_uri" chorus
-    "$solo_uri" solo
-    "$demo_uri" demo
-    "$demo_uri" orch
-)
+labeled_uris=("${labeled_music_uris[@]}")
 mul_args=()
 for (( i=0; i<"${#labeled_uris[@]}"; i+=2 )); do
     if [ -n "${labeled_uris[i]}" ]; then

@@ -2,7 +2,14 @@
 
 source "$(dirname "$0")/_uri.sh"
 
-plain_uris=("$chorus_uri" "$solo_uri")
+# collect all URIs from the labeled_music_uris list
+plain_uris=()
+labeled_uris=("${labeled_music_uris[@]}")
+for (( i=0; i<"${#labeled_uris[@]}"; i+=2 )); do
+    if [ -n "${labeled_uris[i]}" ]; then
+        plain_uris+=( "${labeled_uris[i]}" )
+    fi
+done
 unique_uris=()
 while read u; do
     unique_uris+=("$u")

@@ -5,6 +5,8 @@ source "$(dirname "$0")/_uri.sh"
 DO_WIPE=
 DO_CHECK_LINKS=
 INDEX_CHORUS=
+INDEX_CHORUS_REBELS=
+INDEX_CHORUS_EMPIRE=
 INDEX_SOLO=
 INDEX_DEMO=
 INDEX_ORCH=
@@ -12,12 +14,14 @@ INDEX_SCENE=
 INDEX_PDF=
 INDEX_VIDEO=
 
-while [ "$#" -gt 0 ]; do
+while [[ "$#" -gt 0 ]]; do
     case "$1" in
         --wipe)     DO_WIPE=yes; shift ;;
         --check-links)
                     DO_CHECK_LINKS=yes; shift ;;
-        --chorus)   INDEX_CHORUS="$2"; shift; shift ;;
+        # --chorus)   INDEX_CHORUS="$2"; shift; shift ;;
+        --rebels)   INDEX_CHORUS_REBELS="$2"; shift; shift ;;
+        --empire)   INDEX_CHORUS_EMPIRE="$2"; shift; shift ;;
         --solo)     INDEX_SOLO="$2"; shift; shift ;;
         --demo)     INDEX_DEMO="$2"; shift; shift ;;
         --orch)     INDEX_ORCH="$2"; INDEX_SCENE="$2"; shift; shift ;;
@@ -30,30 +34,30 @@ done
 
 DIR=tmplists
 rm -f *.tmplist "$DIR"/*.tmplist
-if [ -n "$DO_WIPE" ]; then rm -f *.urllist "$DIR"/*.urllist; fi
-if [ ! -d "$DIR" ]; then mkdir "$DIR"; fi
+if [[ -n "$DO_WIPE" ]]; then rm -f *.urllist "$DIR"/*.urllist; fi
+if [[ ! -d "$DIR" ]]; then mkdir "$DIR"; fi
 
 base_uri="${base_uri}/DUMMY"
 
 do_generate_zip=
-if [ -e .generate-zip ]; then do_generate_zip=yes; fi
+if [[ -e .generate-zip ]]; then do_generate_zip=yes; fi
 do_generate_cd=
-if [ -e .generate-cd ]; then do_generate_cd=yes; fi
+if [[ -e .generate-cd ]]; then do_generate_cd=yes; fi
 do_generate_demo=
-if [ -e .generate-demo ]; then do_generate_demo=yes; fi
+if [[ -e .generate-demo ]]; then do_generate_demo=yes; fi
 do_generate_orchestra=
-if [ -e .generate-orchestra ]; then do_generate_orchestra=yes; fi
+if [[ -e .generate-orchestra ]]; then do_generate_orchestra=yes; fi
 do_generate_scenes=
-if [ -e .generate-scenes ]; then do_generate_scenes=yes; fi
+if [[ -e .generate-scenes ]]; then do_generate_scenes=yes; fi
 
 do_generate_all_voices=
-if [ -e .generate-all-voices ]; then do_generate_all_voices=yes; fi
+if [[ -e .generate-all-voices ]]; then do_generate_all_voices=yes; fi
 do_generate_all_supporting=
-if [ -e .generate-all-supporting ]; then do_generate_all_supporting=yes; fi
+if [[ -e .generate-all-supporting ]]; then do_generate_all_supporting=yes; fi
 do_generate_all_solos=
-if [ -e .generate-all-solos ]; then do_generate_all_solos=yes; fi
+if [[ -e .generate-all-solos ]]; then do_generate_all_solos=yes; fi
 
-if [ -n "$DO_CHECK_LINKS" ]; then
+if [[ -n "$DO_CHECK_LINKS" ]]; then
     do_generate_cd=yes; do_generate_demo=yes
     do_generate_orchestra=yes; do_generate_scenes=yes
     do_generate_all_voices=yes; do_generate_all_supporting=yes
@@ -72,15 +76,15 @@ force_https=yes
 use_tables=
 
 # 'AC' is the melody part for Weedpatch
-voice_parts=('Soprano' 'Alto' 'AC' 'Tenor' 'Bass')
+voice_parts=('Soprano' 'Alto' 'Tenor' 'Bass')
 
 plist () {
     local index="$1"; shift
     local plist="${index##*/}"; plist="$DIR/${plist%%.html}.p.tmplist"
     local pslist="${plist%%.p.tmplist}.ps.tmplist"
-    if [ "$plist" = "$DIR/.p.tmplist" ]; then
+    if [[ "$plist" == "$DIR/.p.tmplist" ]]; then
         echo "... $plist (plist) has no name for index $index" >&2
-    elif [ ! -e "$plist" ]; then
+    elif ! [[ -e "$plist" ]]; then
         echo "... $plist (plist)" >&2
         ./plinks.pl --show-bold-or-heading --show-less-indented \
                     --show-previous-line-text --show-line-text \
@@ -104,9 +108,9 @@ tlist () {
     local index="$1"; shift
     local tlist="${index##*/}"; tlist="$DIR/${tlist%%.html}.t.tmplist"
     local tslist="${tlist%%.t.tmplist}.ts.tmplist"
-    if [ "$tlist" = "$DIR/.t.tmplist" ]; then
+    if [[ "$tlist" == "$DIR/.t.tmplist" ]]; then
         echo "... $tlist (tlist) has no name for index $index" >&2
-    elif [ ! -e "$tlist" ]; then
+    elif ! [[ -e "$tlist" ]]; then
         echo "... $tlist (tlist)" >&2
         # Notes:
         #   --ignore-breaks may or may not be needed (or not matter) based
@@ -156,7 +160,7 @@ uniq_in_order () {
     local seen=()
     while read line; do
         for s in "${seen[@]}"; do
-            if [ "x$line" = "x$s" ]; then continue 2; fi
+            if [[ "x$line" == "x$s" ]]; then continue 2; fi
         done
         echo "$line"
         seen+=("$line")
@@ -210,7 +214,7 @@ process_text_section_columns () {
     local text_style=replace
     #local text_style=prepend
     local out_tag=out_file
-    if [ "$text_style" = prepend ]; then
+    if [[ "$text_style" == prepend ]]; then
         out_tag=out_file_prefix
         files_suffix="$files_suffix "
     fi
@@ -233,7 +237,7 @@ process_text_section_columns () {
         -e '' \
         -e 's/^\([^	]*\)	/\1 /' `# combine line-before-link into track name` \
         -e 's/^\([^	]*\)	/\1 /' `# combine text into track name` \
-        -e 's/^\([^	]*\)	[^	]*/\1/' `# remove line-after-link` \
+        -e 's/^\([^	]*\)	/\1 /' `# combine line-after-link into track name` \
         `# If there's an unclosed parenthesis in the track name, force it closed:` \
         -e 's/^\([^	]*([^)	]*\)	/\1)	/' \
         -e 's/^\([^	]*\)[:\*\?"<>|~]/\1/' \
@@ -255,9 +259,12 @@ process_text_section_columns () {
         -e '/\('"${voices_regex}"'\) *2/Is,\(out_file[_a-z]*:[SATB]\) ,\12 ,' \
         -e '/KCCC/s,\(out_file[_a-z]*:[SATB]\) ,\1cc ,' \
         `# final fixups` \
-        -e 's/\(Scene \)1 \(1[a-z]\)/\1\2/' \
-        -e 's,\( *-\)\?  *rev [1-9][0-9]\?/[1-9][0-9]\?/1[78] ([^()	]*),,I' \
+        -e 's/ACT ONE, /I./;s/ACT TWO, /II./' \
+        -e 's/SCENE ONE /1 /;s/SCENE TWO /2 /;s/SCENE THREE /3 /;s/SCENE FOUR /4 /;s/SCENE FIVE /5 /' \
         -e ''
+
+    #    -e 's/\(Scene \)1 \(1[a-z]\)/\1\2/' \
+    #    -e 's,\( *-\)\?  *rev [1-9][0-9]\?/[1-9][0-9]\?/1[78] ([^()	]*),,I' \
 }
 
 process_table_section_columns () {
@@ -270,7 +277,7 @@ process_table_section_columns () {
     local text_style=replace
     #local text_style=prepend
     local out_tag=out_file
-    if [ "$text_style" = prepend ]; then
+    if [[ "$text_style" == prepend ]]; then
         out_tag=out_file_prefix
         files_suffix="$files_suffix "
     fi
@@ -320,16 +327,22 @@ process_table_section_columns () {
 extract_demorch () {
     local plist="$1"; shift
     local section="$1"; shift
+    local link_text_re="$1"; shift
     local file="$1"; shift
     local files_prefix="$1"; shift
     local files_suffix="$1"; shift
+
+    if [[ -z "${section}" ]]; then section='[^	]*'; fi
+    if [[ -z "${link_text_re}" ]]; then link_text_re='[^	]*'; fi
 
     local out_tag=out_file
     echo "::: $DIR/$file.mp3.tmplist (demo/orch)" >&2
     cat "$plist" \
         | sed -e '/\.mp3$/I!d' \
               -e '/^'"$section"'/I!d' `# filter sections` \
-              -e 's/^[^	]*	//' `# remove section (bold-or-heading)` \
+              -e 's/^[^	]*	//' `# remove section (bold-or-heading); less-indented will be used though` \
+              `# If the act and section info is in less-indented, extract just the tag from it:` \
+              -e '/^ACT /{;s/^ACT  *//I;s/^\([^	]*\), SCENE  */\1./I;s@^\([^ 	]*\):\? [^	/]* */*@\1@I;s@^\([^	]*\) *([^	]*@\1@I;}' \
               `# Remove //, which is the hardcoded separator from less-indented:` \
               -e 's,^\([^	]*\)  *//  *,\1 ,' \
               -e 's,^\([^	]*\)  *//  *,\1 ,' \
@@ -337,11 +350,15 @@ extract_demorch () {
               -e 's/^\([^	]*\)	[^	]*/\1/' `# keep less-indented, remove previous-line-text` \
               -e 's/^\([^	]*	\)[^	]*	/\1/' `# remove same line text (line-text)` \
               -e 's/^\([^	]*\)	/\1 /' `# combine same line before link (line-before-link) into track name` \
+              -e 's/^\([^	]*\)Demo *\/ *	/\1	/' `# strip "Demo / " from possible unlinked text` \
+              -e '\@^\([^	]*\)	\('"${link_text_re}"'\)@!d' `# filter link text (text)` \
               -e 's/^\([^	]*\)	/\1 /' `# combine link text (text) into track name` \
+              -e 's/^\([^	]*\)	 *\/ *Orchestra/\1	/' `# strip " / Orch" from possible unlinked text` \
               -e 's/^\([^	]*\)	/\1 /' `# combine same line after link (line-after-link) into track name` \
               `# remove some common labeling we don't care about:` \
               -e 's,\( *-\)\?  *rev [1-9][0-9]\?/[1-9][0-9]\?/1[78] ([^()	]*),,I' \
-              -e 's, *(\(added  *\|updated  *\)\?[1-9][0-9]\?/[1-9][0-9]\?/1[78]),,I' \
+              -e 's, *(\(orchestra  *\)\?\(added  *\|updated  *\|fixed  *\)\?[1-9][0-9]\?/[1-9][0-9]\?/1[789]),,I' \
+              -e 's, *- *\(orchestra  *\)\?\(added  *\|updated  *\|fixed  *\)\?[1-9][0-9]\?/[1-9][0-9]\?/1[789],,I' \
               -e 's, *(updated  *12/30),,I' `# specific update from 2017` \
               -e 's,^\(act  *II*  *scene  *[1-9][0-9]*[a-z]\?\)\(  *-\)\? *,\1 - ,I' `# add - if missing after scene` \
               `# use the scene "#.#" number from filename if available:` \
@@ -361,8 +378,11 @@ extract_demorch () {
               -e 's/^\([^	]*\)  *)/\1)/' \
               -e 's/   */ /g' -e 's/^  *//' -e 's/  *	/	/g' \
               -e 's/^\([^	]*\)	\(.*\)$/\2	'"$out_tag:$files_prefix"'\1'"$files_suffix"'/' \
+              `# final fixups` \
               -e 's,\xe2\x80\x99,'\'',g' \
-              > "$DIR"/"$file".mp3.tmplist
+              -e 's,(\(a cappella Tatooine\)$,\1,' \
+              -e 's,(\(Orchestra\)$,(\1),' \
+               > "$DIR"/"$file".mp3.tmplist
 }
 
 process_section_non_table_extras () {
@@ -469,18 +489,28 @@ extract_satb_sections () {
 
 extract_single_solo () {
     local tlist="$1"; shift
-    local column_heading="$1"; shift
+    local plist="$1"; shift
+    local solo_name="$1"; shift
     local files_prefix="$1"; shift
     local files_suffix="$1"; shift
     local file="$1"; shift
 
-    echo "::: $DIR/$file.mp3.tmplist (solo sections/table columns)" >&2
-    cat "$tlist" \
-        | merge_field_with_next 2 ', ' \
-        | process_table_section_columns \
-              '[^	]*' '[1-9][0-9]*' "$column_heading" \
-              "$files_prefix" "$files_suffix" \
-              > "$DIR"/"$file".mp3.tmplist
+    if true; then
+        echo "::: $DIR/$file.mp3.tmplist (solo sections, no tables)" >&2
+        cat "$plist" \
+            | process_text_section_columns \
+                  "$solo_name" \
+                  "$files_prefix" "$files_suffix" \
+                  > "$DIR"/"$file".mp3.tmplist
+    else
+        echo "::: $DIR/$file.mp3.tmplist (solo sections/table columns)" >&2
+        cat "$tlist" \
+            | merge_field_with_next 2 ', ' \
+            | process_table_section_columns \
+                  '[^	]*' '[1-9][0-9]*' "$solo_name" \
+                  "$files_prefix" "$files_suffix" \
+                  > "$DIR"/"$file".mp3.tmplist
+    fi
 
     echo "+++ $DIR/all-solos.mp3.tmplist (partial)" >&2
     cat "$DIR"/"$file".mp3.tmplist >> "$DIR"/all-solos.mp3.tmplist
@@ -488,30 +518,24 @@ extract_single_solo () {
 
 extract_solos () {
     local tlist="$1"; shift
+    local plist="$1"; shift
 
     echo "vvv (begin solos)" >&2
     if false; then
         # For debugging & dev: show all column names
-        get_table_section_field "$tlist" "[^	]*" 4 0 \
-            | sed -e '/^Scene/d;/^Song$/d'
+        get_mp3_sections "${tlist}" "${plist}"
     fi
 
-#    extract_single_solo "$tlist" "Roli" "Roli " "" "roli-solo"
-#    extract_single_solo "$tlist" "Mandisa" "Mandisa " "" "mandisa-solo"
-#    extract_single_solo "$tlist" "Leverets" "Leverets " "" "leverets-solo"
-#    extract_single_solo "$tlist" "Koni" "Koni " "" "koni-solo"
-#
-#    extract_single_solo "$tlist" "Tau" "Tau " "" "tau-solo"
-#    extract_single_solo "$tlist" "Balosi" "Balosi " "" "balosi-solo"
-#    extract_single_solo "$tlist" "Ndanga" "Ndanga " "" "ndanga-solo"
-#    extract_single_solo "$tlist" "Johnny panned right Jackie panned left" "J+J " "" "j+j-solo"
-#    extract_single_solo "$tlist" "Antoine" "Antoine " "" "antoine-solo"
-#
-#    extract_single_solo "$tlist" "Bello" "Bello " "" "bello-solo"
-#    extract_single_solo "$tlist" "Hobo" "Hobo " "" "hobo-solo"
-#    extract_single_solo "$tlist" "Thendo" "Thendo " "" "thendo-solo"
-#    extract_single_solo "$tlist" "Kipling" "Kipling " "" "kipling-solo"
-#    extract_single_solo "$tlist" "Dikeledi" "Dikeledi " "" "dikeledi-solo"
+    extract_single_solo "$tlist" "$plist" "LUKE SKYWALKER" "Luke " "" "luke-solo"
+    extract_single_solo "$tlist" "$plist" "HAN SOLO" "Han " "" "han-solo"
+    extract_single_solo "$tlist" "$plist" "PRINCESS LEIA" "Leia " "" "leia-solo"
+    extract_single_solo "$tlist" "$plist" "OBI-WAN KENOBI" "Obi-Wan " "" "obiwan-solo"
+    extract_single_solo "$tlist" "$plist" "DARTH VADER" "Vader " "" "vader-solo"
+    extract_single_solo "$tlist" "$plist" "C-3PO" "C-3PO " "" "c3po-solo"
+    extract_single_solo "$tlist" "$plist" "R2-D2" "R2-D2 " "" "r2d2-solo"
+    extract_single_solo "$tlist" "$plist" "CHEWBACCA" "Chewie " "" "chewie-solo"
+    extract_single_solo "$tlist" "$plist" "JABBA THE HUTT" "Jabba " "" "jabba-solo"
+    extract_single_solo "$tlist" "$plist" "UNCLE OWEN" "Owen " "" "owen-solo"
 
     echo "^^^ (end solos)" >&2
 }
@@ -540,13 +564,13 @@ prepare_link_check () {
         -e '\,^https\?://www.familyopera.org/drupal/node/[^\./][^\./]*/\?$,d' \
         -e '\,^https\?://www.familyopera.org/drupal/user/logout,d' \
         > "$base.lcE.tmplist"
-    if [ -s "$base.lcE.tmplist" ]; then
+    if [[ -s "$base.lcE.tmplist" ]]; then
         sed -e 's/^/LNK unexpected: /' "$base.lcE.tmplist" >&2
     fi
 }
 
 
-if [ -n "$INDEX_CHORUS" ]; then
+if [[ -n "$INDEX_CHORUS" ]]; then
     # note: no 'Chorus MP3s' suffix for Weedpatch
     extract_satb_sections "$(tlist "$INDEX_CHORUS")" "$(plist "$INDEX_CHORUS")" \
                           '' '' \
@@ -576,45 +600,80 @@ if [ -n "$INDEX_CHORUS" ]; then
 #    done
 fi
 
-if [ -n "$INDEX_SOLO" ]; then
-    extract_solos "$(tlist "$INDEX_SOLO")"
+if [[ -n "$INDEX_CHORUS_REBELS" ]]; then
+    extract_satb_sections "$(tlist "$INDEX_CHORUS_REBELS")" "$(plist "$INDEX_CHORUS_REBELS")" \
+                          '' '' \
+                          '' '-rebels' \
+                          '' ''
+fi
+if [[ -n "$INDEX_CHORUS_EMPIRE" ]]; then
+    extract_satb_sections "$(tlist "$INDEX_CHORUS_EMPIRE")" "$(plist "$INDEX_CHORUS_EMPIRE")" \
+                          '' '' \
+                          '' '-empire' \
+                          '' ''
 fi
 
-if [ -n "$INDEX_DEMO" ]; then
-    extract_demorch "$(plist "$INDEX_DEMO")" 'DEMO' 'demo'
+if [[ -n "$INDEX_SOLO" ]]; then
+    extract_solos "$(tlist "$INDEX_SOLO")" "$(plist "$INDEX_SOLO")"
 fi
-if [ -n "$INDEX_ORCH" ]; then
-    extract_demorch "$(plist "$INDEX_ORCH")" \
-                    'ORCHESTRA.*' 'orchestra'
+
+if [[ -n "$INDEX_DEMO" ]]; then
+    if false; then
+        # "traditional" sections
+        extract_demorch "$(plist "$INDEX_DEMO")" \
+                        'DEMO' '' 'demo'
+    else
+        # mixed links
+        extract_demorch "$(plist "$INDEX_DEMO")" \
+                        '' \
+                        '[^	]*\(Demo\|a cappella\|I.m the Best\)[^	]*' \
+                        'demo'
+    fi
 fi
-#if [ -n "$INDEX_SCENE" ]; then
+if [[ -n "$INDEX_ORCH" ]]; then
+    if false; then
+        # "traditional" sections
+        extract_demorch "$(plist "$INDEX_ORCH")" \
+                        'ORCHESTRA.*' '' 'orchestra' ''
+    else
+        # mixed links
+        extract_demorch "$(plist "$INDEX_ORCH")" \
+                        '' \
+                        '[^	]*\(Orchestra\|Overture\)[^	]*' \
+                        'orchestra'
+    fi
+fi
+#if [[ -n "$INDEX_SCENE" ]]; then
 #    extract_demorch "$(plist "$INDEX_SCENE")" \
-#                    'soundtrack\|sound track' 'scenes'
+#                    'soundtrack\|sound track' '' 'scenes'
 #fi
 
 
-if [ -n "$do_generate_all_voices" -a -n "$INDEX_CHORUS" ]; then
+if [[ -n "$do_generate_all_voices" ]] && \
+       ([[ -n "$INDEX_CHORUS" ]] || [[ -n "$INDEX_CHORUS_REBELS" ]] || [[ -n "$INDEX_CHORUS_EMPIRE" ]]); then
     cat "$DIR"/{soprano,alto,ac,tenor,bass}-*.mp3.tmplist | sed \
         -e '/NOOP/d' \
         > X-all-voices.mp3.urllist
 fi
 
-if [ -n "$do_generate_all_supporting" -a -n "$INDEX_CHORUS" ]; then
-    cat "$DIR"/all-supporting.mp3.tmplist | sed \
+if [[ -n "$do_generate_all_supporting" ]] && \
+       ([[ -n "$INDEX_CHORUS" ]] || [[ -n "$INDEX_CHORUS_REBELS" ]] || [[ -n "$INDEX_CHORUS_EMPIRE" ]]); then
+    cat "$DIR"/all-supporting*.mp3.tmplist | sed \
         -e '/NOOP/d' \
         > X-all-supporting.mp3.urllist
 fi
 
-if [ -n "$do_generate_all_solos" -a -n "$INDEX_SOLO" ]; then
+if [[ -n "$do_generate_all_solos" ]] && [[ -n "$INDEX_SOLO" ]]; then
     cat "$DIR"/all-solos.mp3.tmplist | sed \
         -e '/NOOP/d' \
         > X-all-solos.mp3.urllist
 fi
 
-if [ -n "$DO_CHECK_LINKS" ]; then
-    for i in "$INDEX_CHORUS" "$INDEX_SOLO" "$INDEX_DEMO" "$INDEX_ORCH" \
+if [[ -n "$DO_CHECK_LINKS" ]]; then
+    for i in "$INDEX_CHORUS" "$INDEX_CHORUS_REBELS" "$INDEX_CHORUS_EMPIRE" \
+             "$INDEX_SOLO" "$INDEX_DEMO" "$INDEX_ORCH" \
              "$INDEX_SCENE" "$INDEX_PDF" "$INDEX_VIDEO"; do
-        if [ -n "$i" ]; then
+        if [[ -n "$i" ]]; then
             prepare_link_check "$i"
         fi
     done
@@ -666,91 +725,54 @@ split_1_2 () {
 }
 cp_for_zip () {
     local name="$1"; shift
-    if [ -n "$do_generate_zip" ]; then
+    if [[ -n "$do_generate_zip" ]]; then
         cp "${DIR}/${name}.mp3.tmplist" "${name}.mp3zip.urllist"
     fi
 }
 
-inputs=()
-for i in "$INDEX_CHORUS" "$INDEX_SOLO"; do
-    if [ -n "$i" ]; then
-        sections=()
-        while read -r section; do
-            sections+=("$section")
-        done < <(get_mp3_sections "$(tlist "$i")" "$(plist "$i")")
-        for section in "${sections[@]}"; do
-            base="${section,,}"; base="${base// /-}"
-            base_out="$base"
-            if [[ "${base}" == "ac" ]]; then
-                base_out="AC"
-            fi
-            input="${DIR}/${base}-chorus.mp3.tmplist"
-            if [[ -e "${input}" ]]; then
-                inputs+=("${input}")
-                cat "${input}" | sed \
-                    -e '/KCCC/d' \
-                    > "${DIR}/${base_out}.mp3.tmplist"
-                if split_camper_townie "${base_out}" ""; then
-                    if split_1_2 "${base_out}" " camper"; then
-                        cp_for_zip "${base_out} 1 camper"
-                        cp_for_zip "${base_out} 2 camper"
-                    else
-                        cp_for_zip "${base_out} camper"
-                    fi
-                    if split_1_2 "${base_out}" " townie"; then
-                        cp_for_zip "${base_out} 1 townie"
-                        cp_for_zip "${base_out} 2 townie"
-                    else
-                        cp_for_zip "${base_out} townie"
-                    fi
-                else
-                    if split_1_2 "${base_out}" ""; then
-                        cp_for_zip "${base_out} 1"
-                        cp_for_zip "${base_out} 2"
-                    else
-                        cp_for_zip "${base_out}"
-                    fi
-                fi
-            fi
-        done
-    fi
-done
-if [[ "${#inputs[@]}" -gt 0 ]]; then
-    cat "${inputs[@]}" | sed \
-        -e '/KCCC/!d' \
-        -e 's/:Scc /:Citizens Committee soprano /' \
-        -e 's/:Acc /:Citizens Committee alto /' \
-        -e 's/:Tcc /:Citizens Committee tenor /' \
-        -e 's/:Bcc /:Citizens Committee bass /' \
-        > "${DIR}/Kern County Citizens Committee.mp3.tmplist"
-    if [[ -s "${DIR}/Kern County Citizens Committee.mp3.tmplist" ]]; then
-        cp_for_zip "Kern County Citizens Committee"
-    fi
-fi
+### ### vvv TODO vvv
+sections=()
+while read -r section; do
+    sections+=("$section")
+done < <(for i in "$INDEX_CHORUS" "$INDEX_CHORUS_REBELS" "$INDEX_CHORUS_EMPIRE" "$INDEX_SOLO"; do
+             if [[ -n "$i" ]]; then
+                 get_mp3_sections "$(tlist "$i")" "$(plist "$i")"
+             fi
+         done | sort -u)
 
-#    if [ -n "$INDEX_CHORUS" ]; then
-#        section="SUPPORTING"
-#        get_table_section_field "$(tlist "$INDEX_CHORUS")" "$section" 2 1 \
-#        | while read -r who; do
-#            base="$who"
-#            cat "$(tlist "$INDEX_CHORUS")" \
-#                | remove_field 3 \
-#                | filter_by_field 4 "$who" \
-#                | process_table_section_columns "$section" '[^	]*' \
-#                                                '[^	]*' '' '' \
-#                | sed -e 's/	.*$//' \
-#                      > "$base".mp3zip.urllist
-#            # some links may be repeated in the list, but that's OK
-#        done
-#    fi
-#fi
+inputs=()
+for section in "${sections[@]}"; do
+    base="${section,,}"; base="${base%% mp3s}"; base="${base// /-}"
+    base_out="$base"
+    if [[ "${base}" == "ac" ]]; then
+        base_out="AC"
+    fi
+    for chorus in '' -rebels -empire; do
+        input="${DIR}/${base}${chorus}.mp3.tmplist"
+        if [[ -e "${input}" ]]; then
+            inputs+=("${input}")
+            output="${DIR}/${base_out}${section}.mp3.tmplist"
+            if [[ "${input}" != "${output}" ]]; then
+                cp -p "${input}" "${output}"
+            fi
+            cp_for_zip "${output%%.mp3.tmplist}"
+        fi
+    done
+done
 
 ### no Katarina ;(
 
+# hack until full casting
+if [[ -n "$INDEX_CHORUS_REBELS" ]] && true; then
+    cat "$DIR"/tenor-rebels.mp3.tmplist | sed \
+        -e '' \
+        > Abbe+bert+Luka.mp3.urllist
+fi
+
 ### Luka (Alto)
 # MP3s
-if [ -n "$INDEX_CHORUS" ]; then
-    snip_allow='.'  # this will always match
+if [[ -n "$INDEX_CHORUS_REBELS" ]] && false; then
+    #snip_allow='.'  # this will always match
     #for snip_deny in 'THIS_WILL_NOT_MATCH'; do
     #    cat "$DIR"/alto-chorus.mp3.tmplist | sed \
     #        -n \
@@ -769,31 +791,29 @@ if [ -n "$INDEX_CHORUS" ]; then
     #        >> Luka.mp3.urllist
     #    snip_allow="$snip_deny"
     #done
-    cat "$DIR"/alto.mp3.tmplist | sed \
+    cat "$DIR"/tenor-rebels.mp3.tmplist | sed \
         -e '' \
         > Luka.mp3.urllist
 fi
 
 ### bert (Tenor)
 # MP3s
-if [ -n "$INDEX_CHORUS" ]; then
-    cat "$DIR"/tenor.mp3.tmplist | sed \
-        -e 's/out_file:TB /out_file:T /' \
-        -e '/The\ Talent\ Show\ Camper/d' \
+if [[ -n "$INDEX_CHORUS_REBELS" ]] && false; then
+    cat "$DIR"/tenor-rebels.mp3.tmplist | sed \
+        -e '' \
         > bert.mp3.urllist
 fi
 
 ### Abbe (Tenor)
 # MP3s
-if [ -n "$INDEX_CHORUS" ]; then
-    cat "$DIR"/tenor.mp3.tmplist | sed \
-        -e 's/out_file:TB /out_file:T /' \
-        -e '/The\ Talent\ Show\ Townie/d' \
+if [[ -n "$INDEX_CHORUS_REBELS" ]] && false; then
+    cat "$DIR"/tenor-rebels.mp3.tmplist | sed \
+        -e '' \
         > Abbe.mp3.urllist
 fi
 
 #####  video
-if [ -n "$INDEX_VIDEO" ]; then
+if [[ -n "$INDEX_VIDEO" ]]; then
     plist="$(plist "$INDEX_VIDEO")"
     cat "$plist" \
         | sed -e '/\.mp4$/I!d' \
@@ -838,7 +858,7 @@ if [ -n "$INDEX_VIDEO" ]; then
 fi
 
 ### demo MP3s
-if [ -n "$do_generate_demo" -a -e tmplists/demo.mp3.tmplist ]; then
+if [[ -n "$do_generate_demo" ]] && [[ -e tmplists/demo.mp3.tmplist ]]; then
     echo "@@@ demo" >&2
     cat tmplists/demo.mp3.tmplist \
         | sed -e '/Rehearsal/Id' \
@@ -851,12 +871,12 @@ if [ -n "$do_generate_demo" -a -e tmplists/demo.mp3.tmplist ]; then
 fi
 
 ### orchestra-only MP3s
-if [ -n "$do_generate_orchestra" -a -e tmplists/orchestra.mp3.tmplist ]; then
+if [[ -n "$do_generate_orchestra" ]] && [[ -e tmplists/orchestra.mp3.tmplist ]]; then
     echo "@@@ orchestra" >&2
     cat tmplists/orchestra.mp3.tmplist \
         > orchestra.mp3.urllist
 fi
-#if [ -n "$do_generate_scenes" -a -e tmplists/scenes.mp3.tmplist ]; then
+#if [[ -n "$do_generate_scenes" ]] && [[ -e tmplists/scenes.mp3.tmplist ]]; then
 #    echo "@@@ scenes (Red)" >&2
 #    cat tmplists/scenes.mp3.tmplist \
 #        | sed -e '/:I\.3/!{;/Gold/d;}' \
@@ -865,7 +885,7 @@ fi
 
 ### score PDFs
 
-if [ -n "$INDEX_PDF" ]; then
+if [[ -n "$INDEX_PDF" ]]; then
     echo "@@@ score" >&2
 
     ./plinks.pl --base "$base_uri" "$INDEX_PDF" \

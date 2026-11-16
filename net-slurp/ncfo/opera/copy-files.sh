@@ -37,14 +37,7 @@ inspect() {
 }
 
 source "$(dirname "$0")/_uri.sh"
-labeled_uris=(
-    "$chorus_uri" chorus
-    "$solo_uri" solo
-    "$demo_uri" demo
-    "$demo_uri" orch
-    "$video_uri" video
-    "$pdf_uri" pdf
-)
+# keep the full labeled_uris list
 mul_args=( --wipe )
 for (( i=0; i<"${#labeled_uris[@]}"; i+=2 )); do
     if [ -n "${labeled_uris[i]}" ]; then

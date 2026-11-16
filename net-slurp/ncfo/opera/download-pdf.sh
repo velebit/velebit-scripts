@@ -6,9 +6,7 @@ type=pdf
 file_dir="$pdf_dir"
 log=download-"$type".log
 
-labeled_uris=(
-    "$pdf_uri" pdf
-)
+labeled_uris=("${labeled_pdf_uris[@]}")
 plain_uris=()
 mul_args=()
 for (( i=0; i<"${#labeled_uris[@]}"; i+=2 )); do
@@ -54,9 +52,27 @@ done
 sed -e 's/	.*//' *."$type".urllist | sort | uniq \
     | sed -e '/\.[Pp][Dd][Ff]$/!d' \
     > "$type"-master.urllist
-wget --load-cookies cookies.txt -i "$type"-master.urllist \
-    -nd -P "$file_dir" -N --restrict-file-names=windows \
-    --progress=bar:force \
+cleanup_manifest="$file_dir/.wget-cache/references.tsv"
+python3 "$(dirname "$0")/fetch-url-list.py" \
+    --url-list "$type"-master.urllist \
+    --output-dir "$file_dir" \
+    --cookies cookies.txt \
+    --reference-file "$cleanup_manifest" \
   2>&1 | tee "$log"
+download_status=${PIPESTATUS[0]}
 rm -f "$type"-master.urllist
-./clean-up.pl -d "$file_dir" "$log"
+if [ "$download_status" -eq 0 ] && [ -f "$cleanup_manifest" ]; then
+    "$(dirname "$0")/clean-up.pl" \
+        --exclude-directory "$file_dir/.wget-cache" \
+        --reference-file "$cleanup_manifest" \
+        -d "$file_dir" "$log"
+    cleanup_status=$?
+elif [ "$download_status" -ne 0 ]; then
+    cleanup_status=0
+else
+    echo "Missing cleanup manifest: $cleanup_manifest" >&2
+    cleanup_status=1
+fi
+rm -f "$cleanup_manifest"
+if [ "$download_status" -ne 0 ]; then exit "$download_status"; fi
+exit "$cleanup_status"

@@ -2,7 +2,13 @@
 
 source "$(dirname "$0")/_uri.sh"
 
-raw_uris=("$chorus_uri" "$solo_uri" "$demo_uri" "$pdf_uri" "$video_uri")
+# collect all URIs from the full labeled_uris list
+raw_uris=()
+for (( i=0; i<"${#labeled_uris[@]}"; i+=2 )); do
+    if [ -n "${labeled_uris[i]}" ]; then
+        raw_uris+=( "${labeled_uris[i]}" )
+    fi
+done
 unique_uris=()
 while read u; do
     unique_uris+=("$u")

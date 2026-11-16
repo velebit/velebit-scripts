@@ -4,18 +4,35 @@ use strict;
 use utf8;
 use open ':std', ':encoding(UTF-8)';
 use Getopt::Long;
+use File::Spec;
 
 our @IGNORED = ( 'html/' );
 our @DIRS = ();
+our @EXCLUDED_DIRS = ();
+our @REFERENCE_FILES = ();
 GetOptions('ignore|i=s' => \@IGNORED,
 	   'directory|d=s' => \@DIRS,
-          ) or die "Usage: $0 [-d DIR] [-i IGNORE] LOG_FILE\n";
-@ARGV > 1  and die "Usage: $0 [-d DIR] [-i IGNORE] LOG_FILE\n";
+	   'exclude-directory=s' => \@EXCLUDED_DIRS,
+	   'reference-file=s' => \@REFERENCE_FILES,
+          ) or die "Usage: $0 [-d DIR] [-i IGNORE] [--exclude-directory DIR] [--reference-file FILE] LOG_FILE\n";
+@ARGV > 1  and die "Usage: $0 [-d DIR] [-i IGNORE] [--exclude-directory DIR] [--reference-file FILE] LOG_FILE\n";
 
 my $log = @ARGV ? shift @ARGV : 'download.log';
 
 my $ignored_re = '(?:^|/)(?:\d+|' . join('|', map "\Q$_", @IGNORED) . ')$';
 $ignored_re =~ qr/$ignored_re/;
+
+sub is_excluded_directory {
+  my ($path) = @_;
+  my $absolute_path = File::Spec->canonpath(File::Spec->rel2abs($path));
+  for my $directory (@EXCLUDED_DIRS) {
+    my $absolute_directory =
+      File::Spec->canonpath(File::Spec->rel2abs($directory));
+    return 1 if $absolute_path eq $absolute_directory;
+    return 1 if index($absolute_path, "$absolute_directory/") == 0;
+  }
+  return 0;
+}
 
 ### Get a list of referenced files from the download log.
 
@@ -31,8 +48,10 @@ while (<$LOG>) {
   if (/^(?:Saving to: |Server file no newer than local file |File .* not modified on server)/) {
     my ($file) = /[`'‘](.+)['’]/
       or die "Format error: no file name found in\n    $_\n ";
+    # Expand `\ooo` sequences in wget output
+    $file =~ s/\\(?:(\\)|([0-7]{1,3}))/$1 or chr(oct($2))/ge;
     #print STDERR "F $file\n";
-    if ($file !~ $ignored_re) {
+    if ($file !~ $ignored_re && !is_excluded_directory($file)) {
       push @referenced, $file;
       push @added, $file if /^Saving to: /;
     }
@@ -44,8 +63,11 @@ while (<$LOG>) {
     # But mark robot.txt URLs so we know they don't HAVE to exist:
     $is_ok_if_file_missing = (m,/robots\.txt$, ? 1 : 0);
 
-  } elsif (/[`‘][^`'‘’]*['’]/) {
-    warn "Unexpected quoted name seen in\n    $_\n ";
+  } elsif (/[`‘]([^`'‘’]*)['’]/) {
+    my $file = $1;
+    $file =~ s/\\(?:(\\)|([0-7]{1,3}))/$1 or chr(oct($2))/ge;
+    warn "Unexpected quoted name seen in\n    $_\n "
+      unless is_excluded_directory($file);
 
   } elsif (/^HTTP request sent.*\.\.\.\s*(\d+)\s*(.*)$/) {
     ++$code_counts{$1} unless $1 eq '404' and $is_ok_if_file_missing;
@@ -55,6 +77,21 @@ while (<$LOG>) {
   } elsif (/^\s*$/) {
     $is_ok_if_file_missing = 0;
   }
+}
+
+for my $reference_file (@REFERENCE_FILES) {
+  open my $REF, '<', $reference_file
+    or die "open($reference_file): $!";
+  while (<$REF>) {
+    s/[\r\n]+$//;
+    my ($kind, $file) = split /\t/, $_, 2;
+    defined $file && ($kind eq 'new' || $kind eq 'keep')
+      or die "Invalid reference entry in $reference_file:\n    $_\n";
+    $file =~ s/\\(?:(\\)|([0-7]{1,3}))/$1 or chr(oct($2))/ge;
+    push @referenced, $file;
+    push @added, $file if $kind eq 'new';
+  }
+  close $REF or die "close($reference_file): $!";
 }
 
 my %ref_dir = map +($_ => 1), @DIRS;
